@@ -16,11 +16,14 @@ export function ResultView({
   onRecheck,
   saved,
   snapshotNote,
+  embedded,
 }: {
   result: CheckResult;
   onRecheck: () => void;
   saved?: boolean;
   snapshotNote?: string;
+  /** Inside the history detail view: no action bar, no own scroll container. */
+  embedded?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -30,8 +33,8 @@ export function ResultView({
   };
   const usd = formatUsd(result.usage?.estUsd);
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex grow flex-col gap-3 overflow-y-auto p-3.5">
+    <div className={embedded ? 'flex flex-col' : 'flex h-full flex-col'}>
+      <div className={`flex grow flex-col gap-3 p-3.5 ${embedded ? '' : 'overflow-y-auto'}`}>
         <InputCard input={result.input} when={timeAgo(result.createdAt)} />
         <VerdictBanner verdict={result.verdict} />
         {result.degraded && (
@@ -106,17 +109,19 @@ export function ResultView({
           )}
         </div>
       </div>
-      <div className="flex shrink-0 gap-2 border-t border-line bg-paper px-3.5 py-2.5">
-        <button className="wys-btn grow" onClick={copy}>
-          {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied' : 'Copy'}
-        </button>
-        <button className="wys-btn grow" onClick={onRecheck}>
-          <Refresh size={15} /> Re-check
-        </button>
-        <a href={googleAiModeUrl(result.input)} target="_blank" rel="noopener noreferrer" className="wys-btn wys-btn-primary grow-[1.4] no-underline">
-          Open in Google AI <External size={14} />
-        </a>
-      </div>
+      {!embedded && (
+        <div className="flex shrink-0 gap-2 border-t border-line bg-paper px-3.5 py-2.5">
+          <button className="wys-btn grow" onClick={copy}>
+            {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied' : 'Copy'}
+          </button>
+          <button className="wys-btn grow" onClick={onRecheck}>
+            <Refresh size={15} /> Re-check
+          </button>
+          <a href={googleAiModeUrl(result.input)} target="_blank" rel="noopener noreferrer" className="wys-btn wys-btn-primary grow-[1.4] no-underline">
+            Open in Google AI <External size={14} />
+          </a>
+        </div>
+      )}
     </div>
   );
 }

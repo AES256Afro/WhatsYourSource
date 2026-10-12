@@ -51,6 +51,10 @@ export const SettingsSchema = z.object({
     /** Hostnames where the chip is never shown. */
     disabledSites: z.array(z.string()),
   }),
+  history: z.object({
+    /** Snapshot storage cap; oldest snapshots are dropped first (results are kept). */
+    maxMb: z.number().min(10).max(5000),
+  }),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -74,6 +78,7 @@ export const DEFAULT_SETTINGS: Settings = {
     anthropic: { apiKey: '', model: 'claude-sonnet-5-5' },
   },
   privacy: { snapshots: true, chip: true, disabledSites: [] },
+  history: { maxMb: 200 },
 };
 
 const STORAGE_KEY = 'settings';

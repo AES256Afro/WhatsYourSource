@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
+import { enforceSnapshotCap, saveCheck } from '@/lib/history/db';
+import { captureFromTab } from '@/lib/history/snapshot';
 import { onJob, takeJob } from '@/lib/jobs';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { runCheck } from '@/lib/pipeline/runCheck';
@@ -8,13 +10,16 @@ import { PROVIDER_LABELS, createProvider } from '@/lib/providers/registry';
 import { providerOrder, providerReady, type Settings } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/webmode';
 import { CheckingView, type RunState } from './components/CheckingView';
+import { DetailView } from './components/DetailView';
 import { ErrorView, type RunError } from './components/ErrorView';
+import { HistoryView } from './components/HistoryView';
 import { HomeView } from './components/HomeView';
+import { External, Sliders } from './components/Icons';
+import { RecentList } from './components/RecentList';
 import { ResultView } from './components/ResultView';
 import { SettingsView } from './components/SettingsView';
 import { TopBar } from './components/TopBar';
 import { useSettings } from './hooks/useSettings';
-import { External, Sliders } from './components/Icons';
 
 type View = 'home' | 'checking' | 'result' | 'error' | 'settings' | 'history' | 'detail';
 
@@ -26,8 +31,12 @@ export function App() {
   const [view, setView] = useState<View>('home');
   const [run, setRun] = useState<RunState | null>(null);
   const [result, setResult] = useState<CheckResult | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [savedWithSnapshot, setSavedWithSnapshot] = useState(false);
   const [error, setError] = useState<{ input: CheckInput; error: RunError } | null>(null);
   const [needsSetup, setNeedsSetup] = useState<CheckInput | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [historyTick, setHistoryTick] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const seenJobs = useRef(new Set<string>());
   const settingsRef = useRef<Settings | null>(null);
@@ -38,12 +47,14 @@ export function App() {
   }, []);
 
   const startCheck = useCallback(
-    async (input: CheckInput) => {
+    async (input: CheckInput, tabId?: number) => {
       const s = settingsRef.current;
       if (!s) return;
       abortRef.current?.abort();
       setError(null);
       setResult(null);
+      setSavedId(null);
+      setSavedWithSnapshot(false);
 
       if (s.defaultProvider === 'webmode') {
         openWebMode(input);
@@ -56,6 +67,9 @@ export function App() {
         setView('settings');
         return;
       }
+
+      // Capture the page as it is *now*, in parallel with the AI call.
+      const snapshotPromise = s.privacy.snapshots && input.kind !== 'image' ? captureFromTab(tabId, input.kind === 'text' ? input.text : undefined) : Promise.resolve(null);
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -75,7 +89,7 @@ export function App() {
         };
         setRun({ ...state });
         setView('checking');
-        let finished = false;
+        let finished: CheckResult | null = null;
         let failed: RunError | null = null;
 
         for await (const ev of runCheck(input, provider, controller.signal)) {
@@ -89,14 +103,16 @@ export function App() {
               break;
             case 'searchQueries':
               state.queries = ev.queries;
-              state.statuses = [...state.statuses.filter((x) => !x.startsWith('Searched')), `Searched Google · ${ev.queries.length} ${ev.queries.length === 1 ? 'query' : 'queries'}`];
+              state.statuses = [
+                ...state.statuses.filter((x) => !x.startsWith('Searched')),
+                `Searched Google · ${ev.queries.length} ${ev.queries.length === 1 ? 'query' : 'queries'}`,
+              ];
               break;
             case 'sources':
               state.sources = [...state.sources, ...ev.sources];
               break;
             case 'result':
-              setResult(ev.result);
-              finished = true;
+              finished = ev.result;
               break;
             case 'error':
               failed = { code: ev.code, message: ev.message, details: ev.details };
@@ -112,7 +128,18 @@ export function App() {
           return;
         }
         if (finished) {
+          setResult(finished);
           setView('result');
+          try {
+            const snap = await snapshotPromise;
+            await saveCheck(finished, snap);
+            setSavedId(finished.id);
+            setSavedWithSnapshot(!!snap);
+            setHistoryTick((t) => t + 1);
+            void enforceSnapshotCap(s.history.maxMb * 1024 * 1024);
+          } catch (e) {
+            console.warn('[wys] could not save to history', e);
+          }
           return;
         }
         lastError = failed ?? { code: 'unknown', message: 'The provider returned nothing.' };
@@ -127,10 +154,10 @@ export function App() {
   // Jobs from the background (context menu, shortcut, chip, popup).
   useEffect(() => {
     if (!settings) return;
-    const handle = (job: { id: string; input: CheckInput }) => {
+    const handle = (job: { id: string; input: CheckInput; tabId?: number }) => {
       if (seenJobs.current.has(job.id)) return;
       seenJobs.current.add(job.id);
-      void startCheck(job.input);
+      void startCheck(job.input, job.tabId);
     };
     const off = onJob(handle);
     void takeJob().then((job) => job && handle(job));
@@ -138,6 +165,10 @@ export function App() {
   }, [settings === null, startCheck]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cancel = () => abortRef.current?.abort();
+  const openDetail = (id: string) => {
+    setDetailId(id);
+    setView('detail');
+  };
 
   if (!settings) return <div className="p-4 text-[13px] text-ink-2">Loading…</div>;
 
@@ -146,7 +177,9 @@ export function App() {
       case 'checking':
         return run ? <CheckingView run={run} onCancel={cancel} /> : null;
       case 'result':
-        return result ? <ResultView result={result} onRecheck={() => startCheck(result.input)} /> : null;
+        return result ? (
+          <ResultView result={result} onRecheck={() => startCheck(result.input)} saved={!!savedId} snapshotNote={savedWithSnapshot ? 'Saved with page snapshot' : 'Saved to history'} />
+        ) : null;
       case 'error':
         return error ? (
           <ErrorView input={error.input} error={error.error} onRetry={() => startCheck(error.input)} onSettings={() => setView('settings')} />
@@ -174,10 +207,28 @@ export function App() {
           </>
         );
       case 'history':
+        return <HistoryView onOpen={openDetail} refreshKey={historyTick} />;
       case 'detail':
-        return <div className="p-3.5 text-[13px] text-ink-2">History arrives in the next milestone.</div>;
+        return detailId ? (
+          <DetailView
+            id={detailId}
+            onRecheck={(input) => void startCheck(input)}
+            onDeleted={() => {
+              setHistoryTick((t) => t + 1);
+              setView('history');
+            }}
+          />
+        ) : null;
       default:
-        return <HomeView settings={settings} onCheck={(i) => void startCheck(i)} onWebMode={openWebMode} onSettings={() => setView('settings')} />;
+        return (
+          <HomeView
+            settings={settings}
+            onCheck={(i) => void startCheck(i)}
+            onWebMode={openWebMode}
+            onSettings={() => setView('settings')}
+            recent={<RecentList onOpen={openDetail} onSeeAll={() => setView('history')} refreshKey={historyTick} />}
+          />
+        );
     }
   })();
 
@@ -185,8 +236,10 @@ export function App() {
     <div className="flex h-full flex-col bg-paper">
       <TopBar
         view={view}
+        title={view === 'detail' ? 'Saved check' : undefined}
+        onBack={view === 'detail' ? () => setView('history') : undefined}
         onHome={() => setView(result ? 'result' : 'home')}
-        onHistory={() => setView('history')}
+        onHistory={() => setView(view === 'history' ? (result ? 'result' : 'home') : 'history')}
         onSettings={() => setView(view === 'settings' ? (result ? 'result' : 'home') : 'settings')}
       />
       <div className="min-h-0 grow overflow-y-auto">{body}</div>

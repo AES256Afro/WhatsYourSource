@@ -50,6 +50,24 @@ export function SettingsView({ settings, update, wide }: { settings: Settings; u
           <Row label="Show the floating “Check source” chip on selection">
             <Toggle checked={settings.privacy.chip} onChange={(v) => update((s) => ({ ...s, privacy: { ...s.privacy, chip: v } }))} />
           </Row>
+          <Row label="Page snapshot storage limit" hint="Oldest snapshots are removed first; results are kept.">
+            <span className="inline-flex items-center gap-1 text-[12px] text-ink-2">
+              <input
+                type="number"
+                min={10}
+                max={5000}
+                step={10}
+                className="wys-input h-8 w-20 text-[12px]"
+                value={settings.history.maxMb}
+                onChange={(e) => {
+                  const v = Math.min(5000, Math.max(10, Number(e.target.value) || 10));
+                  void update((s) => ({ ...s, history: { ...s.history, maxMb: v } }));
+                }}
+                aria-label="Snapshot storage limit in megabytes"
+              />
+              MB
+            </span>
+          </Row>
           <div className="flex flex-col gap-1 py-2.5">
             <label htmlFor="wys-disabled" className="text-[13px]">
               Never show the chip on these sites <span className="text-ink-2">(one hostname per line)</span>
