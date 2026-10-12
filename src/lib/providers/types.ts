@@ -14,6 +14,8 @@ export interface GenerateRequest {
   urls?: string[];
   /** Hint for a repair/second pass: plain completion, no tools. */
   plain?: boolean;
+  /** A ready-made search query for providers that must search before the model runs. */
+  searchHint?: string;
 }
 
 /** A source the provider actually touched (search result, grounding chunk, fetched page). */

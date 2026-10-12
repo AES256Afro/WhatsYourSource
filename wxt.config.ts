@@ -20,6 +20,10 @@ export default defineConfig({
     permissions: ['contextMenus', 'storage', 'unlimitedStorage', 'activeTab', 'scripting'],
     host_permissions: [
       'https://generativelanguage.googleapis.com/*',
+      'https://api.anthropic.com/*',
+      'https://api.openai.com/*',
+      'https://api.search.brave.com/*',
+      'https://api.tavily.com/*',
       'http://localhost/*',
       'http://127.0.0.1/*',
     ],

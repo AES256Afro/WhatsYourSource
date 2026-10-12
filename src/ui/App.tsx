@@ -6,7 +6,7 @@ import { onJob, takeJob } from '@/lib/jobs';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { runCheck } from '@/lib/pipeline/runCheck';
 import type { CheckResult } from '@/lib/pipeline/schema';
-import { PROVIDER_LABELS, createProvider } from '@/lib/providers/registry';
+import { createProvider, providerDisplayName } from '@/lib/providers/registry';
 import { providerOrder, providerReady, type Settings } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/webmode';
 import { CheckingView, type RunState } from './components/CheckingView';
@@ -80,7 +80,7 @@ export function App() {
         if (!provider) continue;
         const state: RunState = {
           input,
-          providerLabel: `${PROVIDER_LABELS[id]} · ${provider.model}`,
+          providerLabel: `${providerDisplayName(id, s)} · ${provider.model}`,
           statuses: [],
           text: '',
           queries: [],

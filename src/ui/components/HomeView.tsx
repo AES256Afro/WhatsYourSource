@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { browser } from 'wxt/browser';
 import type { CheckInput, SelectionInfo } from '@/lib/messaging/protocol';
 import { SelectionInfoSchema } from '@/lib/messaging/protocol';
-import { PROVIDER_LABELS } from '@/lib/providers/registry';
+import { PROVIDER_LABELS, openaiCompatLabel } from '@/lib/providers/registry';
 import type { Settings } from '@/lib/storage/settings';
 import { domainOf, truncate } from '@/lib/util/url';
 import { Label, ProviderBadge } from './common';
@@ -55,8 +55,10 @@ export function HomeView({
     settings.defaultProvider === 'gemini'
       ? `Google AI · ${settings.providers.gemini.model}`
       : settings.defaultProvider === 'openai-compat'
-        ? `Local · ${settings.providers.openaiCompat.model || 'no model'}`
-        : PROVIDER_LABELS[settings.defaultProvider];
+        ? `${openaiCompatLabel(settings.providers.openaiCompat.baseUrl)} · ${settings.providers.openaiCompat.model || 'no model'}`
+        : settings.defaultProvider === 'anthropic'
+          ? `Claude · ${settings.providers.anthropic.model}`
+          : PROVIDER_LABELS[settings.defaultProvider];
 
   const pageInput: CheckInput | null = tab?.url && /^https?:/i.test(tab.url) ? { kind: 'page', url: tab.url, title: tab.title } : null;
 

@@ -8,7 +8,7 @@ import { Label, Pill, toneForVerdict } from './common';
 import { Camera, Download, External, Refresh, Trash } from './Icons';
 import { ResultView } from './ResultView';
 import { SourceList } from './SourceList';
-import { Toggle } from './SettingsView';
+import { Toggle } from './settings/primitives';
 
 type Tab = 'result' | 'page' | 'sources';
 

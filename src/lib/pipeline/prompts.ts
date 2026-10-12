@@ -96,7 +96,29 @@ export function buildRequest(input: CheckInput, extra?: { imageBase64?: string; 
     }
   }
 
-  return { system: SYSTEM_PROMPT, parts, wantSearch: true, urls };
+  return { system: SYSTEM_PROMPT, parts, wantSearch: true, urls, searchHint: searchHintFor(input) };
+}
+
+/** A plain search query for backends that search before the model sees anything. */
+export function searchHintFor(input: CheckInput): string {
+  switch (input.kind) {
+    case 'text': {
+      const words = input.text.replace(/\s+/g, ' ').trim().split(' ');
+      return words.slice(0, 14).join(' ').replace(/^["“”']+|["“”']+$/g, '');
+    }
+    case 'image':
+      return (input.alt || input.nearbyText || input.pageTitle || '').replace(/\s+/g, ' ').trim().split(' ').slice(0, 14).join(' ');
+    case 'page':
+      return input.title ? `${input.title} ${domainOfUrl(input.url)}` : input.url;
+  }
+}
+
+function domainOfUrl(u: string): string {
+  try {
+    return new URL(u).hostname.replace(/^www\./, '');
+  } catch {
+    return u;
+  }
 }
 
 export function buildRepairRequest(rawText: string): GenerateRequest {
