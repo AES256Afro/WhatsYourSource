@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+/* Scan the whole src tree regardless of which Vite root is building (extension or preview). */
+@source '../';
 
 @theme {
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -29,6 +31,44 @@
   --color-bad-soft: #fee2e2;
   --color-bad-line: #f3b4b4;
   --color-muted-soft: #e5e7eb;
+}
+
+/* Dark theme follows the browser. Tokens only — components never hard-code colours. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-ink: #e8eaed;
+    --color-ink-2: #a8b0ba;
+    --color-ink-3: #8b939e;
+    --color-line: #2c3138;
+    --color-line-2: #3a4049;
+    --color-surface: #1b1f24;
+    --color-surface-2: #242930;
+    --color-paper: #15181c;
+
+    --color-accent: #6fb1f0;
+    --color-accent-deep: #8fc1f2;
+    --color-accent-soft: #15283b;
+    --color-accent-line: #2f5478;
+    --color-accent-wash: #121e2b;
+
+    --color-ok: #7ed29a;
+    --color-ok-soft: #12301d;
+    --color-warn: #f1c35a;
+    --color-warn-ink: #f6d98c;
+    --color-warn-soft: #332a10;
+    --color-warn-line: #6b5520;
+    --color-bad: #f28b8b;
+    --color-bad-ink: #f6b1b1;
+    --color-bad-soft: #3a1818;
+    --color-bad-line: #6e2a2a;
+    --color-muted-soft: #2c3138;
+  }
+  .wys-btn-primary {
+    color: #0b1620;
+  }
+  .wys-btn-primary:hover {
+    color: #0b1620;
+  }
 }
 
 html,
@@ -101,6 +141,7 @@ textarea {
 }
 .wys-btn-primary:hover {
   background: var(--color-accent-deep);
+  border-color: var(--color-accent-deep);
 }
 .wys-icon-btn {
   width: 36px;

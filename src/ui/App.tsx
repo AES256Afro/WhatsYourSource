@@ -17,6 +17,7 @@ import { DetailView } from './components/DetailView';
 import { ErrorView, type RunError } from './components/ErrorView';
 import { HistoryView } from './components/HistoryView';
 import { HomeView } from './components/HomeView';
+import { Onboarding } from './components/Onboarding';
 import { External, Sliders } from './components/Icons';
 import { RecentList } from './components/RecentList';
 import { ResultView } from './components/ResultView';
@@ -205,6 +206,14 @@ export function App() {
   };
 
   if (!settings) return <div className="p-4 text-[13px] text-ink-2">Loading…</div>;
+
+  if (!settings.onboarded && view !== 'settings') {
+    return (
+      <div className="flex h-full flex-col bg-paper">
+        <Onboarding settings={settings} update={update} onDone={() => setView('home')} onOpenSettings={() => setView('settings')} />
+      </div>
+    );
+  }
 
   const body = (() => {
     switch (view) {

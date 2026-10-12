@@ -6,5 +6,5 @@
     "noUncheckedIndexedAccess": true,
     "types": ["vitest/globals"]
   },
-  "include": ["src", "tests", "scripts", ".wxt/wxt.d.ts", "wxt.config.ts", "vitest.config.ts"]
+  "include": ["src", "tests", "scripts", "preview", ".wxt/wxt.d.ts", "wxt.config.ts", "vitest.config.ts", "vite.preview.config.ts"]
 }

@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "lint:firefox": "web-ext lint --source-dir .output/firefox-mv3",
     "icons": "node scripts/make-icons.mjs",
+    "preview": "vite -c vite.preview.config.ts",
     "postinstall": "wxt prepare"
   },
   "dependencies": {

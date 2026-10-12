@@ -42,7 +42,11 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
         <div className="flex items-center gap-2">
           <h1 className="m-0 text-[18px] font-bold">History</h1>
           <span className="grow" />
-          {stats && <span className="text-[12px] text-ink-2">{stats.checks} checks</span>}
+          {stats && (
+            <span className="text-[12px] text-ink-2">
+              {stats.checks} {stats.checks === 1 ? 'check' : 'checks'}
+            </span>
+          )}
         </div>
         <label htmlFor="wys-hsearch" className="sr-only">
           Search history
