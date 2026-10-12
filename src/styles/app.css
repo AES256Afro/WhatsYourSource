@@ -1,0 +1,193 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  --color-ink: #15181c;
+  --color-ink-2: #4b5563;
+  --color-ink-3: #6b7280;
+  --color-line: #e3e6ea;
+  --color-line-2: #d6dae0;
+  --color-surface: #f7f8fa;
+  --color-surface-2: #f3f4f6;
+  --color-paper: #ffffff;
+
+  --color-accent: #0f5fa8;
+  --color-accent-deep: #0a4a85;
+  --color-accent-soft: #e6f0fa;
+  --color-accent-line: #bfd7f5;
+  --color-accent-wash: #f2f7fd;
+
+  --color-ok: #166534;
+  --color-ok-soft: #dcfce7;
+  --color-warn: #7a4e00;
+  --color-warn-ink: #5c3d00;
+  --color-warn-soft: #fef3c7;
+  --color-warn-line: #f5d77a;
+  --color-bad: #991b1b;
+  --color-bad-ink: #7f1d1d;
+  --color-bad-soft: #fee2e2;
+  --color-bad-line: #f3b4b4;
+  --color-muted-soft: #e5e7eb;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* Small reusable bits that read better as classes than as 12 utilities repeated 40 times. */
+.wys-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-2);
+  text-transform: uppercase;
+}
+.wys-card {
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-paper);
+}
+.wys-btn {
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--color-line-2);
+  border-radius: 10px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-weight: 600;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wys-btn:hover {
+  background: var(--color-surface);
+}
+.wys-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.wys-btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+.wys-btn-primary:hover {
+  background: var(--color-accent-deep);
+}
+.wys-icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.wys-icon-btn:hover,
+.wys-icon-btn[aria-pressed='true'] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+.wys-input {
+  height: 38px;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--color-line-2);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+.wys-input:focus,
+.wys-btn:focus-visible,
+.wys-icon-btn:focus-visible {
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 1px;
+}
+.wys-cite {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-decoration: none;
+  vertical-align: 1px;
+}
+.wys-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wys-spin {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--color-accent);
+  border-right-color: var(--color-accent-line);
+  box-sizing: border-box;
+  animation: wys-spin 0.9s linear infinite;
+}
+@keyframes wys-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.wys-caret::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: var(--color-accent);
+  vertical-align: -2px;
+  margin-left: 2px;
+  animation: wys-blink 1s steps(2) infinite;
+}
+@keyframes wys-blink {
+  to {
+    opacity: 0;
+  }
+}
+.wys-prose p {
+  margin: 0 0 8px;
+}
+.wys-prose p:last-child {
+  margin-bottom: 0;
+}

@@ -1,0 +1,39 @@
+# WhatsYourSource
+
+Browser extension (Chrome + Firefox, Manifest V3) that answers **"where did this come from, and is it legit?"** for highlighted text, images and posts — with the AI of your choice.
+
+- **Google AI (Gemini) with your own free key** — Google Search grounding, answers and sources inside the side panel. Default.
+- **Google AI Mode on the web** — no key, no setup: hands your selection to google.com in a new tab.
+- **Your own frontier model** — Claude, GPT or any OpenAI-compatible API key.
+- **A local model on your device** — Ollama / LM Studio (e.g. Qwen), paired with a search tool so it can find sources.
+
+Every in-panel check is kept in a local history with a saved copy of the page it came from. Nothing leaves the browser until you press **Check**.
+
+See [PLAN.md](PLAN.md) for the architecture, milestones and the UI mockups.
+
+## Development
+
+```bash
+npm install
+npm run dev            # Chrome, with hot reload
+npm run dev:firefox    # Firefox
+npm run build:all      # .output/chrome-mv3 and .output/firefox-mv3
+npm test
+```
+
+Load the unpacked build from `.output/chrome-mv3` (chrome://extensions → Developer mode → Load unpacked) or run `npm run dev:firefox`, which launches Firefox with the extension temporarily installed.
+
+### Layout
+
+```
+src/entrypoints/   background (router), content (selection chip + page capture), sidepanel, popup, options
+src/lib/providers/ one file per AI provider; the pipeline is provider-agnostic
+src/lib/pipeline/  prompt, result schema, source merging, the streaming check runner
+src/lib/history/   IndexedDB store for past checks and page snapshots
+src/ui/            React side panel / popup / options
+tests/unit/        vitest
+```
+
+### Settings and keys
+
+Keys live in `browser.storage.local` on your device. They are never synced and are only ever sent to the provider you picked. The Gemini free tier may use prompts to improve Google's products; a paid key does not.
