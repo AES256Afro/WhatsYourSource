@@ -4,6 +4,7 @@ import type { CheckInput, SelectionInfo } from '@/lib/messaging/protocol';
 import { SelectionInfoSchema } from '@/lib/messaging/protocol';
 import { PROVIDER_LABELS, openaiCompatLabel } from '@/lib/providers/registry';
 import type { Settings } from '@/lib/storage/settings';
+import { getTargetTab } from '@/lib/tabs';
 import { domainOf, truncate } from '@/lib/util/url';
 import { Label, ProviderBadge } from './common';
 import { ChevronRight, Globe, Image, Logo } from './Icons';
@@ -28,14 +29,19 @@ export function HomeView({
   useEffect(() => {
     let alive = true;
     const refresh = async () => {
-      const [t] = await browser.tabs.query({ active: true, currentWindow: true });
+      const t = await getTargetTab();
       if (!alive) return;
       setTab(t ? { id: t.id, url: t.url ?? '', title: t.title ?? '' } : null);
       if (t?.id == null) return setSelection(null);
       try {
+        // The content script reports the page URL/title too; we don't hold the `tabs` permission.
         const reply = await browser.tabs.sendMessage(t.id, { type: 'wys:get-selection' });
         const parsed = SelectionInfoSchema.safeParse(reply);
-        if (alive) setSelection(parsed.success && parsed.data.text.trim() ? parsed.data : null);
+        if (!alive) return;
+        if (parsed.success) {
+          setTab({ id: t.id, url: parsed.data.pageUrl || t.url || '', title: parsed.data.pageTitle || t.title || '' });
+          setSelection(parsed.data.text.trim() ? parsed.data : null);
+        } else setSelection(null);
       } catch {
         if (alive) setSelection(null);
       }

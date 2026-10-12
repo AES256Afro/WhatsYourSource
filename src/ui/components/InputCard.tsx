@@ -3,6 +3,12 @@ import { domainOf } from '@/lib/util/url';
 import { Label } from './common';
 import { Globe, Image, Lines, Link as LinkIcon } from './Icons';
 
+function displayUrl(u: string): string {
+  if (u.startsWith('data:')) return `inline image (${Math.round((u.length * 3) / 4 / 1024)} KB)`;
+  if (u.startsWith('blob:')) return 'in-page image';
+  return u.length > 120 ? `${u.slice(0, 117)}…` : u;
+}
+
 function formatWhen(s: string): string {
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? s : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
@@ -56,7 +62,7 @@ export function InputCard({ input, when, clamp }: { input: CheckInput; when?: st
         {input.kind === 'page' && <Globe size={16} className="mt-0.5 shrink-0 text-ink-3" />}
         <p className={`m-0 min-w-0 text-[13px] leading-[19px] wrap-break-word ${clamp ? 'line-clamp-3' : ''}`}>
           {input.kind === 'text' && `“${input.text}”`}
-          {input.kind === 'image' && (input.alt ? `${input.alt} — ${input.srcUrl}` : input.srcUrl)}
+          {input.kind === 'image' && (input.alt ? `${input.alt} — ${displayUrl(input.srcUrl)}` : displayUrl(input.srcUrl))}
           {input.kind === 'page' && (input.title ? `${input.title} — ${input.url}` : input.url)}
         </p>
       </div>

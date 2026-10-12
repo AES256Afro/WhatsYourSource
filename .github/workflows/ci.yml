@@ -20,6 +20,8 @@ jobs:
       - run: npm run build
       - run: npm run build:firefox
       - run: npx web-ext lint --source-dir .output/firefox-mv3 --no-config-discovery --warnings-as-errors=false
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       - run: npm run zip && npm run zip:firefox
       - uses: actions/upload-artifact@v4
         with:

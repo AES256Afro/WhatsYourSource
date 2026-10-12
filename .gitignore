@@ -8,3 +8,5 @@ dist/
 .DS_Store
 Thumbs.db
 web-ext-artifacts/
+test-results/
+playwright-report/

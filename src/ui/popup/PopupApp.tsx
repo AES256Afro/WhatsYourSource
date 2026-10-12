@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
 import { SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
+import { getTargetTab } from '@/lib/tabs';
 import { googleAiModeUrl } from '@/lib/webmode';
 import { domainOf } from '@/lib/util/url';
 import { useSettings } from '../hooks/useSettings';
@@ -20,14 +21,18 @@ export function PopupApp() {
 
   useEffect(() => {
     void (async () => {
-      const [t] = await browser.tabs.query({ active: true, currentWindow: true });
+      const t = await getTargetTab();
       if (!t) return;
       setTab({ id: t.id, windowId: t.windowId, url: t.url ?? '', title: t.title ?? '' });
       if (t.id == null) return;
       try {
+        // The content script reports the page URL/title too; we don't hold the `tabs` permission.
         const reply = await browser.tabs.sendMessage(t.id, { type: 'wys:get-selection' });
         const parsed = SelectionInfoSchema.safeParse(reply);
-        if (parsed.success && parsed.data.text.trim()) setSelection(parsed.data);
+        if (parsed.success) {
+          setTab({ id: t.id, windowId: t.windowId, url: parsed.data.pageUrl || t.url || '', title: parsed.data.pageTitle || t.title || '' });
+          if (parsed.data.text.trim()) setSelection(parsed.data);
+        }
       } catch {
         /* no content script here */
       }

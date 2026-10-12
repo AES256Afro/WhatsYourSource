@@ -20,7 +20,8 @@ npm install
 npm run dev            # Chrome, with hot reload
 npm run dev:firefox    # Firefox
 npm run build:all      # .output/chrome-mv3 and .output/firefox-mv3
-npm test
+npm test               # unit tests (vitest)
+npm run test:e2e       # loads .output/chrome-mv3 into Chromium/Edge with Playwright and runs a mocked check end to end
 npm run preview        # side panel + popup in a plain browser tab against a fake browser API
                        # (?scenario=fresh|home|popup|local) — handy for UI work without reloading the extension
 ```

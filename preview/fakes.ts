@@ -76,6 +76,26 @@ export async function installFakes(scenario: string) {
   };
   await fakeBrowser.storage.local.set({ settings: base });
 
+  // Image scenario: a generated PNG queued as a job, so the whole image path runs (fetch → provenance → model).
+  if (scenario === 'image') {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 400;
+    const ctx = canvas.getContext('2d')!;
+    const grad = ctx.createLinearGradient(0, 0, 640, 400);
+    grad.addColorStop(0, '#0F5FA8');
+    grad.addColorStop(1, '#F5D77A');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 640, 400);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 42px system-ui';
+    ctx.fillText('[photo in the post]', 120, 210);
+    const srcUrl = canvas.toDataURL('image/png');
+    await fakeBrowser.storage.session.set({
+      pendingJob: { id: 'preview-image', createdAt: Date.now(), tabId: 1, input: { kind: 'image', srcUrl, pageUrl: 'https://x.com/someone/status/1', pageTitle: 'Post by @someone', alt: 'Photo attached to the post' } },
+    });
+  }
+
   // A canned, slowly streamed Gemini reply so the checking view is visible for a moment.
   const realFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = async (input, init) => {

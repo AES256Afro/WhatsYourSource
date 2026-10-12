@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import { SnapshotPayloadSchema } from '../messaging/protocol';
+import { getTargetTab } from '../tabs';
 import type { SnapshotInput, StoredSnapshot } from './db';
 
 /**
@@ -12,7 +13,7 @@ export async function captureFromTab(tabId: number | undefined, highlight?: stri
   let windowId: number | undefined;
   try {
     if (id == null) {
-      const [t] = await browser.tabs.query({ active: true, currentWindow: true });
+      const t = await getTargetTab();
       id = t?.id;
       windowId = t?.windowId;
     } else {
