@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { enforceSnapshotCap, saveCheck } from '@/lib/history/db';
 import { captureFromTab } from '@/lib/history/snapshot';
+import { ImageFetchError } from '@/lib/image/bytes';
+import { prepareImage, type PreparedImage } from '@/lib/image/prepare';
+import { requestOrigin } from '@/lib/permissions';
 import { onJob, takeJob } from '@/lib/jobs';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { runCheck } from '@/lib/pipeline/runCheck';
@@ -69,11 +72,42 @@ export function App() {
       }
 
       // Capture the page as it is *now*, in parallel with the AI call.
-      const snapshotPromise = s.privacy.snapshots && input.kind !== 'image' ? captureFromTab(tabId, input.kind === 'text' ? input.text : undefined) : Promise.resolve(null);
+      const snapshotPromise = s.privacy.snapshots ? captureFromTab(tabId, input.kind === 'text' ? input.text : undefined) : Promise.resolve(null);
 
       const controller = new AbortController();
       abortRef.current = controller;
       let lastError: RunError | null = null;
+
+      // Images: get the bytes and the local provenance facts before any provider runs.
+      let image: PreparedImage | undefined;
+      if (input.kind === 'image') {
+        const prep: RunState = { input, providerLabel: 'Preparing image', statuses: [], text: '', queries: [], sources: [], startedAt: Date.now() };
+        setRun({ ...prep });
+        setView('checking');
+        try {
+          image = await prepareImage(
+            input,
+            tabId,
+            (m) => {
+              prep.statuses = [...prep.statuses, m];
+              setRun({ ...prep });
+            },
+            controller.signal,
+          );
+        } catch (e) {
+          const err = e instanceof ImageFetchError ? e : null;
+          setError({
+            input,
+            error: {
+              code: err?.kind === 'permission' ? 'image-permission' : 'image',
+              message: err?.kind === 'permission' ? 'The image host blocked a direct download.' : err?.kind === 'not-image' ? 'That link is not an image.' : 'Could not load the image.',
+              details: err?.message ?? String(e),
+            },
+          });
+          setView('error');
+          return;
+        }
+      }
 
       for (const id of order) {
         const provider = createProvider(id, s);
@@ -92,7 +126,7 @@ export function App() {
         let finished: CheckResult | null = null;
         let failed: RunError | null = null;
 
-        for await (const ev of runCheck(input, provider, controller.signal)) {
+        for await (const ev of runCheck(input, provider, controller.signal, image ? { image } : {})) {
           if (controller.signal.aborted) break;
           switch (ev.type) {
             case 'status':
@@ -182,7 +216,20 @@ export function App() {
         ) : null;
       case 'error':
         return error ? (
-          <ErrorView input={error.input} error={error.error} onRetry={() => startCheck(error.input)} onSettings={() => setView('settings')} />
+          <ErrorView
+            input={error.input}
+            error={error.error}
+            onRetry={() => startCheck(error.input)}
+            onSettings={() => setView('settings')}
+            onAllowHost={
+              error.error.code === 'image-permission' && error.input.kind === 'image'
+                ? async () => {
+                    const ok = await requestOrigin((error.input as { srcUrl: string }).srcUrl);
+                    if (ok) void startCheck(error.input);
+                  }
+                : undefined
+            }
+          />
         ) : null;
       case 'settings':
         return (

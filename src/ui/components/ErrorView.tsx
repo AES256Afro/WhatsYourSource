@@ -18,6 +18,8 @@ const HINT: Record<string, string> = {
   'bad-request': 'The provider didn’t accept the request — often an unknown model name. Check the model in settings.',
   server: 'The provider had a server error. Try again in a moment.',
   cancelled: 'Cancelled.',
+  'image-permission': 'The site doesn’t allow extensions to read its images directly. Allow access to that host once and try again, or make sure the image is visible on screen so a screenshot can be used.',
+  image: 'The image couldn’t be loaded. Try opening it in its own tab and checking it from there.',
 };
 
 export function ErrorView({
@@ -25,12 +27,15 @@ export function ErrorView({
   error,
   onRetry,
   onSettings,
+  onAllowHost,
 }: {
   input: CheckInput;
   error: RunError;
   onRetry: () => void;
   onSettings: () => void;
+  onAllowHost?: () => void;
 }) {
+  const host = input.kind === 'image' ? hostOf(input.srcUrl) : '';
   return (
     <div className="flex flex-col gap-3.5 p-3.5">
       <InputCard input={input} clamp />
@@ -43,6 +48,11 @@ export function ErrorView({
         </div>
       </div>
       <p className="m-0 text-[13px] leading-[19px] text-ink-2">{HINT[error.code] ?? 'Something unexpected happened. Try again, or use Google AI Mode.'}</p>
+      {onAllowHost && host && (
+        <button className="wys-btn wys-btn-primary" onClick={onAllowHost}>
+          Allow access to {host} and retry
+        </button>
+      )}
       <div className="flex gap-2">
         <button className="wys-btn grow" onClick={onRetry}>
           <Refresh size={15} /> Try again
@@ -51,9 +61,17 @@ export function ErrorView({
           <Sliders size={15} /> Settings
         </button>
       </div>
-      <a href={googleAiModeUrl(input)} target="_blank" rel="noopener noreferrer" className="wys-btn wys-btn-primary no-underline">
+      <a href={googleAiModeUrl(input)} target="_blank" rel="noopener noreferrer" className={`wys-btn no-underline ${onAllowHost ? '' : 'wys-btn-primary'}`}>
         Open in Google AI Mode instead <External size={14} />
       </a>
     </div>
   );
+}
+
+function hostOf(u: string): string {
+  try {
+    return new URL(u).host;
+  } catch {
+    return '';
+  }
 }

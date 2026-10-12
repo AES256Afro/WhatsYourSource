@@ -19,6 +19,11 @@ export function InputCard({ input, when, clamp }: { input: CheckInput; when?: st
           {input.kind === 'page' && (input.title ? `${input.title} — ${input.url}` : input.url)}
         </p>
       </div>
+      {input.kind === 'image' && (
+        <a href={input.srcUrl} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-[10px] border border-line bg-surface-2">
+          <img src={input.srcUrl} alt={input.alt ?? 'The checked image'} className="block max-h-[180px] w-full object-contain" loading="lazy" />
+        </a>
+      )}
     </div>
   );
 }
