@@ -6,7 +6,13 @@ export function checkToStandaloneHtml(check: StoredCheck, snapshot?: StoredSnaps
   const r = check.result;
   const e = escapeHtml;
   const subject =
-    r.input.kind === 'text' ? `<blockquote>${e(r.input.text)}</blockquote>` : r.input.kind === 'image' ? `<p>Image: <a href="${e(r.input.srcUrl)}">${e(r.input.srcUrl)}</a></p>` : `<p>Page: <a href="${e(r.input.url)}">${e(r.input.url)}</a></p>`;
+    r.input.kind === 'text'
+      ? `<blockquote>${e(r.input.text)}</blockquote>`
+      : r.input.kind === 'image'
+        ? `<p>Image: <a href="${e(r.input.srcUrl)}">${e(r.input.srcUrl)}</a></p>`
+        : r.input.kind === 'post'
+          ? `<p><small>Post on ${e(r.input.site)}${r.input.author ? ` by ${e(r.input.author)}` : ''}${r.input.permalink ? ` · <a href="${e(r.input.permalink)}">permalink</a>` : ''}</small></p><blockquote style="white-space:pre-line">${e(r.input.text)}</blockquote>`
+          : `<p>Page: <a href="${e(r.input.url)}">${e(r.input.url)}</a></p>`;
   const claims = r.claims.length
     ? `<h3>Claims</h3><ul>${r.claims.map((c) => `<li><strong>${e(c.text)}</strong> — ${e(c.status)}${c.note ? `: ${e(c.note)}` : ''}${c.sourceIds.length ? ` [${c.sourceIds.join(', ')}]` : ''}</li>`).join('')}</ul>`
     : '';

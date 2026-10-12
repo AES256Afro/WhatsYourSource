@@ -23,7 +23,7 @@ export function ProviderCard({
   return (
     <div className={`flex flex-col gap-2.5 rounded-xl border p-3 ${isDefault ? 'border-accent bg-accent-wash' : 'border-line'} ${disabled ? 'opacity-70' : ''}`}>
       <div className="flex items-center gap-2">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] ${isDefault ? 'bg-accent text-white' : 'bg-surface-2 text-ink-2'}`}>{icon}</span>
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] ${isDefault ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}>{icon}</span>
         <span className="flex min-w-0 grow flex-col">
           <span className="text-[14px] font-semibold">{title}</span>
           {subtitle && (
@@ -34,7 +34,7 @@ export function ProviderCard({
           )}
         </span>
         {isDefault ? (
-          <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-white">Default</span>
+          <span className="rounded-full bg-accent-fill px-2 py-0.5 text-[11px] font-semibold text-white">Default</span>
         ) : (
           onMakeDefault &&
           !disabled && (
@@ -69,7 +69,7 @@ export function Toggle({ checked, onChange, disabled }: { checked: boolean; onCh
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative h-5 w-9 shrink-0 rounded-full border-0 p-0 transition-colors ${checked ? 'bg-accent' : 'bg-line-2'} ${disabled ? 'opacity-50' : 'cursor-pointer'}`}
+      className={`relative h-5 w-9 shrink-0 rounded-full border-0 p-0 transition-colors ${checked ? 'bg-accent-fill' : 'bg-line-2'} ${disabled ? 'opacity-50' : 'cursor-pointer'}`}
     >
       <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
     </button>

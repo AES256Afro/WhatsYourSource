@@ -3,6 +3,7 @@ import { browser } from 'wxt/browser';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
 import { MessageSchema, type SelectionInfo, type SnapshotPayload } from '@/lib/messaging/protocol';
+import { extractPost } from '@/lib/post/extract';
 import { DEFAULT_SETTINGS, mergeSettings, type Settings } from '@/lib/storage/settings';
 
 /**
@@ -57,6 +58,11 @@ export default defineContentScript({
     ctx.addEventListener(document, 'pointerdown', (e) => {
       if (!chip.contains(e.target as Node | null)) chip.hide();
     });
+    // Remember what was under the cursor when the context menu opened, for "Check source of this post".
+    let lastContextTarget: Element | null = null;
+    ctx.addEventListener(document, 'contextmenu', (e) => {
+      lastContextTarget = e.target instanceof Element ? e.target : null;
+    });
 
     browser.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
       const parsed = MessageSchema.safeParse(raw);
@@ -68,6 +74,13 @@ export default defineContentScript({
         case 'wys:capture-snapshot':
           try {
             sendResponse(captureSnapshot());
+          } catch (e) {
+            sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+          }
+          return false;
+        case 'wys:extract-post':
+          try {
+            sendResponse(extractPost(lastContextTarget));
           } catch (e) {
             sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
           }

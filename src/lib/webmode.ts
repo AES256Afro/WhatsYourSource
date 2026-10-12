@@ -17,6 +17,9 @@ export function googleAiModeUrl(input: CheckInput): string {
     case 'page':
       q = `Who is behind ${input.url}, is it an original source, and do its main claims hold up?`;
       break;
+    case 'post':
+      q = `Is this ${input.site} post accurate and where do its claims originally come from? "${truncate(input.text.replace(/\s+/g, ' ').trim(), 800)}"`;
+      break;
   }
   return `https://www.google.com/search?udm=50&q=${encodeURIComponent(q)}`;
 }

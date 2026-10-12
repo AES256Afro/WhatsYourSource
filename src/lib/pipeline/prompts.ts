@@ -94,6 +94,22 @@ export function buildRequest(input: CheckInput, extra?: { imageBase64?: string; 
       parts.push({ text: lines.join('\n\n') });
       break;
     }
+    case 'post': {
+      const meta = [input.author ? `author: ${input.author}` : null, input.postedAt ? `posted: ${input.postedAt}` : null, input.permalink ? `permalink: ${input.permalink}` : null]
+        .filter(Boolean)
+        .join(' · ');
+      const lines = [`The user asked about a post on ${input.site}${meta ? ` (${meta})` : ''}:`, untrusted('post', { site: input.site }, truncate(input.text, 5000))];
+      if (input.images.length) lines.push(`Images attached to the post:\n${input.images.slice(0, 4).join('\n')}`);
+      if (input.links.length) {
+        lines.push(`Links in the post:\n${input.links.slice(0, 8).join('\n')}`);
+        urls.push(...input.links.slice(0, 8));
+      }
+      lines.push(
+        'Identify the specific claims the post makes, find where they originally come from (is this the original source or a repost?), whether the linked material says what the post says it does, and whether the claims hold up.',
+      );
+      parts.push({ text: lines.join('\n\n') });
+      break;
+    }
   }
 
   return { system: SYSTEM_PROMPT, parts, wantSearch: true, urls, searchHint: searchHintFor(input) };
@@ -110,6 +126,10 @@ export function searchHintFor(input: CheckInput): string {
       return (input.alt || input.nearbyText || input.pageTitle || '').replace(/\s+/g, ' ').trim().split(' ').slice(0, 14).join(' ');
     case 'page':
       return input.title ? `${input.title} ${domainOfUrl(input.url)}` : input.url;
+    case 'post': {
+      const words = input.text.replace(/\s+/g, ' ').trim().split(' ');
+      return words.slice(0, 14).join(' ');
+    }
   }
 }
 

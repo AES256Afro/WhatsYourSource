@@ -9,7 +9,9 @@ Browser extension (Chrome + Firefox, Manifest V3) that answers **"where did this
 
 Every in-panel check is kept in a local history with a saved copy of the page it came from. Nothing leaves the browser until you press **Check**.
 
-See [PLAN.md](PLAN.md) for the architecture, milestones and the UI mockups.
+**What you can check:** highlighted text (floating chip, right-click, or `Ctrl+Shift+S`), an image (right-click → *Check source of this image*; EXIF, Content Credentials and a perceptual hash are read on your device first), a social post (right-click anywhere in it → *Check source of this post*), or the whole page.
+
+See [PLAN.md](PLAN.md) for the architecture, milestones and the UI mockups; [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/PERMISSIONS.md](docs/PERMISSIONS.md) for what is sent where and why each permission exists.
 
 ## Development
 
@@ -19,6 +21,8 @@ npm run dev            # Chrome, with hot reload
 npm run dev:firefox    # Firefox
 npm run build:all      # .output/chrome-mv3 and .output/firefox-mv3
 npm test
+npm run preview        # side panel + popup in a plain browser tab against a fake browser API
+                       # (?scenario=fresh|home|popup|local) — handy for UI work without reloading the extension
 ```
 
 Load the unpacked build from `.output/chrome-mv3` (chrome://extensions → Developer mode → Load unpacked) or run `npm run dev:firefox`, which launches Firefox with the extension temporarily installed.

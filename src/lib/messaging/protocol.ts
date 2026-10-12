@@ -30,15 +30,31 @@ export const PageInputSchema = z.object({
   excerpt: z.string().optional(),
 });
 
+/** A social post (or any article-like block) extracted from under the cursor. */
+export const PostInputSchema = z.object({
+  kind: z.literal('post'),
+  pageUrl: z.string(),
+  pageTitle: z.string(),
+  site: z.string(),
+  permalink: z.string().optional(),
+  author: z.string().optional(),
+  postedAt: z.string().optional(),
+  text: z.string().min(1),
+  images: z.array(z.string()).max(6),
+  links: z.array(z.string()).max(12),
+});
+
 export const CheckInputSchema = z.discriminatedUnion('kind', [
   TextInputSchema,
   ImageInputSchema,
   PageInputSchema,
+  PostInputSchema,
 ]);
 export type CheckInput = z.infer<typeof CheckInputSchema>;
 export type TextInput = z.infer<typeof TextInputSchema>;
 export type ImageInput = z.infer<typeof ImageInputSchema>;
 export type PageInput = z.infer<typeof PageInputSchema>;
+export type PostInput = z.infer<typeof PostInputSchema>;
 
 /** A job handed from the background to the side panel through storage.session. */
 export const JobSchema = z.object({
@@ -77,6 +93,8 @@ export const MessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('wys:capture-snapshot'), highlight: z.string().optional() }),
   /** side panel → content: where is this image on screen? */
   z.object({ type: z.literal('wys:locate-image'), srcUrl: z.string() }),
+  /** background → content: extract the post under the last right-click. */
+  z.object({ type: z.literal('wys:extract-post') }),
 ]);
 export type Message = z.infer<typeof MessageSchema>;
 

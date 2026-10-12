@@ -71,6 +71,8 @@ export function summarizeInput(input: CheckInput): { title: string; site: string
       return { title: input.alt ? truncate(input.alt, 140) : `Image on ${domainOf(input.pageUrl)}`, site: domainOf(input.pageUrl) };
     case 'page':
       return { title: input.title ? truncate(input.title, 140) : input.url, site: domainOf(input.url) };
+    case 'post':
+      return { title: `${input.author ? `${input.author}: ` : ''}${truncate(input.text.replace(/\s+/g, ' ').trim(), 120)}`, site: input.site };
   }
 }
 

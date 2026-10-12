@@ -3,7 +3,7 @@ import { clearHistory, exportAll, listChecks, storageStats, type StoredCheck } f
 import { downloadText } from '@/lib/history/export';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { Label, Pill, toneForVerdict } from './common';
-import { Camera, Globe, Image, Lines } from './Icons';
+import { Camera, Globe, Image, Lines, Post } from './Icons';
 
 type KindFilter = CheckInput['kind'] | 'all';
 
@@ -58,6 +58,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
               ['all', 'All'],
               ['text', 'Text'],
               ['image', 'Image'],
+              ['post', 'Post'],
               ['page', 'Page'],
             ] as Array<[KindFilter, string]>
           ).map(([k, label]) => (
@@ -106,7 +107,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
 }
 
 export function HistoryRow({ check: c, onOpen, compact }: { check: StoredCheck; onOpen: () => void; compact?: boolean }) {
-  const Icon = c.kind === 'text' ? Lines : c.kind === 'image' ? Image : Globe;
+  const Icon = c.kind === 'text' ? Lines : c.kind === 'image' ? Image : c.kind === 'post' ? Post : Globe;
   const time = new Date(c.createdAt);
   return (
     <button className={`wys-card flex items-start gap-2.5 px-2.5 py-[9px] text-left hover:bg-surface ${compact ? 'border-0 px-2' : ''}`} onClick={onOpen}>

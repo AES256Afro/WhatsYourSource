@@ -67,11 +67,11 @@ export function Onboarding({ settings, update, onDone, onOpenSettings }: { setti
           {CHOICES.map((c) => (
             <label key={c.id} htmlFor={`wys-ob-${c.id}`} className={`flex cursor-pointer items-start gap-2.5 rounded-[10px] border px-3 py-2.5 ${choice === c.id ? 'border-accent bg-accent-wash' : 'border-line bg-paper'}`}>
               <input id={`wys-ob-${c.id}`} type="radio" name="wys-provider" className="mt-[3px] accent-accent" checked={choice === c.id} onChange={() => setChoice(c.id)} />
-              <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg ${choice === c.id ? 'bg-accent text-white' : 'bg-surface-2 text-ink-2'}`}>{c.icon}</span>
+              <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg ${choice === c.id ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}>{c.icon}</span>
               <span className="flex min-w-0 grow flex-col gap-0.5">
                 <span className="flex items-center gap-1.5">
                   <span className="text-[13px] font-semibold">{c.title}</span>
-                  <span className={`rounded-full px-1.5 py-px text-[10px] font-semibold ${c.tagTone === 'accent' ? 'bg-accent text-white' : c.tagTone === 'ok' ? 'bg-ok-soft text-ok' : 'bg-muted-soft text-ink-2'}`}>{c.tag}</span>
+                  <span className={`rounded-full px-1.5 py-px text-[10px] font-semibold ${c.tagTone === 'accent' ? 'bg-accent-fill text-white' : c.tagTone === 'ok' ? 'bg-ok-soft text-ok' : 'bg-muted-soft text-ink-2'}`}>{c.tag}</span>
                 </span>
                 <span className="text-[12px] leading-4 text-ink-2">{c.blurb}</span>
               </span>
@@ -147,7 +147,7 @@ export function Onboarding({ settings, update, onDone, onOpenSettings }: { setti
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-accent text-[12px] font-bold text-white">{n}</span>
+      <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-accent-fill text-[12px] font-bold text-white">{n}</span>
       <span className="text-[13px] font-semibold">{children}</span>
     </div>
   );

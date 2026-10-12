@@ -16,6 +16,9 @@
 
   --color-accent: #0f5fa8;
   --color-accent-deep: #0a4a85;
+  /* Filled surfaces that carry white text; stays dark enough in both themes. */
+  --color-accent-fill: #0f5fa8;
+  --color-accent-fill-hover: #0a4a85;
   --color-accent-soft: #e6f0fa;
   --color-accent-line: #bfd7f5;
   --color-accent-wash: #f2f7fd;
@@ -47,6 +50,8 @@
 
     --color-accent: #6fb1f0;
     --color-accent-deep: #8fc1f2;
+    --color-accent-fill: #1f66ad;
+    --color-accent-fill-hover: #2a77c4;
     --color-accent-soft: #15283b;
     --color-accent-line: #2f5478;
     --color-accent-wash: #121e2b;
@@ -62,12 +67,6 @@
     --color-bad-soft: #3a1818;
     --color-bad-line: #6e2a2a;
     --color-muted-soft: #2c3138;
-  }
-  .wys-btn-primary {
-    color: #0b1620;
-  }
-  .wys-btn-primary:hover {
-    color: #0b1620;
   }
 }
 
@@ -135,13 +134,13 @@ textarea {
   cursor: default;
 }
 .wys-btn-primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--color-accent-fill);
+  border-color: var(--color-accent-fill);
   color: #fff;
 }
 .wys-btn-primary:hover {
-  background: var(--color-accent-deep);
-  border-color: var(--color-accent-deep);
+  background: var(--color-accent-fill-hover);
+  border-color: var(--color-accent-fill-hover);
 }
 .wys-icon-btn {
   width: 36px;

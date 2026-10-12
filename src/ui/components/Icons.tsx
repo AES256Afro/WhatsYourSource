@@ -71,6 +71,7 @@ export const Image = (p: P) =>
     </>
   ));
 export const Lines = (p: P) => base(p, <path d="M4 6h16M4 12h10M4 18h7" />);
+export const Post = (p: P) => base(p, <path d="M4 5h16v11H9l-5 4z" />);
 export const Globe = (p: P) =>
   base(p, (
     <>

@@ -15,7 +15,7 @@ _Written 2026-10-12. Model names, prices and store policies below were checked o
 | M2 History + snapshots | ✅ done | IndexedDB, Readability snapshots with highlight, screenshot, export, cap |
 | M3 Provider plugins | ✅ done | OpenAI-compatible + tool loop (SearXNG/Brave/Tavily), Anthropic web search, fallback chain |
 | M4 Image check | ✅ done | Fetch/screenshot capture, EXIF/XMP, PNG text, C2PA presence, pHash; C2PA *verification* still TODO |
-| M5 Posts | ⏳ next | Generic article extraction exists for snapshots; "Check this post" button + adapters not started |
+| M5 Posts | 🔶 generic done | "Check source of this post" context-menu item extracts the post under the cursor on any site; injected per-post buttons and site-specific adapters not started |
 | M6 Polish | 🔶 partial | Dark mode, onboarding, cost meter done; i18n and SW-lifecycle soak test pending |
 | M7 Hardening | 🔶 partial | PRIVACY.md + PERMISSIONS.md written; Playwright e2e and manual QA matrix pending |
 | M8 Store release | ⏳ | Needs real-key QA in Chrome and Firefox first |

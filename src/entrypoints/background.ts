@@ -1,7 +1,7 @@
 import { defineBackground } from '#imports';
 import { browser, type Browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
-import { MessageSchema, SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
+import { MessageSchema, PostInputSchema, SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
 import { loadSettings } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/webmode';
 
@@ -14,6 +14,7 @@ const MENU = {
   selection: 'wys-selection',
   selectionWeb: 'wys-selection-web',
   image: 'wys-image',
+  post: 'wys-post',
   page: 'wys-page',
 } as const;
 
@@ -34,6 +35,7 @@ export default defineBackground(() => {
         contexts: ['selection'],
       });
       browser.contextMenus.create({ id: MENU.image, title: 'Check source of this image', contexts: ['image'] });
+      browser.contextMenus.create({ id: MENU.post, title: 'Check source of this post', contexts: ['page', 'link', 'image', 'selection'] });
       browser.contextMenus.create({ id: MENU.page, title: 'Check source of this page', contexts: ['page'] });
     });
   }
@@ -66,6 +68,23 @@ export default defineBackground(() => {
         if (!info.srcUrl) return;
         openPanel(tab);
         void enqueueJob({ kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle }, tab?.id);
+        return;
+      }
+      case MENU.post: {
+        openPanel(tab);
+        void (async () => {
+          let input: CheckInput = { kind: 'page', url: pageUrl, title: pageTitle };
+          if (tab?.id != null) {
+            try {
+              const reply = await browser.tabs.sendMessage(tab.id, { type: 'wys:extract-post' });
+              const parsed = PostInputSchema.safeParse(reply);
+              if (parsed.success) input = parsed.data;
+            } catch {
+              /* no content script on this page */
+            }
+          }
+          await enqueueJob(input, tab?.id);
+        })();
         return;
       }
       case MENU.page: {

@@ -50,7 +50,7 @@ export function ResultView({
           <div className="flex flex-col gap-1.5">
             <Label>{result.input.kind === 'image' ? 'Earliest match found' : 'Likely original source'}</Label>
             <div className="flex gap-2.5 rounded-xl border border-accent-line bg-accent-wash p-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-accent text-[13px] font-bold text-white">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-accent-fill text-[13px] font-bold text-white">
                 {initials(result.originalSource.publisher || result.originalSource.title)}
               </span>
               <div className="flex min-w-0 grow flex-col gap-1">
@@ -139,7 +139,14 @@ function fmtK(n: number): string {
 
 export function toMarkdown(r: CheckResult): string {
   const lines: string[] = [];
-  const subject = r.input.kind === 'text' ? `> ${r.input.text}` : r.input.kind === 'image' ? `Image: ${r.input.srcUrl}` : `Page: ${r.input.url}`;
+  const subject =
+    r.input.kind === 'text'
+      ? `> ${r.input.text}`
+      : r.input.kind === 'image'
+        ? `Image: ${r.input.srcUrl}`
+        : r.input.kind === 'post'
+          ? `Post on ${r.input.site}${r.input.author ? ` by ${r.input.author}` : ''}${r.input.permalink ? ` (${r.input.permalink})` : ''}:\n> ${r.input.text.replace(/\n/g, '\n> ')}`
+          : `Page: ${r.input.url}`;
   lines.push(`**${r.verdict.label}** (${r.verdict.confidence} confidence) — ${r.verdict.summary}`, '', subject, '', r.narrative, '');
   if (r.originalSource) {
     lines.push(
