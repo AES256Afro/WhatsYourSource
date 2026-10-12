@@ -39,6 +39,10 @@ src/ui/            React side panel / popup / options
 tests/unit/        vitest
 ```
 
+### Local model + private search
+
+A local model can't search by itself. The quickest private search backend is SearXNG in Docker: `docker/searxng/` has a ready `compose.yml` and a `settings.yml` with the JSON API enabled — set a `secret_key`, run `docker compose up -d` in that folder, then pick **SearXNG** with URL `http://localhost:8888` in the add-on's Local model card.
+
 ### Settings and keys
 
 Keys live in `browser.storage.local` on your device. They are never synced and are only ever sent to the provider you picked. The Gemini free tier may use prompts to improve Google's products; a paid key does not.

@@ -1,0 +1,30 @@
+# SearXNG settings for a private, local instance used by WhatsYourSource.
+# Everything not listed here comes from SearXNG's defaults.
+use_default_settings: true
+
+general:
+  instance_name: 'WhatsYourSource search'
+  debug: false
+
+server:
+  # Replace with any random string before first start (e.g. 32 random letters/digits).
+  secret_key: 'REPLACE-ME-WITH-A-RANDOM-STRING'
+  # The rate limiter is for public instances; it would block the add-on's API calls.
+  limiter: false
+  image_proxy: false
+
+search:
+  # The add-on reads results as JSON. `html` keeps the normal web UI working too.
+  formats:
+    - html
+    - json
+  safe_search: 0
+  autocomplete: ''
+
+ui:
+  static_use_hash: true
+
+# Keep the default engines (Google, Bing, DuckDuckGo, Wikipedia, ...). Disable any you don't want:
+# engines:
+#   - name: bing
+#     disabled: true
