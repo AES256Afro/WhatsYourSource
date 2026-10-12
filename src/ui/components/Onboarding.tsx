@@ -114,7 +114,7 @@ export function Onboarding({ settings, update, onDone, onOpenSettings }: { setti
               <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer" className="font-semibold no-underline">
                 Ollama
               </a>{' '}
-              and run <code className="rounded bg-surface-2 px-1">ollama pull qwen3:8b</code>. You’ll pick the model and a search tool on the next screen.
+              and run <code className="rounded bg-surface-2 px-1">ollama pull qwen3.5:9b</code> (or <code className="rounded bg-surface-2 px-1">qwen3.5:4b</code> on a small GPU). You’ll pick the model and a search tool on the next screen.
             </span>
           </div>
         )}

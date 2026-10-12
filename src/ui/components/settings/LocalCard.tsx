@@ -95,7 +95,7 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
         <label htmlFor="wys-ocmodel" className="w-[70px] shrink-0 text-[13px]">
           Model
         </label>
-        <CommitInput id="wys-ocmodel" list="wys-ocmodels" value={o.model} onCommit={(v) => set({ model: v })} placeholder={isLocal ? 'e.g. qwen3:8b' : 'e.g. gpt-5-mini'} className="h-8 min-w-0 grow text-[12px]" />
+        <CommitInput id="wys-ocmodel" list="wys-ocmodels" value={o.model} onCommit={(v) => set({ model: v })} placeholder={isLocal ? 'e.g. qwen3.5:9b' : 'e.g. gpt-5-mini'} className="h-8 min-w-0 grow text-[12px]" />
         <datalist id="wys-ocmodels">
           {models.map((m) => (
             <option key={m} value={m} />
