@@ -1,6 +1,6 @@
 # WhatsYourSource
 
-Browser extension (Chrome + Firefox, Manifest V3) that answers **"where did this come from, and is it legit?"** for highlighted text, images and posts — with the AI of your choice.
+Browser extension (Chrome + Firefox, Manifest V3) that answers **"is this true, and where can I find the source?"** for highlighted text, images and posts — with the AI of your choice.
 
 - **Google AI (Gemini) with your own free key** — Google Search grounding, answers and sources inside the side panel. Default.
 - **Google AI Mode on the web** — no key, no setup: hands your selection to google.com in a new tab.

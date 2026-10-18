@@ -1,6 +1,6 @@
 # WhatsYourSource — Build Plan
 
-Browser extension (Chrome + Firefox) that answers "where did this come from, and is it legit?" for **highlighted text** first, then **images**, then whole **social posts**. Text is platform-agnostic and is the core of the product; images are "send a copy and ask"; post extraction is a later convenience. Defaults to **Google AI (Gemini)** with Google Search grounding; providers are pluggable (cloud APIs or a local model). Every check is kept in a local **history** together with a snapshot of the page it came from.
+Browser extension (Chrome + Firefox) that answers "is this true, and where can I find the source of this topic?" for **highlighted text** first, then **images**, then whole **social posts**. Text is platform-agnostic and is the core of the product; images are "send a copy and ask"; post extraction is a later convenience. Defaults to **Google AI (Gemini)** with Google Search grounding; providers are pluggable (cloud APIs or a local model). Every check is kept in a local **history** together with a snapshot of the page it came from.
 
 _UI mockups (11 screens): https://claude.ai/artifact/HQCWFXKpQx3Xy5oMZNP4jU_
 
@@ -21,6 +21,8 @@ _Written 2026-10-12. Model names, prices and store policies below were checked o
 | M8 Store release | ⏳ | Needs real-key QA in Chrome and Firefox first |
 
 Not yet exercised against a live Gemini key — the pipeline is unit-tested against recorded response shapes; first real-world run is the next QA step.
+
+2026-10-18: every check now puts one question to the model and to the search engine, "Is this true, and where can I find the source of this topic?" (src/lib/pipeline/prompts.ts, src/lib/webmode.ts). The narrative answers the truth question first, then points to the source; the verdict card and the "Likely original source" card map to those two halves.
 
 ---
 

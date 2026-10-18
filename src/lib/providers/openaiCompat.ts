@@ -271,7 +271,7 @@ export class OpenAICompatProvider implements LlmProvider {
   }
 }
 
-const TOOL_GUIDANCE = `You have two tools: web_search(query) and fetch_page(url). Search at least once before answering, read the most promising result with fetch_page when a snippet is not enough, and cite only URLs you actually received from the tools.`;
+const TOOL_GUIDANCE = `You have two tools: web_search(query) and fetch_page(url). Start by putting the user's question to the search engine: the key phrase from the content plus whether it is true (for example the phrase with "fact check") and where its source is (the phrase with "original source"). Search at least once before answering, read the most promising result with fetch_page when a snippet is not enough, and cite only URLs you actually received from the tools.`;
 
 function toUserContent(req: GenerateRequest): string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> {
   const hasImage = req.parts.some((p) => 'image' in p);

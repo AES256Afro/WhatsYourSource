@@ -8,7 +8,7 @@ When you check something, the extension sends to your chosen provider:
 
 - the highlighted text (plus the surrounding paragraph for context), **or** the image bytes (downscaled), **or** the page URL and title;
 - the address and title of the page it came from;
-- a fixed instruction prompt.
+- a fixed instruction prompt that asks "Is this true, and where can I find the source of this topic?".
 
 Providers you can choose:
 

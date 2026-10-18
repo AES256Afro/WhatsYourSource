@@ -5,7 +5,7 @@
  */
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 
-const CANNED_ANSWER = `The line is attributed to Einstein all over the web, but it does not appear in his published writings. Quote Investigator traced the earliest print appearance to a 1981 Narcotics Anonymous text, and Wikiquote lists it under "Misattributed".
+const CANNED_ANSWER = `No: there is no evidence Einstein ever said this. The line is attributed to him all over the web, but it does not appear in his published writings. Quote Investigator traced the earliest print appearance to a 1981 Narcotics Anonymous text, and Wikiquote lists it under "Misattributed".
 
 \`\`\`json
 {
