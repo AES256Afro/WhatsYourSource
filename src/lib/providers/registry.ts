@@ -37,7 +37,7 @@ export function openaiCompatLabel(baseUrl: string): string {
 export function createProvider(id: ProviderId, s: Settings): LlmProvider | null {
   switch (id) {
     case 'gemini':
-      return new GeminiProvider(s.providers.gemini);
+      return new GeminiProvider(s.providers.gemini, PROVIDER_LABELS.gemini);
     case 'openai-compat': {
       const o = s.providers.openaiCompat;
       return new OpenAICompatProvider({
@@ -54,16 +54,17 @@ export function createProvider(id: ProviderId, s: Settings): LlmProvider | null 
       });
     }
     case 'anthropic':
-      return new AnthropicProvider(s.providers.anthropic);
+      return new AnthropicProvider(s.providers.anthropic, PROVIDER_LABELS.anthropic);
     case 'webmode':
       return null;
   }
 }
 
+/** The one name per provider that users see everywhere: onboarding, settings, home, results, history, Markdown. */
 export const PROVIDER_LABELS: Record<ProviderId, string> = {
-  gemini: 'Google AI (Gemini)',
-  'openai-compat': 'OpenAI-compatible',
-  anthropic: 'Anthropic (Claude)',
+  gemini: 'Gemini (your key)',
+  'openai-compat': 'Local or OpenAI-style model',
+  anthropic: 'Claude (your key)',
   webmode: 'Google AI Mode (web)',
 };
 

@@ -42,7 +42,11 @@ export function AnthropicCard({ settings, update }: { settings: Settings; update
         <div className="min-w-[160px] grow basis-0">
           <SecretInput id="wys-akey" value={a.apiKey} onCommit={(v) => set({ apiKey: v })} placeholder="sk-ant-…" />
         </div>
-        <button className="wys-btn h-8 px-2.5 text-[12px]" onClick={() => void verify()} disabled={status.kind === 'checking' || !a.apiKey}>
+        <button
+          className="wys-btn h-8 px-2.5 text-[12px]"
+          aria-disabled={status.kind === 'checking' || !a.apiKey}
+          onClick={() => status.kind !== 'checking' && a.apiKey && void verify()}
+        >
           {status.kind === 'checking' ? '…' : 'Verify'}
         </button>
       </div>

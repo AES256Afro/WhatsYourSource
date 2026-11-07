@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
 import type { CheckInput, SelectionInfo } from '@/lib/messaging/protocol';
 import { SelectionInfoSchema } from '@/lib/messaging/protocol';
@@ -28,6 +28,11 @@ export function HomeView({
   const [pasted, setPasted] = useState('');
   const [openedNote, setOpenedNote] = useState(false);
   const shortcut = useShortcutLabel();
+  // Arriving here (New check, Finish setup, Escape) must not drop keyboard focus on <body>.
+  const landing = useRef<HTMLElement>(null);
+  useEffect(() => {
+    landing.current?.focus();
+  }, [selection !== null]); // eslint-disable-line react-hooks/exhaustive-deps -- once the selection state is known
 
   useEffect(() => {
     let alive = true;
@@ -116,7 +121,11 @@ export function HomeView({
           </Label>
           <p className="m-0 line-clamp-3 text-[13px] leading-[18px]">“{selection.text}”</p>
           <div className="flex gap-2">
-            <button className="wys-btn wys-btn-primary grow" onClick={() => run({ kind: 'text', ...selection })}>
+            <button
+              ref={landing as React.RefObject<HTMLButtonElement>}
+              className="wys-btn wys-btn-primary grow"
+              onClick={() => run({ kind: 'text', ...selection })}
+            >
               {webmode ? (
                 <>
                   Open in Google AI Mode <External size={14} />
@@ -140,7 +149,11 @@ export function HomeView({
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-line-strong p-3 text-[12px] leading-4 text-ink-2">
+        <div
+          ref={landing as React.RefObject<HTMLDivElement>}
+          tabIndex={-1}
+          className="rounded-xl border border-dashed border-line-strong p-3 text-[12px] leading-4 text-ink-2 outline-none"
+        >
           Highlight text on the page and a <strong className="text-ink">Check source</strong> chip appears
           {shortcut ? (
             <>
@@ -148,7 +161,8 @@ export function HomeView({
               — or press <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">{shortcut}</kbd>
             </>
           ) : null}
-          . Right-click an image to check it.
+          . Right-click an image to check it, or type <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">wys</kbd> and your text or link in the
+          address bar.
         </div>
       )}
 
@@ -164,7 +178,9 @@ export function HomeView({
           </span>
           <span className="flex min-w-0 grow flex-col">
             <span className="text-[13px] font-semibold">This page</span>
-            <span className="truncate text-[12px] text-ink-2">{pageInput ? truncate(pageInput.url, 60) : 'Not available on this tab'}</span>
+            <span className="truncate text-[12px] text-ink-2">
+              {pageInput ? (webmode ? `Opens in Google AI Mode ↗ · ${truncate(pageInput.url, 48)}` : truncate(pageInput.url, 60)) : 'Not available on this tab'}
+            </span>
           </span>
           <ChevronRight size={16} className="text-ink-3" />
         </button>
@@ -186,7 +202,7 @@ export function HomeView({
           </label>
           <input id="wys-paste" className="wys-input" placeholder="Paste text or a link…" value={pasted} onChange={(e) => setPasted(e.target.value)} />
           <button type="submit" className="wys-btn" disabled={!pasted.trim()}>
-            Check
+            {webmode ? 'Open in AI Mode ↗' : 'Check'}
           </button>
         </form>
       </div>

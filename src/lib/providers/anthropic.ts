@@ -13,10 +13,15 @@ const VERSION = '2023-06-01';
 /** Claude via the Messages API with the built-in web search tool, streamed. */
 export class AnthropicProvider implements LlmProvider {
   id = 'anthropic' as const;
-  label = 'Anthropic (Claude)';
+  label: string;
   capabilities = { image: true, webSearch: true, urlContext: false };
 
-  constructor(private cfg: AnthropicConfig) {}
+  constructor(
+    private cfg: AnthropicConfig,
+    label = 'Claude',
+  ) {
+    this.label = label;
+  }
 
   get model() {
     return this.cfg.model;

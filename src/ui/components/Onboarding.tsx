@@ -95,7 +95,7 @@ export function Onboarding({
           <p className="m-0 text-[13px] leading-[18px] text-ink-2">You decide which AI does the checking. Change it any time.</p>
         </div>
 
-        <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+        <fieldset className="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0">
           <legend className="mb-1.5 flex items-center gap-2 p-0">
             <StepNo n={1} />
             <span className="text-[13px] font-semibold">How do you want to check sources?</span>
@@ -153,7 +153,12 @@ export function Onboarding({
                   placeholder="Paste key…"
                 />
               </div>
-              <button className="wys-btn px-2.5" type="button" onClick={() => void verifyGemini()} disabled={!geminiKey || verify.kind === 'checking'}>
+              <button
+                className="wys-btn px-2.5"
+                type="button"
+                aria-disabled={!geminiKey || verify.kind === 'checking'}
+                onClick={() => geminiKey && verify.kind !== 'checking' && void verifyGemini()}
+              >
                 Verify
               </button>
             </div>

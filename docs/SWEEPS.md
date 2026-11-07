@@ -20,7 +20,7 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 | Category | Sweeps run | Consecutive clean | Retired |
 |---|---|---|---|
 | Readability | 2 | 0 | no |
-| Usability | 1 | 0 | no |
+| Usability | 2 | 0 | no |
 | Visual | 1 | 0 | no |
 | Quality of life | 1 | 0 | no |
 | Platform features | 2 | 0 | no |
@@ -332,5 +332,24 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - `LlmProvider.id` and `CheckResult.provider.id` are `ProviderId`, removing the cast in App; `toneForVerdict` moved to the schema next to `VerdictKind` and the export's copy is gone; `normalizeStored` → `upgradeStoredCheck`; `loadPublicSettings` → `loadSettingsWithoutSecrets`.
 - Dead code removed: `RunOptions.repair`, `factCheckError`, `MessageResponse`, an impossible branch in `sourceMixNotes`, `domainOfUrl`, orphan doc blocks; stale comments on `shortcutAction`, `providerReady` and the provider interface corrected; the two settings casts replaced by schema parses.
 - Still to do (UI half, after the usability/visual reports): split `App.tsx`'s `startCheck` into `runProviders` + `reduceProgress` + `useCheckRun`; `useProviderVerify` shared by the three cards (fixes the local card's status not resetting on endpoint edits); `UpdateSettings` type, `useActionError`, `Row` for onboarding; `OpenAICompatCard` naming; one provider-name table; test file housekeeping.
+
+`clean: no`
+
+### 2026-11-07 · Usability sweep 2 — independent audit (16 findings), all addressed
+
+- Verified broken from sweep 1: the detail title never received focus (focused before the loaded view rendered) → focus runs once the row has loaded. Verified inert: the "Is Ollama running?" hint (no endpoint on the error) → fixed in readability sweep 2.
+- First run clipped at 400 px: the options `<fieldset>` had the UA `min-inline-size: min-content` → `min-w-0`.
+- Evidence card: "For / Against" with a green tick and red alert read as the opposite of a false verdict → "Why it could be true" / "Why it may not be", no colour, same heading weight for "What it leaves out" / "What would change this".
+- Fact-check banner arrived after focus had moved and pushed the verdict down silently → lookups that have resolved are attached before the result's first render; the banner is an `<h2>` section in a polite live region; dates are locale-formatted.
+- Verify/Test buttons went `disabled` while checking and dropped keyboard focus → `aria-disabled`, still focusable.
+- Three names for one provider → one table (`PROVIDER_LABELS`) used by onboarding, settings, home, checking footer, results, history and Markdown.
+- "What was sent, and to whom" under-reported → now lists the surrounding text, page title, nearby text, post links/images, which service ran the searches, the lookups (archive, fact-check) and what was kept locally; the content expands.
+- Outlet-reputation pills: shown on unverified rows too, read "Wikipedia: Generally unreliable", 11 px; the general entry wins over section-specific ones for multi-entry domains (Fox News); notes name outlets, not domains.
+- Archive line: the capture date now links to that archived copy, and the action reads "view that copy ↗ · save today's version ↗" (or "no copy… Save one now ↗"); locale dates on the original-source card too.
+- Focus on arrival at Home (primary action or the hint) and History (heading).
+- Google AI Mode default: "This page" subtitle and the paste button say they open a tab.
+- Extra evidence: a status line when the lookup is on but no key is set; "No key needed." on the two keyless lookups; a Verify for the fact-check key that runs one real query; the key instructions walk through project → enable API → credentials.
+- Copy as Markdown includes fact-checks, evidence, outlet ratings and archive dates; grounding redirect links print the domain.
+- Elapsed timer can no longer show negative time; the Checking… pill is named "Back to the check in progress"; the error view's button is "Open Settings"; the no-selection hint mentions the `wys` keyword; scheme-less links in the address bar are treated as links.
 
 `clean: no`

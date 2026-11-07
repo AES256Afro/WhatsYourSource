@@ -5,6 +5,8 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 ## [Unreleased]
 
 ### Added
+- "What was sent, and to whom" now lists everything that left the browser, including lookups and search providers, and what was kept locally; Copy as Markdown includes fact-checks, evidence and outlet ratings.
+- Archive dates link to the archived copy; a Verify button for the Fact Check Tools key.
 - Two-pass checking: the claims are listed first, looked up one by one, then verified; can be turned off in Settings.
 - Local models: LM Studio and Ollama report which models can see images and call tools; text-only models decline image checks with a hint instead of a server error.
 - More servers: Jan, vLLM, OpenRouter, Groq, Together AI presets; Google AI Overview as an alternative to AI Mode.

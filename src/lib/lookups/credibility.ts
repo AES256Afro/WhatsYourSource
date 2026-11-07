@@ -34,8 +34,15 @@ let loaded: Promise<{ byDomain: Map<string, CredibilityEntry>; statuses: Record<
 function load() {
   loaded ??= import('@/data/reliable-sources.json').then((m) => {
     const data = (m as { default: Dataset }).default;
+    // Several entries can share a domain (Fox News news vs talk shows); the general entry, the one
+    // without a parenthetical in its name, is the one to show for an arbitrary page on that site.
     const byDomain = new Map<string, CredibilityEntry>();
-    for (const e of data.entries) for (const d of e.domains) byDomain.set(d, e);
+    for (const e of data.entries) {
+      for (const d of e.domains) {
+        const cur = byDomain.get(d);
+        if (!cur || (cur.name.includes('(') && !e.name.includes('('))) byDomain.set(d, e);
+      }
+    }
     return { byDomain, statuses: data.statuses, updated: data.updated };
   });
   return loaded;
@@ -70,6 +77,9 @@ export function sourceMixNotes(domains: string[], ratings: Record<string, Credib
   const unique = Array.from(new Set(domains.filter(Boolean)));
   if (domains.length >= 3 && unique.length === 1) notes.push(`Every source is from ${unique[0]}; look for an independent one.`);
   const bad = unique.filter((d) => ['unreliable', 'deprecated', 'blacklisted'].includes(ratings[d]?.status ?? ''));
-  if (bad.length) notes.push(`${bad.join(', ')} ${bad.length === 1 ? 'is' : 'are'} rated unreliable by Wikipedia editors; weigh accordingly.`);
+  if (bad.length) {
+    const names = bad.map((d) => ratings[d]?.name ?? d);
+    notes.push(`${names.join(', ')} ${bad.length === 1 ? 'is' : 'are'} rated unreliable by Wikipedia editors; weigh accordingly.`);
+  }
   return notes;
 }

@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { searchFactChecks } from '@/lib/lookups/factcheck';
 import type { ProviderId, Settings } from '@/lib/storage/settings';
 import { Label, PROVIDER_NAMES } from './common';
 import { Globe, Shield } from './Icons';
 import { AnthropicCard } from './settings/AnthropicCard';
 import { GeminiCard } from './settings/GeminiCard';
 import { LocalCard } from './settings/LocalCard';
-import { CommitInput, DebouncedTextarea, ProviderCard, Row, SecretInput, Toggle } from './settings/primitives';
+import { CommitInput, DebouncedTextarea, ProviderCard, Row, SecretInput, StatusLine, Toggle, type Status } from './settings/primitives';
 import { useShortcutLabel } from '../hooks/useShortcutLabel';
 
 type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
@@ -46,7 +47,7 @@ export function SettingsView({ settings, update, wide, focusProvider }: { settin
 
       <div className="flex flex-col gap-1.5">
         <Label>Extra evidence</Label>
-        <p className="m-0 text-[12px] leading-4 text-ink-2">Looked up beside the AI, with no model involved, so they work with every provider.</p>
+        <p className="m-0 text-[12px] leading-4 text-ink-2">These run beside the AI call, with no model involved, so they work with every provider.</p>
         <div className="wys-card flex flex-col px-3">
           <Row label="Published fact-checks" hint="PolitiFact, Snopes, AFP, Full Fact and others, via Google’s Fact Check Tools index. Needs a free key.">
             {(id) => (
@@ -57,38 +58,13 @@ export function SettingsView({ settings, update, wide, focusProvider }: { settin
               />
             )}
           </Row>
-          {settings.lookups.factChecks && (
-            <div className="flex flex-col gap-1 py-2">
-              <label htmlFor="wys-fckey" className="text-[13px]">
-                Fact Check Tools API key
-              </label>
-              <SecretInput
-                id="wys-fckey"
-                value={settings.lookups.factCheckKey}
-                onCommit={(v) => void update((s) => ({ ...s, lookups: { ...s.lookups, factCheckKey: v } }))}
-                placeholder="AIza…"
-              />
-              <span className="text-[11px] leading-[15px] text-ink-2">
-                Free: in{' '}
-                <a
-                  href="https://console.cloud.google.com/apis/library/factchecktools.googleapis.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold no-underline"
-                >
-                  Google Cloud
-                </a>{' '}
-                enable “Fact Check Tools API”, then create an API key under Credentials. Your Gemini key from AI Studio may work too if its project has the API
-                enabled.
-              </span>
-            </div>
-          )}
-          <Row label="Wayback Machine dates" hint="When the page and the original source were first archived.">
+          {settings.lookups.factChecks && <FactCheckKeyField settings={settings} update={update} />}
+          <Row label="Wayback Machine dates" hint="When the page and the original source were first archived. No key needed.">
             {(id) => (
               <Toggle checked={settings.lookups.archive} onChange={(v) => update((s) => ({ ...s, lookups: { ...s.lookups, archive: v } }))} labelledBy={id} />
             )}
           </Row>
-          <Row label="Outlet reputation" hint="Wikipedia editors’ ratings of outlets (shipped offline, CC BY-SA).">
+          <Row label="Outlet reputation" hint="Wikipedia editors’ ratings of outlets (shipped offline, CC BY-SA). No key needed.">
             {(id) => (
               <Toggle
                 checked={settings.lookups.credibility}
@@ -193,6 +169,59 @@ export function SettingsView({ settings, update, wide, focusProvider }: { settin
           model’s search tool receives the search queries.
         </p>
       </div>
+    </div>
+  );
+}
+
+/** The key field with a Verify that runs one real `claims:search`, so "may work" becomes "works" or "doesn't". */
+function FactCheckKeyField({ settings, update }: { settings: Settings; update: Update }) {
+  const key = settings.lookups.factCheckKey;
+  const [verified, setVerified] = useState<Status & { forKey: string }>({ kind: 'idle', forKey: key });
+  const status: Status = verified.forKey === key ? verified : { kind: 'idle' };
+  const verify = async () => {
+    setVerified({ kind: 'checking', forKey: key });
+    try {
+      const hits = await searchFactChecks('vaccines cause autism', key);
+      setVerified({ kind: 'ok', text: `Key works · ${hits.length} fact-check${hits.length === 1 ? '' : 's'} found for a test query`, forKey: key });
+    } catch (e) {
+      setVerified({ kind: 'bad', text: e instanceof Error ? e.message : String(e), forKey: key });
+    }
+  };
+  return (
+    <div className="flex flex-col gap-1 py-2">
+      <label htmlFor="wys-fckey" className="text-[13px]">
+        Fact Check Tools API key
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-[160px] grow basis-0">
+          <SecretInput
+            id="wys-fckey"
+            value={key}
+            onCommit={(v) => void update((s) => ({ ...s, lookups: { ...s.lookups, factCheckKey: v } }))}
+            placeholder="AIza…"
+          />
+        </div>
+        <button
+          className="wys-btn h-8 px-2.5 text-[12px]"
+          aria-disabled={!key || status.kind === 'checking'}
+          onClick={() => key && status.kind !== 'checking' && void verify()}
+        >
+          {status.kind === 'checking' ? '…' : 'Verify'}
+        </button>
+      </div>
+      <StatusLine status={status} idleText={key ? undefined : 'Not running: add a key, or turn the lookup off.'} />
+      <span className="text-[11px] leading-[15px] text-ink-2">
+        Already have a Gemini key from AI Studio? Paste it and press Verify. Otherwise: open{' '}
+        <a
+          href="https://console.cloud.google.com/apis/library/factchecktools.googleapis.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold no-underline"
+        >
+          Google Cloud
+        </a>
+        , pick or create a project, enable “Fact Check Tools API”, then Credentials → Create API key. Free.
+      </span>
     </div>
   );
 }

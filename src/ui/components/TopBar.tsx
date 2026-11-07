@@ -35,6 +35,7 @@ export function TopBar({
       {checking && view !== 'checking' && (
         <button
           className="inline-flex h-7 items-center gap-1.5 rounded-full border border-accent-line bg-accent-soft px-2.5 text-[11px] font-semibold text-accent"
+          aria-label="Back to the check in progress"
           onClick={onHome}
         >
           <span className="wys-spin h-3 w-3 border" /> Checking…

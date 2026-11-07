@@ -46,7 +46,11 @@ export function GeminiCard({ settings, update }: { settings: Settings; update: U
         <div className="min-w-[160px] grow basis-0">
           <SecretInput id="wys-gkey" value={g.apiKey} onCommit={(v) => set({ apiKey: v })} placeholder="AIza…" />
         </div>
-        <button className="wys-btn h-8 px-2.5 text-[12px]" onClick={() => void verify()} disabled={status.kind === 'checking' || !g.apiKey}>
+        <button
+          className="wys-btn h-8 px-2.5 text-[12px]"
+          aria-disabled={status.kind === 'checking' || !g.apiKey}
+          onClick={() => status.kind !== 'checking' && g.apiKey && void verify()}
+        >
           {status.kind === 'checking' ? '…' : 'Verify'}
         </button>
       </div>

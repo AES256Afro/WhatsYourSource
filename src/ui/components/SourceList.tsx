@@ -67,8 +67,11 @@ const RATING_TONE: Record<Credibility['status'], string> = {
 
 function RatingPill({ rating }: { rating: Credibility }) {
   return (
-    <span className={`wys-pill px-1.5 py-0 text-[10px] ${RATING_TONE[rating.status]}`} title={`${rating.name}: ${rating.statusLabel}. ${rating.summary}`}>
-      {rating.statusLabel}
+    <span
+      className={`wys-pill px-1.5 py-0 text-[11px] ${RATING_TONE[rating.status]}`}
+      title={`${rating.name}: ${rating.statusLabel} (Wikipedia editors' consensus). ${rating.summary}`}
+    >
+      Wikipedia: {rating.statusLabel}
     </span>
   );
 }
@@ -108,8 +111,11 @@ export function SourceRow({ source: s, rating }: { source: Source; rating?: Cred
       {number}
       <span className="flex min-w-0 grow flex-col gap-px">
         <span className="truncate text-[13px] leading-[18px] font-medium text-ink">{s.title || s.domain}</span>
-        <span className="truncate text-[12px] text-ink-2" title={s.url}>
-          {s.url}
+        <span className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">
+          <span className="truncate" title={s.url}>
+            {s.url}
+          </span>
+          {rating && <RatingPill rating={rating} />}
         </span>
         <span className="text-[11px] leading-[15px] text-ink-2">
           Cited by the model but not returned by the search, so it is not linked. Copy it to check yourself.

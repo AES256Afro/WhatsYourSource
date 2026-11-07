@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
-import { sourceLookups, startLookups } from '@/lib/lookups';
+import { attachLookups, sourceLookups, startLookups, type PreRunLookups } from '@/lib/lookups';
 import { claimsForPrompt, extractClaims } from '@/lib/pipeline/claims';
 import { enforceSnapshotCap, saveCheck } from '@/lib/history/db';
 import { captureFromTab } from '@/lib/history/snapshot';
@@ -107,6 +107,10 @@ export function App() {
       const claimsPromise: Promise<string[]> = twoPass ? extractClaims(input, firstProvider, controller.signal) : Promise.resolve([]);
       const lookups = startLookups(input, s, controller.signal, twoPass ? claimsPromise : undefined);
       const lookupsPromise = lookups.all;
+      // Whatever has resolved by the time the result lands goes into its first render, so the
+      // fact-check banner is there when focus arrives instead of pushing the verdict down later.
+      let preReady: PreRunLookups | null = null;
+      void lookupsPromise.then((v) => (preReady = v)).catch(() => undefined);
       if (twoPass)
         setRun({
           input,
@@ -246,6 +250,7 @@ export function App() {
           return;
         }
         if (finished) {
+          if (preReady) finished = attachLookups(finished, preReady, { credibility: {}, mixNotes: [] });
           setResult(finished);
           setView('result');
           finish();
@@ -260,14 +265,8 @@ export function App() {
               controller.signal,
             );
             if (stale()) return;
-            Object.assign(finished, {
-              factChecks: lookups.factChecks.length ? lookups.factChecks : undefined,
-              pageCapture: lookups.pageCapture,
-              originalCapture: extra.originalCapture,
-              credibility: Object.keys(extra.credibility).length ? extra.credibility : undefined,
-              mixNotes: extra.mixNotes.length ? extra.mixNotes : undefined,
-            });
-            setResult({ ...finished });
+            finished = attachLookups(finished, lookups, extra);
+            setResult(finished);
           } catch (e) {
             console.warn('[wys] lookups failed', e);
           }
@@ -354,6 +353,7 @@ export function App() {
             result={result}
             onRecheck={() => startCheck(result.input)}
             onNewCheck={() => setView('home')}
+            searchTool={settings.providers.openaiCompat.searchTool !== 'none' ? settings.providers.openaiCompat.searchTool : undefined}
             saved={!!savedId}
             saveError={saveError}
             snapshotNote={savedWithSnapshot ? 'Saved with page snapshot' : 'Saved to history'}

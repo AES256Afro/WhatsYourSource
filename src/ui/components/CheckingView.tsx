@@ -112,7 +112,7 @@ function Elapsed({ since }: { since: number }) {
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
   }, []);
-  const s = Math.floor((now - since) / 1000);
+  const s = Math.max(0, Math.floor((now - since) / 1000));
   return (
     <span className="text-[11px] text-ink-2">
       {String(Math.floor(s / 60)).padStart(2, '0')}:{String(s % 60).padStart(2, '0')}

@@ -115,7 +115,9 @@ export default defineBackground(() => {
   browser.omnibox.onInputEntered.addListener((text) => {
     const t = text.trim();
     if (!t) return;
-    const input: CheckInput = /^https?:\/\/\S+$/i.test(t) ? { kind: 'page', url: t, title: '' } : { kind: 'text', text: t, pageUrl: '', pageTitle: '' };
+    // "example.com/post" is a link too; give it a scheme rather than checking it as text.
+    const asLink = /^https?:\/\/\S+$/i.test(t) ? t : /^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(t) ? `https://${t}` : null;
+    const input: CheckInput = asLink ? { kind: 'page', url: asLink, title: '' } : { kind: 'text', text: t, pageUrl: '', pageTitle: '' };
     if (settings.defaultProvider === 'webmode') {
       void browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) });
       return;

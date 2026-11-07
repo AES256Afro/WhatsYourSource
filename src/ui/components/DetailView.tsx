@@ -30,8 +30,6 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
       if (!alive) return;
       setCheck(c ?? null);
       setNoteText(c?.note ?? '');
-      // Focus the title once loaded, so keyboard users don't land on <body> after opening a row.
-      setTimeout(() => title.current?.focus(), 0);
     });
     void getSnapshot(id).then((s) => alive && setSnapshot(s ?? null));
     return () => {
@@ -40,6 +38,10 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
   }, [id]);
 
   const srcdoc = useMemo(() => (snapshot ? buildSnapshotSrcdoc(snapshot, { loadImages }) : ''), [snapshot, loadImages]);
+  // Focus the title once the loaded view (which contains it) has rendered, so keyboard users don't land on <body>.
+  useEffect(() => {
+    if (check) title.current?.focus();
+  }, [check?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- once per loaded row, not on every note edit
 
   if (check === undefined) return <div className="p-3.5 text-[13px] text-ink-2">Loading…</div>;
   if (check === null) return <div className="p-3.5 text-[13px] text-ink-2">This check was deleted.</div>;

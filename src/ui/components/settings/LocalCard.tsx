@@ -145,7 +145,7 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
             <option key={m} value={m} />
           ))}
         </datalist>
-        <button className="wys-btn h-8 px-2.5 text-[12px]" onClick={() => void test()} disabled={status.kind === 'checking'}>
+        <button className="wys-btn h-8 px-2.5 text-[12px]" aria-disabled={status.kind === 'checking'} onClick={() => status.kind !== 'checking' && void test()}>
           {status.kind === 'checking' ? '…' : 'Test'}
         </button>
       </div>

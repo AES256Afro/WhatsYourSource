@@ -18,6 +18,10 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
   const filterSeq = useRef(0);
   const [stats, setStats] = useState<{ checks: number; snapshotBytes: number } | null>(null);
   const [tick, setTick] = useState(0);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
 
   // Typing should not scan the store on every keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState(query);
@@ -86,7 +90,9 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
     <div className="flex h-full flex-col">
       <div className="flex grow flex-col gap-2.5 overflow-y-auto p-3.5">
         <div className="flex items-center gap-2">
-          <h1 className="m-0 text-[18px] font-bold">History</h1>
+          <h1 ref={heading} tabIndex={-1} className="m-0 text-[18px] font-bold outline-none">
+            History
+          </h1>
           <span className="grow" />
           {stats && (
             <span className="text-[12px] text-ink-2">

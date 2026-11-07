@@ -102,10 +102,5 @@ export function formatUsd(v: number | undefined): string | null {
   return `≈ $${v.toFixed(2)}`;
 }
 
-/** The names users see for each way of checking. One vocabulary everywhere: onboarding, settings, home, errors. */
-export const PROVIDER_NAMES = {
-  gemini: 'Gemini (your key)',
-  webmode: 'Google AI Mode (web)',
-  anthropic: 'Claude (your key)',
-  'openai-compat': 'Local or OpenAI-style model',
-} as const;
+/** The names users see for each way of checking; one table, kept in the provider registry. */
+export { PROVIDER_LABELS as PROVIDER_NAMES } from '@/lib/providers/registry';

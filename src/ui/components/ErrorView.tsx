@@ -83,7 +83,7 @@ export function ErrorView({
           <Refresh size={15} /> Try again
         </button>
         <button className="wys-btn grow" onClick={() => onSettings(error.provider)}>
-          <Sliders size={15} /> Settings
+          <Sliders size={15} /> Open Settings
         </button>
       </div>
       <a href={googleAiModeUrl(input)} target="_blank" rel="noopener noreferrer" className="wys-btn no-underline">
