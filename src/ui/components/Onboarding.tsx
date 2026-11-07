@@ -3,9 +3,8 @@ import { GeminiProvider } from '@/lib/providers/gemini';
 import { providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
 import { PROVIDER_NAMES } from './common';
 import { Cpu, Globe, Link, Sparkle } from './Icons';
-import { CommitInput, SecretInput, StatusLine, Toggle, type Status } from './settings/primitives';
-
-type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
+import { CommitInput, Row, SecretInput, StatusLine, Toggle, type Status } from './settings/primitives';
+import type { UpdateSettings } from '../hooks/useSettings';
 
 /** Same names as the Settings cards, so what you pick here is what you find there. */
 const CHOICES: { id: ProviderId; title: string; tag: string; tagTone: 'accent' | 'muted' | 'ok'; blurb: string; icon: React.ReactNode }[] = [
@@ -50,7 +49,7 @@ export function Onboarding({
   onOpenSettings,
 }: {
   settings: Settings;
-  update: Update;
+  update: UpdateSettings;
   onDone: () => void;
   onOpenSettings: (provider?: ProviderId) => void;
 }) {
@@ -231,15 +230,13 @@ export function Onboarding({
           </div>
           {privacyOpen ? (
             <div className="wys-card flex flex-col px-3">
-              <PrivacyRow label="Send text or images only when I press Check" hint="Always">
+              <Row label="Send text or images only when I press Check" hint="Always">
                 {(id) => <Toggle checked disabled labelledBy={id} />}
-              </PrivacyRow>
-              <PrivacyRow label="Save a copy of the page with each check (local only)">
+              </Row>
+              <Row label="Save a copy of the page with each check (local only)">
                 {(id) => <Toggle checked={snapshots} onChange={setSnapshots} labelledBy={id} />}
-              </PrivacyRow>
-              <PrivacyRow label="Show the floating “Check source” chip on selection">
-                {(id) => <Toggle checked={chip} onChange={setChip} labelledBy={id} />}
-              </PrivacyRow>
+              </Row>
+              <Row label="Show the floating “Check source” chip on selection">{(id) => <Toggle checked={chip} onChange={setChip} labelledBy={id} />}</Row>
             </div>
           ) : (
             <p className="m-0 text-[12px] leading-4 text-ink-2">
@@ -266,18 +263,5 @@ function StepNo({ n }: { n: number }) {
     >
       {n}
     </span>
-  );
-}
-
-function PrivacyRow({ label, hint, children }: { label: string; hint?: string; children: (labelId: string) => React.ReactNode }) {
-  const id = `wys-pr-${label.replace(/\W+/g, '-').toLowerCase()}`;
-  return (
-    <div className="flex min-h-[40px] items-center gap-2.5 border-b border-surface-2 py-1.5 text-[13px] last:border-b-0">
-      <span id={id} className="grow leading-[17px]">
-        {label}
-      </span>
-      {hint && <span className="text-[11px] text-ink-2">{hint}</span>}
-      {children(id)}
-    </div>
   );
 }

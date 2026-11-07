@@ -1,32 +1,18 @@
-import { useState } from 'react';
 import { GeminiProvider } from '@/lib/providers/gemini';
 import { GEMINI_FREE_SEARCHES_PER_MONTH } from '@/lib/providers/pricing';
 import { GEMINI_MODELS, type Settings } from '@/lib/storage/settings';
 import { PROVIDER_NAMES } from '../common';
 import { Sparkle } from '../Icons';
 import { PROVIDER_CARD_ID } from '../SettingsView';
-import { ProviderCard, Row, SecretInput, StatusLine, Toggle, type Status } from './primitives';
+import { ProviderCard, Row, SecretInput, StatusLine, Toggle } from './primitives';
+import { useProviderVerify } from './useProviderVerify';
+import type { UpdateSettings } from '../../hooks/useSettings';
 
-type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
-
-export function GeminiCard({ settings, update }: { settings: Settings; update: Update }) {
+export function GeminiCard({ settings, update }: { settings: Settings; update: UpdateSettings }) {
   const g = settings.providers.gemini;
   const set = (patch: Partial<typeof g>) => update((s) => ({ ...s, providers: { ...s.providers, gemini: { ...s.providers.gemini, ...patch } } }));
-  const [verified, setVerified] = useState<Status & { forKey: string }>({ kind: 'idle', forKey: g.apiKey });
-  const [models, setModels] = useState<string[]>([]);
-  // A verify result only applies to the key it was run for.
-  const status: Status = verified.forKey === g.apiKey ? verified : { kind: 'idle' };
+  const { status, models, verify } = useProviderVerify(() => new GeminiProvider(g), g.apiKey);
   const idleText = g.apiKey ? `Key set · ends in …${g.apiKey.trim().slice(-3)}` : 'Free key from Google AI Studio · searches Google';
-
-  const verify = async () => {
-    const key = g.apiKey;
-    setVerified({ kind: 'checking', forKey: key });
-    const r = await new GeminiProvider(g).validate();
-    if (r.ok) {
-      setModels(r.models ?? []);
-      setVerified({ kind: 'ok', text: `Key works · ends in …${key.trim().slice(-3)}`, forKey: key });
-    } else setVerified({ kind: 'bad', text: r.error, forKey: key });
-  };
 
   const modelOptions = Array.from(new Set([...GEMINI_MODELS.map((m) => m.id), ...models, g.model]));
   return (

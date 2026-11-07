@@ -5,11 +5,10 @@ import { Label, PROVIDER_NAMES } from './common';
 import { Globe, Shield } from './Icons';
 import { AnthropicCard } from './settings/AnthropicCard';
 import { GeminiCard } from './settings/GeminiCard';
-import { LocalCard } from './settings/LocalCard';
+import { OpenAICompatCard } from './settings/OpenAICompatCard';
 import { CommitInput, DebouncedTextarea, ProviderCard, Row, SecretInput, StatusLine, Toggle, type Status } from './settings/primitives';
 import { useShortcutLabel } from '../hooks/useShortcutLabel';
-
-type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
+import type { UpdateSettings } from '../hooks/useSettings';
 
 /** DOM ids of the provider cards, for scrolling to the one an error or onboarding points at. */
 export const PROVIDER_CARD_ID: Record<ProviderId, string> = {
@@ -19,7 +18,17 @@ export const PROVIDER_CARD_ID: Record<ProviderId, string> = {
   'openai-compat': 'wys-card-local',
 };
 
-export function SettingsView({ settings, update, wide, focusProvider }: { settings: Settings; update: Update; wide?: boolean; focusProvider?: ProviderId }) {
+export function SettingsView({
+  settings,
+  update,
+  wide,
+  focusProvider,
+}: {
+  settings: Settings;
+  update: UpdateSettings;
+  wide?: boolean;
+  focusProvider?: ProviderId;
+}) {
   const shortcut = useShortcutLabel();
   useEffect(() => {
     if (!focusProvider) return;
@@ -57,7 +66,7 @@ export function SettingsView({ settings, update, wide, focusProvider }: { settin
         </Row>
       </ProviderCard>
       <AnthropicCard settings={settings} update={update} />
-      <LocalCard settings={settings} update={update} />
+      <OpenAICompatCard settings={settings} update={update} />
 
       <div className="flex flex-col gap-1.5">
         <Label>Extra evidence</Label>
@@ -191,7 +200,7 @@ export function SettingsView({ settings, update, wide, focusProvider }: { settin
 }
 
 /** The key field with a Verify that runs one real `claims:search`, so "may work" becomes "works" or "doesn't". */
-function FactCheckKeyField({ settings, update }: { settings: Settings; update: Update }) {
+function FactCheckKeyField({ settings, update }: { settings: Settings; update: UpdateSettings }) {
   const key = settings.lookups.factCheckKey;
   const [verified, setVerified] = useState<Status & { forKey: string }>({ kind: 'idle', forKey: key });
   const status: Status = verified.forKey === key ? verified : { kind: 'idle' };

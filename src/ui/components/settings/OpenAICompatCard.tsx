@@ -9,16 +9,15 @@ import { hostOf } from '@/lib/util/url';
 import { Alert, Cpu } from '../Icons';
 import { PROVIDER_NAMES } from '../common';
 import { PROVIDER_CARD_ID } from '../SettingsView';
-import { CommitInput, ProviderCard, Row, SecretInput, StatusLine, type Status } from './primitives';
+import { CommitInput, ProviderCard, Row, SecretInput, StatusLine } from './primitives';
+import { useProviderVerify } from './useProviderVerify';
+import type { UpdateSettings } from '../../hooks/useSettings';
 
-type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
 type O = Settings['providers']['openaiCompat'];
 
-export function LocalCard({ settings, update }: { settings: Settings; update: Update }) {
+export function OpenAICompatCard({ settings, update }: { settings: Settings; update: UpdateSettings }) {
   const o = settings.providers.openaiCompat;
   const set = (patch: Partial<O>) => update((s) => ({ ...s, providers: { ...s.providers, openaiCompat: { ...s.providers.openaiCompat, ...patch } } }));
-  const [status, setStatus] = useState<Status>({ kind: 'idle' });
-  const [models, setModels] = useState<string[]>([]);
   const [info, setInfo] = useState<LocalModelInfo[]>([]);
   const [originOk, setOriginOk] = useState<boolean | null>(null);
   const [allUrls, setAllUrls] = useState<boolean | null>(null);
@@ -35,32 +34,25 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
     if (o.searchTool === 'searxng' && o.searxngUrl) void hasOrigin(o.searxngUrl).then(setSearxngOk);
   }, [o.baseUrl, o.searchTool, o.searxngUrl]);
 
-  const test = async () => {
-    setStatus({ kind: 'checking' });
-    const r = await new OpenAICompatProvider({
-      baseUrl: o.baseUrl,
-      apiKey: o.apiKey,
-      model: o.model,
-      search: createSearchBackend(o),
-      fetchPages: true,
-    }).validate();
-    if (r.ok) {
-      const ids = r.models ?? [];
-      setModels(ids);
-      // Ask LM Studio / Ollama what each model can do; the chosen model's answer is remembered so an
-      // image check on a text-only model fails up front with a hint instead of a server error.
+  // Test asks LM Studio / Ollama what each model can do; the chosen model's answer is remembered so an
+  // image check on a text-only model fails up front with a hint instead of a server error.
+  const {
+    status,
+    models,
+    verify: test,
+  } = useProviderVerify(
+    () => new OpenAICompatProvider({ baseUrl: o.baseUrl, apiKey: o.apiKey, model: o.model, search: createSearchBackend(o), fetchPages: true }),
+    `${o.baseUrl} ${o.apiKey} ${o.model}`,
+    async (ids) => {
       const described = await describeLocalModels(o.baseUrl, ids);
       setInfo(described);
       const chosen = o.model || ids[0] || '';
       const me = described.find((m) => m.id === chosen);
       const loaded = described.filter((m) => m.loaded).length;
-      setStatus({
-        kind: 'ok',
-        text: `Connected · ${ids.length} model${ids.length === 1 ? '' : 's'}${loaded ? ` · ${loaded} loaded` : ''}${me?.vision === false ? ' · text only' : me?.vision ? ' · can see images' : ''}`,
-      });
-      void set({ model: chosen, modelVision: me?.vision ?? null, modelTools: me?.tools ?? null, modelContext: me?.contextLength ?? null });
-    } else setStatus({ kind: 'bad', text: r.error });
-  };
+      await set({ model: chosen, modelVision: me?.vision ?? null, modelTools: me?.tools ?? null, modelContext: me?.contextLength ?? null });
+      return `Connected · ${ids.length} model${ids.length === 1 ? '' : 's'}${loaded ? ` · ${loaded} loaded` : ''}${me?.vision === false ? ' · text only' : me?.vision ? ' · can see images' : ''}`;
+    },
+  );
   const chosenInfo = info.find((m) => m.id === o.model);
   const capsLine = [
     chosenInfo?.vision === true ? 'Can see images' : chosenInfo?.vision === false ? 'Text only (no image checks)' : null,

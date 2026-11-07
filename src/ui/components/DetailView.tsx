@@ -8,6 +8,7 @@ import { Label, Pill, toneForVerdict } from './common';
 import { Camera, Download, External, Refresh, Trash } from './Icons';
 import { ResultView } from './ResultView';
 import { Toggle } from './settings/primitives';
+import { useActionError } from '../hooks/useActionError';
 
 type Tab = 'result' | 'page';
 const TABS: { id: Tab; label: string; icon?: React.ReactNode }[] = [
@@ -21,7 +22,7 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
   const [tab, setTab] = useState<Tab>('result');
   const [loadImages, setLoadImages] = useState(false);
   const [note, setNoteText] = useState('');
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, guard] = useActionError();
   const title = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -48,14 +49,6 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
 
   const openSnapshotTab = () => {
     void browser.tabs.create({ url: `${browser.runtime.getURL('/snapshot.html')}?id=${encodeURIComponent(check.id)}` });
-  };
-  const guard = (label: string, fn: () => Promise<void> | void) => async () => {
-    setActionError(null);
-    try {
-      await fn();
-    } catch (e) {
-      setActionError(`${label} failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
   };
   const exportHtml = guard('Export', () =>
     downloadText(checkToStandaloneHtml(check, snapshot), `${safeFilename(check.verdictLabel + ' ' + check.title)}.html`),

@@ -1,6 +1,8 @@
 import { browser } from 'wxt/browser';
 import { clampInput, JobSchema, type CheckInput, type Job } from './messaging/protocol';
 
+export type { Job } from './messaging/protocol';
+
 /**
  * The background hands work to the side panel through `storage.session`, not messaging:
  * the panel may not be open yet when the user clicks, and a message to nobody is lost.

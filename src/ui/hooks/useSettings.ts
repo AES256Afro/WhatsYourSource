@@ -19,3 +19,6 @@ export function useSettings() {
   }, []);
   return { settings, update };
 }
+
+/** The `update` function from `useSettings`, for components that receive it as a prop. */
+export type UpdateSettings = ReturnType<typeof useSettings>['update'];

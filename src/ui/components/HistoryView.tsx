@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { clearHistory, exportAll, listChecks, storageStats, type StoredCheck } from '@/lib/history/db';
 import { downloadBlob } from '@/lib/history/export';
+import { useActionError } from '../hooks/useActionError';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { Label, Pill, toneForVerdict } from './common';
 import { Camera, Globe, Image, Lines, Post } from './Icons';
@@ -68,15 +69,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
 
   const groups = useMemo(() => groupByDay(items ?? []), [items]);
 
-  const [actionError, setActionError] = useState<string | null>(null);
-  const guard = (label: string, fn: () => Promise<void>) => async () => {
-    setActionError(null);
-    try {
-      await fn();
-    } catch (e) {
-      setActionError(`${label} failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
+  const [actionError, guard] = useActionError();
   const clearAll = guard('Clear all', async () => {
     if (!confirm('Delete all saved checks and page snapshots? This cannot be undone.')) return;
     await clearHistory();

@@ -1,25 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CheckInput } from '@/lib/messaging/protocol';
-import type { RawSource } from '@/lib/providers/types';
+import type { RunState } from '@/lib/pipeline/progress';
 import { InputCard } from './InputCard';
 import { Label, ProviderBadge } from './common';
 import { Check, Close, Search } from './Icons';
 import { Narrative } from './Narrative';
 
-export interface RunState {
-  input: CheckInput;
-  providerLabel: string;
-  statuses: string[];
-  text: string;
-  queries: string[];
-  sources: RawSource[];
-  startedAt: number;
-}
-
 export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () => void }) {
-  const done = run.statuses;
-  const current = done[done.length - 1] ?? 'Starting…';
-  const earlier = done.slice(0, -1);
+  const statuses = run.statuses;
+  const current = statuses[statuses.length - 1] ?? 'Starting…';
+  const earlier = statuses.slice(0, -1);
   // Keyboard users arrive here from the button they just pressed, which is gone; land them on the progress.
   const steps = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -119,3 +108,5 @@ function Elapsed({ since }: { since: number }) {
     </span>
   );
 }
+
+export type { RunState } from '@/lib/pipeline/progress';

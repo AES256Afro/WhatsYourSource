@@ -2,6 +2,9 @@ import type { ImageInput } from '../messaging/protocol';
 import type { LocalProvenance } from '../pipeline/schema';
 import { ImageFetchError, fetchImageBytes, prepareForModel, screenshotImage, type ImageBytes } from './bytes';
 import { phashFromBitmap } from './phash';
+import type { RunError } from '../pipeline/runCheck';
+import { findTabShowing } from '../tabs';
+import { isHttpUrl } from '../util/url';
 import { provenanceFacts, provenanceMetadata, provenanceSummary, readProvenance } from './provenance';
 
 export interface PreparedImage {
@@ -59,4 +62,38 @@ export async function prepareImage(input: ImageInput, tabId: number | undefined,
     provenanceMetadata: provenanceMetadata(provenance),
     via: img.via,
   };
+}
+
+/**
+ * Everything the check runner needs for an image, or the error to show. A re-check has no tab; an
+ * inline/blob image can only be re-read from the page it was on, so that page is looked for first.
+ */
+export async function prepareImageForCheck(
+  input: ImageInput,
+  tabId: number | undefined,
+  status: PrepareStatus,
+  signal: AbortSignal,
+): Promise<{ ok: true; image: PreparedImage } | { ok: false; error: RunError }> {
+  const tab = tabId ?? (await findTabShowing(input.pageUrl));
+  if (signal.aborted) return { ok: false, error: { code: 'cancelled', message: 'Cancelled.' } };
+  if (tab == null && !isHttpUrl(input.srcUrl))
+    return { ok: false, error: { code: 'image-page-closed', message: 'This image lives inside its page, which is not open.' } };
+  try {
+    return { ok: true, image: await prepareImage(input, tab, status, signal) };
+  } catch (e) {
+    const err = e instanceof ImageFetchError ? e : null;
+    return {
+      ok: false,
+      error: {
+        code: err?.kind === 'permission' ? 'image-permission' : 'image',
+        message:
+          err?.kind === 'permission'
+            ? 'The image host blocked a direct download.'
+            : err?.kind === 'not-image'
+              ? 'That link is not an image.'
+              : 'Could not load the image.',
+        details: err?.message ?? String(e),
+      },
+    };
+  }
 }

@@ -1,26 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
-import { attachLookups, sourceLookups, startLookups, type PreRunLookups } from '@/lib/lookups';
-import { claimsForPrompt, extractClaims } from '@/lib/pipeline/claims';
-import { enforceSnapshotCap, saveCheck } from '@/lib/history/db';
-import { captureFromTab } from '@/lib/history/snapshot';
-import { ImageFetchError } from '@/lib/image/bytes';
-import { prepareImage, type PreparedImage } from '@/lib/image/prepare';
-import { requestOrigin } from '@/lib/permissions';
-import { onJob, takeJob } from '@/lib/jobs';
-import { findTabShowing } from '@/lib/tabs';
-import { isHttpUrl } from '@/lib/util/url';
-import type { CheckInput } from '@/lib/messaging/protocol';
-import { runCheck } from '@/lib/pipeline/runCheck';
-import type { CheckResult } from '@/lib/pipeline/schema';
-import { createProvider, providerDisplayName } from '@/lib/providers/registry';
-import { providerOrder, providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
-import { CheckingView, type RunState } from './components/CheckingView';
+import { onJob, takeJob, type Job } from '@/lib/jobs';
+import type { CheckInput } from '@/lib/messaging/protocol';
+import { providerDisplayName } from '@/lib/providers/registry';
+import { providerOrder, providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
+import { requestOrigin } from '@/lib/permissions';
+import { CheckingView } from './components/CheckingView';
 import { DetailView } from './components/DetailView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ErrorView } from './components/ErrorView';
-import type { RunError } from '@/lib/pipeline/runCheck';
 import { HistoryView } from './components/HistoryView';
 import { HomeView } from './components/HomeView';
 import { Onboarding } from './components/Onboarding';
@@ -29,30 +18,18 @@ import { RecentList } from './components/RecentList';
 import { ResultView } from './components/ResultView';
 import { SettingsView } from './components/SettingsView';
 import { TopBar } from './components/TopBar';
+import { useCheckRun } from './hooks/useCheckRun';
 import { useSettings } from './hooks/useSettings';
 
 type View = 'home' | 'checking' | 'result' | 'error' | 'settings' | 'history' | 'detail';
 
-/** Errors worth trying the next provider for. */
-const FALLBACK_CODES = new Set(['no-key', 'auth', 'quota', 'network', 'server', 'bad-request', 'empty', 'unsupported']);
-
+/** The panel: which view is up, and the check run that drives the checking/result/error views. */
 export function App() {
   const { settings, update } = useSettings();
   const [view, setView] = useState<View>('home');
-  const [run, setRun] = useState<RunState | null>(null);
-  const [result, setResult] = useState<CheckResult | null>(null);
-  const [savedId, setSavedId] = useState<string | null>(null);
-  const [savedWithSnapshot, setSavedWithSnapshot] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [error, setError] = useState<{ input: CheckInput; error: RunError } | null>(null);
-  const [needsSetup, setNeedsSetup] = useState<CheckInput | null>(null);
   const [focusProvider, setFocusProvider] = useState<ProviderId | undefined>(undefined);
-  /** A provider call is in flight (state, not the abort ref, so it can drive the top-bar indicator during render). */
-  const [busy, setBusy] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [historyTick, setHistoryTick] = useState(0);
-  const abortRef = useRef<AbortController | null>(null);
-  const runSeq = useRef(0);
   const seenJobs = useRef(new Set<string>());
   const settingsRef = useRef<Settings | null>(null);
   useEffect(() => {
@@ -63,252 +40,29 @@ export function App() {
     void browser.tabs.create({ url: googleAiModeUrl(input, settingsRef.current?.webmodeVariant) });
   }, []);
 
-  const startCheck = useCallback(
-    async (input: CheckInput, tabId?: number, only?: ProviderId) => {
-      const s = settingsRef.current;
-      if (!s) return;
-      // Each run gets a token; anything a superseded run tries to show after this point is dropped.
-      const myRun = ++runSeq.current;
-      const stale = () => runSeq.current !== myRun;
-      abortRef.current?.abort();
-      setError(null);
-      setResult(null);
-      setSavedId(null);
-      setSavedWithSnapshot(false);
-      setSaveError(null);
+  const { phase, start, cancel, clearSetup, busy } = useCheckRun({
+    settings: () => settingsRef.current,
+    // Each transition of the run moves the panel to the matching view (the user may navigate away in between).
+    onPhase: (p) => setView(p.phase === 'setup' ? 'settings' : p.phase === 'idle' ? 'home' : p.phase),
+    openGoogleAiMode,
+    onOnboarded: () => void update((cur) => ({ ...cur, onboarded: true })),
+    onSaved: () => setHistoryTick((t) => t + 1),
+  });
 
-      if (s.defaultProvider === 'webmode') {
-        openGoogleAiMode(input);
-        setView('home');
-        return;
-      }
-      // `only`: a second opinion runs the same input on one other provider, no fallback chain.
-      const order = only ? [only] : providerOrder(s).filter((id) => providerReady(s, id));
-      if (order.length === 0) {
-        setNeedsSetup(input);
-        setView('settings');
-        return;
-      }
-      // Someone who runs a check with a working provider has been onboarded, whatever the flag says.
-      if (!s.onboarded) void update((cur) => ({ ...cur, onboarded: true }));
-
-      // Capture the page as it is *now*, in parallel with the AI call. Only the page the input came from.
-      const pageOfInput = input.kind === 'page' ? input.url : input.pageUrl;
-      const snapshotPromise = s.privacy.snapshots ? captureFromTab(tabId, input.kind === 'text' ? input.text : undefined, pageOfInput) : Promise.resolve(null);
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-      setBusy(true);
-      // Deterministic lookups run beside the model. The fast ones get a short head start so the
-      // model can cite them; whatever is still pending is merged into the result afterwards.
-      // Two-pass: a cheap first call lists the claims, so each can be looked up on its own and the
-      // main call knows exactly what to verify. Off for image checks (nothing to extract yet) and in Settings.
-      const firstProvider = createProvider(order[0]!, s);
-      const twoPass = s.twoPass && !!firstProvider && input.kind !== 'image';
-      const claimsPromise: Promise<string[]> = twoPass ? extractClaims(input, firstProvider, controller.signal) : Promise.resolve([]);
-      const lookups = startLookups(input, s, controller.signal, twoPass ? claimsPromise : undefined);
-      const lookupsPromise = lookups.all;
-      // Whatever has resolved by the time the result lands goes into its first render, so the
-      // fact-check banner is there when focus arrives instead of pushing the verdict down later.
-      let preReady: PreRunLookups | null = null;
-      void lookupsPromise.then((v) => (preReady = v)).catch(() => undefined);
-      if (twoPass)
-        setRun({
-          input,
-          providerLabel: `${providerDisplayName(order[0]!, s)} · ${firstProvider.model}`,
-          statuses: ['Listing the claims to check…'],
-          text: '',
-          queries: [],
-          sources: [],
-          startedAt: Date.now(),
-        });
-      if (twoPass) setView('checking');
-      const claimsList = await claimsPromise;
-      if (stale()) return;
-      const lookupsText = await Promise.race([lookups.forPrompt, new Promise<string>((r) => setTimeout(() => r(''), twoPass ? 4000 : 2500))]);
-      if (stale()) return;
-      const finish = () => {
-        if (!stale()) setBusy(false);
-      };
-      let lastError: RunError | null = null;
-
-      // Images: get the bytes and the local provenance facts before any provider runs.
-      let image: PreparedImage | undefined;
-      if (input.kind === 'image') {
-        const prep: RunState = { input, providerLabel: 'Preparing image', statuses: [], text: '', queries: [], sources: [], startedAt: Date.now() };
-        setRun({ ...prep });
-        setView('checking');
-        // A re-check has no tab; an inline/blob image can only be re-read from the page it was on.
-        let imageTab = tabId;
-        if (imageTab == null) imageTab = await findTabShowing(input.pageUrl);
-        if (stale()) return;
-        if (imageTab == null && !isHttpUrl(input.srcUrl)) {
-          setError({ input, error: { code: 'image-page-closed', message: 'This image lives inside its page, which is not open.' } });
-          setView('error');
-          return;
-        }
-        try {
-          image = await prepareImage(
-            input,
-            imageTab,
-            (m) => {
-              if (stale()) return;
-              prep.statuses = [...prep.statuses, m];
-              setRun({ ...prep });
-            },
-            controller.signal,
-          );
-        } catch (e) {
-          if (stale()) return;
-          const err = e instanceof ImageFetchError ? e : null;
-          setError({
-            input,
-            error: {
-              code: err?.kind === 'permission' ? 'image-permission' : 'image',
-              message:
-                err?.kind === 'permission'
-                  ? 'The image host blocked a direct download.'
-                  : err?.kind === 'not-image'
-                    ? 'That link is not an image.'
-                    : 'Could not load the image.',
-              details: err?.message ?? String(e),
-            },
-          });
-          setView('error');
-          finish();
-          return;
-        }
-        if (stale()) return;
-      }
-
-      for (const id of order) {
-        const provider = createProvider(id, s);
-        if (!provider) continue;
-        const state: RunState = {
-          input,
-          providerLabel: `${providerDisplayName(id, s)} · ${provider.model}`,
-          statuses: [],
-          text: '',
-          queries: [],
-          sources: [],
-          startedAt: Date.now(),
-        };
-        setRun({ ...state });
-        setView('checking');
-        let finished: CheckResult | null = null;
-        let failed: RunError | null = null;
-
-        if (input.kind === 'image' && !provider.capabilities.image) {
-          failed = { code: 'unsupported', message: `${provider.label} (${provider.model}) cannot look at images.`, provider: id };
-        }
-        for await (const ev of failed
-          ? []
-          : runCheck(input, provider, controller.signal, {
-              image,
-              lookups: lookupsText || undefined,
-              claims: claimsList.length ? claimsForPrompt(claimsList) : undefined,
-            })) {
-          if (stale()) return;
-          switch (ev.type) {
-            case 'status':
-              if (!ev.done) state.statuses = [...state.statuses, ev.message];
-              break;
-            case 'delta':
-              state.text += ev.text;
-              break;
-            case 'searchQueries':
-              state.queries = ev.queries;
-              state.statuses = [
-                ...state.statuses.filter((x) => !x.startsWith('Searched')),
-                `Searched · ${ev.queries.length} ${ev.queries.length === 1 ? 'query' : 'queries'}`,
-              ];
-              break;
-            case 'sources':
-              state.sources = [...state.sources, ...ev.sources];
-              break;
-            case 'result':
-              finished = ev.result;
-              break;
-            case 'error':
-              failed = {
-                code: ev.code,
-                message: ev.message,
-                details: ev.details,
-                provider: id,
-                endpoint: id === 'openai-compat' ? s.providers.openaiCompat.baseUrl : undefined,
-              };
-              break;
-          }
-          setRun({ ...state });
-          if (finished || failed) break;
-        }
-
-        if (stale()) return;
-        if (controller.signal.aborted) {
-          setError({ input, error: { code: 'cancelled', message: 'Cancelled.' } });
-          setView('error');
-          finish();
-          return;
-        }
-        if (finished) {
-          if (preReady) finished = attachLookups(finished, preReady, { credibility: {}, mixNotes: [] });
-          setResult(finished);
-          setView('result');
-          finish();
-          // Evidence that needed the sources: reputation of each outlet, first archive capture of
-          // the original source, plus the pre-run lookups. Shown as they arrive, saved with the result.
-          try {
-            const lookups = await lookupsPromise;
-            const extra = await sourceLookups(
-              finished.sources.map((x) => x.url),
-              finished.originalSource?.url,
-              s,
-              controller.signal,
-            );
-            if (stale()) return;
-            finished = attachLookups(finished, lookups, extra);
-            setResult(finished);
-          } catch (e) {
-            console.warn('[wys] lookups failed', e);
-          }
-          try {
-            const snap = await snapshotPromise;
-            await saveCheck(finished, snap);
-            if (stale()) return;
-            setSavedId(finished.id);
-            setSavedWithSnapshot(!!snap);
-            setHistoryTick((t) => t + 1);
-            void enforceSnapshotCap(s.history.maxMb * 1024 * 1024);
-          } catch (e) {
-            console.warn('[wys] could not save to history', e);
-            if (!stale()) setSaveError(e instanceof Error ? e.message : String(e));
-          }
-          return;
-        }
-        lastError = failed ?? { code: 'unknown', message: 'The check ended without a result.' };
-        if (!FALLBACK_CODES.has(lastError.code) || !s.fallback) break;
-      }
-      setError({ input, error: lastError ?? { code: 'unknown', message: 'Unknown error.' } });
-      setView('error');
-      finish();
-    },
-    [openGoogleAiMode, update],
-  );
-
-  // Jobs from the background (context menu, shortcut, chip, popup).
+  // Jobs from the background (context menu, shortcut, chip, popup, address bar).
+  const ready = settings !== null;
   useEffect(() => {
-    if (!settings) return;
-    const handle = (job: { id: string; input: CheckInput; tabId?: number }) => {
+    if (!ready) return;
+    const handle = (job: Job) => {
       if (seenJobs.current.has(job.id)) return;
       seenJobs.current.add(job.id);
-      void startCheck(job.input, job.tabId);
+      void start(job.input, job.tabId);
     };
     const off = onJob(handle);
     void takeJob().then((job) => job && handle(job));
     return off;
-  }, [settings === null, startCheck]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, start]);
 
-  const cancel = () => abortRef.current?.abort();
   const openDetail = (id: string) => {
     setDetailId(id);
     setView('detail');
@@ -344,43 +98,46 @@ export function App() {
     );
   }
 
+  const needsSetup = phase.phase === 'setup' ? phase.input : null;
   const body = (() => {
     switch (view) {
       case 'checking':
-        return run ? <CheckingView run={run} onCancel={cancel} /> : null;
+        return phase.phase === 'checking' ? <CheckingView run={phase.run} onCancel={cancel} /> : null;
       case 'result':
-        return result ? (
+        if (phase.phase !== 'result') return null;
+        return (
           <ResultView
-            result={result}
-            onRecheck={() => startCheck(result.input)}
+            result={phase.result}
+            onRecheck={() => void start(phase.result.input)}
             secondOpinions={(['gemini', 'anthropic', 'openai-compat'] as const)
-              .filter((id) => id !== result.provider.id && providerReady(settings, id))
+              .filter((id) => id !== phase.result.provider.id && providerReady(settings, id))
               .map((id) => ({ id, label: providerDisplayName(id, settings) }))}
-            onSecondOpinion={(id) => void startCheck(result.input, undefined, id)}
+            onSecondOpinion={(id) => void start(phase.result.input, undefined, id)}
             onNewCheck={() => setView('home')}
             searchTool={settings.providers.openaiCompat.searchTool !== 'none' ? settings.providers.openaiCompat.searchTool : undefined}
-            saved={!!savedId}
-            saveError={saveError}
-            snapshotNote={savedWithSnapshot ? 'Saved with page snapshot' : 'Saved to history'}
+            saved={phase.save.status === 'saved'}
+            saveError={phase.save.status === 'failed' ? phase.save.message : null}
+            snapshotNote={phase.save.status === 'saved' && phase.save.withSnapshot ? 'Saved with page snapshot' : 'Saved to history'}
           />
-        ) : null;
+        );
       case 'error':
-        return error ? (
+        if (phase.phase !== 'error') return null;
+        return (
           <ErrorView
-            input={error.input}
-            error={error.error}
-            onRetry={() => startCheck(error.input)}
+            input={phase.input}
+            error={phase.error}
+            onRetry={() => void start(phase.input)}
             onSettings={openSettings}
             onAllowHost={
-              error.error.code === 'image-permission' && error.input.kind === 'image'
+              phase.error.code === 'image-permission' && phase.input.kind === 'image'
                 ? async () => {
-                    const ok = await requestOrigin(error.input.kind === 'image' ? error.input.srcUrl : '');
-                    if (ok) void startCheck(error.input);
+                    const ok = await requestOrigin(phase.input.kind === 'image' ? phase.input.srcUrl : '');
+                    if (ok) void start(phase.input);
                   }
                 : undefined
             }
           />
-        ) : null;
+        );
       case 'settings':
         return (
           <>
@@ -392,14 +149,7 @@ export function App() {
                 <span className="text-ink-2">Add a Google AI key below (free), or open this check on Google’s AI Mode page — no key needed.</span>
                 <div className="flex gap-2">
                   {providerOrder(settings).some((id) => providerReady(settings, id)) ? (
-                    <button
-                      className="wys-btn wys-btn-primary grow"
-                      onClick={() => {
-                        const pending = needsSetup;
-                        setNeedsSetup(null);
-                        void startCheck(pending);
-                      }}
-                    >
+                    <button className="wys-btn wys-btn-primary grow" onClick={() => void start(needsSetup)}>
                       Check now
                     </button>
                   ) : (
@@ -407,7 +157,7 @@ export function App() {
                       Open in Google AI Mode <External size={13} />
                     </button>
                   )}
-                  <button className="wys-btn" onClick={() => setNeedsSetup(null)}>
+                  <button className="wys-btn" onClick={clearSetup}>
                     Dismiss
                   </button>
                 </div>
@@ -422,7 +172,7 @@ export function App() {
         return detailId ? (
           <DetailView
             id={detailId}
-            onRecheck={(input) => void startCheck(input)}
+            onRecheck={(input) => void start(input)}
             onDeleted={() => {
               setHistoryTick((t) => t + 1);
               setView('history');
@@ -433,7 +183,7 @@ export function App() {
         return (
           <HomeView
             settings={settings}
-            onCheck={(i) => void startCheck(i)}
+            onCheck={(i) => void start(i)}
             onWebMode={openGoogleAiMode}
             onSettings={() => openSettings()}
             recent={<RecentList onOpen={openDetail} onSeeAll={() => setView('history')} refreshKey={historyTick} />}

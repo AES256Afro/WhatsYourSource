@@ -1,29 +1,16 @@
-import { useState } from 'react';
 import { AnthropicProvider } from '@/lib/providers/anthropic';
 import type { Settings } from '@/lib/storage/settings';
 import { PROVIDER_NAMES } from '../common';
 import { PROVIDER_CARD_ID } from '../SettingsView';
-import { CommitInput, ProviderCard, SecretInput, StatusLine, type Status } from './primitives';
+import { CommitInput, ProviderCard, SecretInput, StatusLine } from './primitives';
+import { useProviderVerify } from './useProviderVerify';
+import type { UpdateSettings } from '../../hooks/useSettings';
 
-type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
-
-export function AnthropicCard({ settings, update }: { settings: Settings; update: Update }) {
+export function AnthropicCard({ settings, update }: { settings: Settings; update: UpdateSettings }) {
   const a = settings.providers.anthropic;
   const set = (patch: Partial<typeof a>) => update((s) => ({ ...s, providers: { ...s.providers, anthropic: { ...s.providers.anthropic, ...patch } } }));
-  const [verified, setVerified] = useState<Status & { forKey: string }>({ kind: 'idle', forKey: a.apiKey });
-  const [models, setModels] = useState<string[]>([]);
-  const status: Status = verified.forKey === a.apiKey ? verified : { kind: 'idle' };
+  const { status, models, verify } = useProviderVerify(() => new AnthropicProvider(a), a.apiKey);
   const idleText = a.apiKey ? `Key set · ends in …${a.apiKey.trim().slice(-3)}` : 'Web search built in · bring your own key';
-
-  const verify = async () => {
-    const key = a.apiKey;
-    setVerified({ kind: 'checking', forKey: key });
-    const r = await new AnthropicProvider(a).validate();
-    if (r.ok) {
-      setModels(r.models ?? []);
-      setVerified({ kind: 'ok', text: `Key works · ends in …${key.trim().slice(-3)}`, forKey: key });
-    } else setVerified({ kind: 'bad', text: r.error, forKey: key });
-  };
 
   return (
     <ProviderCard
