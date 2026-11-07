@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { browser } from 'wxt/browser';
 
+/** `'webmode'` is Google AI Mode on google.com: chosen like a provider, but never an LLM call (`createProvider` returns null for it). */
 export const PROVIDER_IDS = ['gemini', 'openai-compat', 'anthropic', 'webmode'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
@@ -25,7 +26,7 @@ export const SettingsSchema = z.object({
   defaultProvider: z.enum(PROVIDER_IDS),
   /** If the default provider fails or is over quota, try the next configured one. */
   fallback: z.boolean(),
-  /** What Ctrl+Shift+S and the floating chip do. */
+  /** What the keyboard shortcut (Alt+Shift+S by default) and the floating chip do. */
   shortcutAction: z.enum(['panel', 'webmode']),
   /** Google on the web: AI Mode (a conversational answer) or a normal search page with its AI Overview. */
   webmodeVariant: z.enum(['ai-mode', 'overview']),
@@ -198,7 +199,7 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
 export function stripSecrets(s: Settings): Settings {
   const copy = structuredClone(s) as unknown as Plain;
   for (const p of SECRET_PATHS) setPath(copy, p, '');
-  return copy as unknown as Settings;
+  return SettingsSchema.parse(copy);
 }
 
 function collectSecrets(s: Settings): Record<string, string> {
@@ -217,7 +218,7 @@ function applySecrets(s: Settings, secrets: unknown): Settings {
     const v = secrets[p.join('.')];
     if (typeof v === 'string' && v) setPath(copy, p, v);
   }
-  return copy as unknown as Settings;
+  return SettingsSchema.parse(copy);
 }
 
 /** Full settings, keys included. Extension pages only. */
@@ -233,7 +234,7 @@ export async function loadSettings(): Promise<Settings> {
 }
 
 /** Settings without keys, for the content script. */
-export async function loadPublicSettings(): Promise<Settings> {
+export async function loadSettingsWithoutSecrets(): Promise<Settings> {
   const stored = await browser.storage.local.get(SETTINGS_KEY);
   return mergeSettings(DEFAULT_SETTINGS, stored[SETTINGS_KEY]);
 }
@@ -268,7 +269,7 @@ export function onSettingsChanged(cb: (s: Settings) => void): () => void {
   return () => browser.storage.onChanged.removeListener(listener);
 }
 
-/** Is any provider usable right now? */
+/** Is this one provider (the default unless given) configured well enough to try? */
 export function providerReady(s: Settings, id: ProviderId = s.defaultProvider): boolean {
   switch (id) {
     case 'gemini':

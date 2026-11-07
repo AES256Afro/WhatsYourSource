@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CheckResult } from '@/lib/pipeline/schema';
-import { googleAiModeUrl } from '@/lib/webmode';
+import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { ClaimList } from './ClaimList';
 import { EvidencePanel, FactCheckBanner, WhatWasSent } from './EvidencePanel';
-import { savePageUrl } from '@/lib/evidence/wayback';
+import { savePageUrl } from '@/lib/lookups/wayback';
 import { Cite, Label, ProviderBadge, TextAction, formatUsd, timeAgo } from './common';
 import { Check, Copy, External, Logo, Refresh } from './Icons';
 import { InputCard } from './InputCard';

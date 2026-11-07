@@ -1,6 +1,6 @@
 import type { CheckInput } from '../messaging/protocol';
 import type { GenerateRequest, Part } from '../providers/types';
-import { truncate } from '../util/url';
+import { domainOf, truncate } from '../util/url';
 
 /**
  * The question every check asks, in the user's own words. It is put to the model verbatim, leads
@@ -186,7 +186,7 @@ export function searchHintFor(input: CheckInput): string {
     case 'image':
       return `Is this image real, and where can I find its original source? ${firstWords(input.alt || input.nearbyText || input.pageTitle || '', 14)}`.trim();
     case 'page':
-      return `${QUESTION} ${input.title ? `${input.title} (${domainOfUrl(input.url)})` : input.url}`;
+      return `${QUESTION} ${input.title ? `${input.title} (${domainOf(input.url)})` : input.url}`;
     case 'post':
       return `${QUESTION} ${firstWords(input.text, 14)}`;
   }
@@ -200,14 +200,6 @@ function firstWords(s: string, n: number): string {
     .slice(0, n)
     .join(' ')
     .replace(/^["“”']+|["“”']+$/g, '');
-}
-
-function domainOfUrl(u: string): string {
-  try {
-    return new URL(u).hostname.replace(/^www\./, '');
-  } catch {
-    return u;
-  }
 }
 
 export function buildRepairRequest(rawText: string): GenerateRequest {

@@ -19,7 +19,7 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 
 | Category | Sweeps run | Consecutive clean | Retired |
 |---|---|---|---|
-| Readability | 1 | 0 | no |
+| Readability | 2 | 0 | no |
 | Usability | 1 | 0 | no |
 | Visual | 1 | 0 | no |
 | Quality of life | 1 | 0 | no |
@@ -321,5 +321,16 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - Presets: Jan, vLLM, OpenRouter, Groq, Together added beside Ollama, LM Studio, llama.cpp, OpenAI.
 - **Google AI Overview** beside AI Mode (`webmodeVariant`): a plain search page with its AI Overview, or the conversational AI Mode.
 - UI for these (Settings controls, Test button using the detection, the variant select) follows in the UI half of this sweep.
+
+`clean: no`
+
+### 2026-11-07 · Readability sweep 2 — independent review (23 items), library half applied
+
+- `lib/evidence` collided with the model's `CheckResult.evidence` (for/against) → folder is `lib/lookups`; `PreRunLookups`, `SourceLookups`, `attachLookups()` (pure, no more `Object.assign` on an object already in React state), one `LOOKUP_BUDGET_MS` table for the three timing policies.
+- `lib/webmode` → `lib/googleAiMode`; the module-level `configureWebMode()` global is gone, callers pass `settings.webmodeVariant`; `openWebMode` → `openGoogleAiMode`; a doc note on `PROVIDER_IDS` says what `'webmode'` is.
+- Latent bug: `RunError.endpoint` was never set, so the "Is Ollama or LM Studio running?" hint could not fire → set for OpenAI-style providers; `RunError` and a `CheckErrorCode` union now live in `lib/pipeline/runCheck.ts`, and the hint table is `Record<CheckErrorCode, string>` (exhaustive, which surfaced the missing `unknown` entry).
+- `LlmProvider.id` and `CheckResult.provider.id` are `ProviderId`, removing the cast in App; `toneForVerdict` moved to the schema next to `VerdictKind` and the export's copy is gone; `normalizeStored` → `upgradeStoredCheck`; `loadPublicSettings` → `loadSettingsWithoutSecrets`.
+- Dead code removed: `RunOptions.repair`, `factCheckError`, `MessageResponse`, an impossible branch in `sourceMixNotes`, `domainOfUrl`, orphan doc blocks; stale comments on `shortcutAction`, `providerReady` and the provider interface corrected; the two settings casts replaced by schema parses.
+- Still to do (UI half, after the usability/visual reports): split `App.tsx`'s `startCheck` into `runProviders` + `reduceProgress` + `useCheckRun`; `useProviderVerify` shared by the three cards (fixes the local card's status not resetting on endpoint edits); `UpdateSettings` type, `useActionError`, `Row` for onboarding; `OpenAICompatCard` naming; one provider-name table; test file housekeeping.
 
 `clean: no`

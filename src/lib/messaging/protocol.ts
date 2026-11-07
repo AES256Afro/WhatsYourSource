@@ -8,11 +8,6 @@ import { LIMITS, MAX_INLINE_IMAGE_URL } from './limits';
  * is validated with these schemas. Page-derived strings are never trusted beyond "it's a string".
  */
 
-/**
- * Every string here is page-controlled. Lengths are bounded so a crafted page cannot stuff kilobytes
- * into the model's framing text; the producers (content script, extractor) truncate to these first.
- */
-
 const url = z.string().max(LIMITS.url);
 const httpUrl = url.refine((u) => /^https?:\/\//i.test(u), 'http(s) only');
 
@@ -113,5 +108,3 @@ export const LocateImageReplySchema = z.object({
   dpr: z.number().positive(),
 });
 export type LocateImageReply = z.infer<typeof LocateImageReplySchema>;
-
-export type MessageResponse = { ok: true } | { ok: false; error: string } | SelectionInfo | SnapshotPayload | LocateImageReply | null;

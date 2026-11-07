@@ -143,7 +143,7 @@ describe('export and stats', () => {
     resetDbForTests();
     await saveCheck(fakeResult({ createdAt: 1 }), { url: 'u', title: 't', html: '<p>x</p>', capturedAt: 1 });
     await saveCheck(fakeResult({ createdAt: 2 }));
-    const { exportAll, storageStats, normalizeStored } = await import('@/lib/history/db');
+    const { exportAll, storageStats, upgradeStoredCheck } = await import('@/lib/history/db');
     const blob = await exportAll();
     const text = await new Promise<string>((resolve, reject) => {
       const fr = new FileReader(); // jsdom's Blob has no .text()
@@ -159,7 +159,7 @@ describe('export and stats', () => {
     expect(stats.snapshots).toBe(1);
     expect(stats.snapshotBytes).toBe('<p>x</p>'.length * 2);
     // Old rows without newer fields render without throwing.
-    const old = normalizeStored({
+    const old = upgradeStoredCheck({
       id: 'o',
       createdAt: 1,
       kind: 'post',

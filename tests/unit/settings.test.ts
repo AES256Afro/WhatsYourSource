@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, mergeSettings, providerOrder, providerReady } from '@/lib/storage/settings';
-import { googleAiModeUrl } from '@/lib/webmode';
+import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { domainOf, normalizeUrl } from '@/lib/util/url';
 
 describe('settings', () => {

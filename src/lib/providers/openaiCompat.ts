@@ -57,7 +57,7 @@ const TOOLS = [
 const MAX_ROUNDS = 6;
 
 export class OpenAICompatProvider implements LlmProvider {
-  id = 'openai-compat';
+  id = 'openai-compat' as const;
   label: string;
   capabilities = { image: true, webSearch: false, urlContext: false };
 

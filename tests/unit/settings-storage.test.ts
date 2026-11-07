@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import {
   DEFAULT_SETTINGS,
-  loadPublicSettings,
+  loadSettingsWithoutSecrets,
   loadSettings,
   mergeSettings,
   pageTriggerTarget,
@@ -50,7 +50,7 @@ describe('secrets live apart from public settings', () => {
     expect(JSON.stringify(stored[SETTINGS_KEY])).not.toContain('secret');
     expect(stored[SECRETS_KEY]).toEqual({ 'providers.gemini.apiKey': 'AIza-secret', 'providers.openaiCompat.braveKey': 'BSA-secret' });
     expect((await loadSettings()).providers.gemini.apiKey).toBe('AIza-secret');
-    expect((await loadPublicSettings()).providers.gemini.apiKey).toBe('');
+    expect((await loadSettingsWithoutSecrets()).providers.gemini.apiKey).toBe('');
     expect(stripSecrets(s).providers.openaiCompat.braveKey).toBe('');
   });
 

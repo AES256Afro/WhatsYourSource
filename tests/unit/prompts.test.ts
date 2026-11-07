@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { QUESTION, SYSTEM_PROMPT, buildRequest, searchHintFor } from '@/lib/pipeline/prompts';
-import { googleAiModeUrl } from '@/lib/webmode';
+import { googleAiModeUrl } from '@/lib/googleAiMode';
 
 const text: CheckInput = {
   kind: 'text',

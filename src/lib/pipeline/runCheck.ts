@@ -1,8 +1,22 @@
 import type { CheckInput } from '../messaging/protocol';
-import { toProviderError, type GenEvent, type LlmProvider, type RawSource, type Usage } from '../providers/types';
+import { toProviderError, type GenEvent, type LlmProvider, type ProviderErrorCode, type RawSource, type Usage } from '../providers/types';
+import type { ProviderId } from '../storage/settings';
 import { buildSources, resolveClaims, resolveOriginal } from './merge';
 import { buildRepairRequest, buildRequest } from './prompts';
 import { extractJsonBlock, parseModelResult, type CheckResult, type LocalProvenance, type ModelResult } from './schema';
+
+/** Every way a check can fail, so hints and fallback rules are checked exhaustively by the compiler. */
+export type CheckErrorCode = ProviderErrorCode | 'empty' | 'image' | 'image-permission' | 'image-page-closed';
+
+/** An error as the UI sees it: the event plus which provider (and, for local servers, which endpoint) it came from. */
+export interface RunError {
+  code: CheckErrorCode;
+  message: string;
+  details?: string;
+  provider?: ProviderId;
+  /** The base URL for OpenAI-style providers, so hints can say "is Ollama running?" for local ones. */
+  endpoint?: string;
+}
 
 export type CheckEvent =
   | { type: 'status'; message: string; done?: boolean }
@@ -12,11 +26,9 @@ export type CheckEvent =
   | { type: 'searchSuggestions'; html: string }
   | { type: 'usage'; usage: Usage }
   | { type: 'result'; result: CheckResult }
-  | { type: 'error'; code: string; message: string; details?: string };
+  | { type: 'error'; code: CheckErrorCode; message: string; details?: string };
 
 export interface RunOptions {
-  /** Second, tool-less call to coerce the output into JSON when the first pass didn't. */
-  repair?: boolean;
   image?: { base64: string; mime: string; provenance?: LocalProvenance; provenanceFacts?: string; provenanceMetadata?: string };
   /** Pre-run lookups to show the model (see `lookupsForPrompt`). */
   lookups?: string;
@@ -94,7 +106,7 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
   let narrative = extracted.narrative;
   let parsed = parseModelResult(extracted.jsonText);
 
-  if (!parsed.ok && opts.repair !== false && text.trim().length > 0) {
+  if (!parsed.ok && text.trim().length > 0) {
     yield { type: 'status', message: 'Tidying up the answer…' };
     try {
       let repairText = '';

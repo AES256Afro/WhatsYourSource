@@ -4,7 +4,7 @@ import { enqueueJob } from '@/lib/jobs';
 import { openPanelSync } from '@/lib/panel';
 import { SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
 import { getTargetTab } from '@/lib/tabs';
-import { googleAiModeUrl } from '@/lib/webmode';
+import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { domainOf } from '@/lib/util/url';
 import { useSettings } from '../hooks/useSettings';
 import { useShortcutLabel } from '../hooks/useShortcutLabel';

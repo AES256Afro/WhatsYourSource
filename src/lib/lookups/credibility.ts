@@ -68,7 +68,6 @@ export async function rateDomains(hostsOrUrls: Iterable<string>): Promise<Record
 export function sourceMixNotes(domains: string[], ratings: Record<string, Credibility>): string[] {
   const notes: string[] = [];
   const unique = Array.from(new Set(domains.filter(Boolean)));
-  if (unique.length >= 2 && unique.length === 1) notes.push('All sources come from one outlet.');
   if (domains.length >= 3 && unique.length === 1) notes.push(`Every source is from ${unique[0]}; look for an independent one.`);
   const bad = unique.filter((d) => ['unreliable', 'deprecated', 'blacklisted'].includes(ratings[d]?.status ?? ''));
   if (bad.length) notes.push(`${bad.join(', ')} ${bad.length === 1 ? 'is' : 'are'} rated unreliable by Wikipedia editors; weigh accordingly.`);

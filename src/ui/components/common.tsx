@@ -1,27 +1,8 @@
 import type { ReactNode } from 'react';
-import type { ClaimStatus, VerdictKind } from '@/lib/pipeline/schema';
+import { type ClaimStatus, type Tone } from '@/lib/pipeline/schema';
 import { Sparkle } from './Icons';
 
-export type Tone = 'ok' | 'warn' | 'bad' | 'muted';
-
-export function toneForVerdict(kind: VerdictKind): Tone {
-  switch (kind) {
-    case 'supported':
-    case 'authentic':
-      return 'ok';
-    case 'disputed':
-    case 'ai-generated':
-      return 'bad';
-    case 'misleading':
-    case 'misattributed':
-    case 'older-than-claimed':
-    case 'mixed':
-    case 'satire':
-      return 'warn';
-    default:
-      return 'muted';
-  }
-}
+export { toneForVerdict, type Tone } from '@/lib/pipeline/schema';
 
 export function toneForClaim(status: ClaimStatus): Tone {
   switch (status) {

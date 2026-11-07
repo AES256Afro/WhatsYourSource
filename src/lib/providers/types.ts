@@ -1,7 +1,10 @@
 /**
- * A provider is only an LLM call. The WhatsYourSource prompt, the result schema and the
- * merging of sources live in the pipeline, so adding a provider is implementing `generate()`.
+ * A provider turns a GenerateRequest into a stream of GenEvents. The prompt, the result schema and
+ * the merging of sources live in the pipeline. Providers with native search (Gemini, Anthropic) are
+ * thin adapters; the OpenAI-style one also carries the search-tool loop a model without web access
+ * needs (see providers/openaiCompat).
  */
+import type { ProviderId } from '../storage/settings';
 
 export type Part = { text: string } | { image: { mime: string; dataBase64: string } };
 
@@ -66,7 +69,7 @@ export interface ProviderCapabilities {
 }
 
 export interface LlmProvider {
-  id: string;
+  id: ProviderId;
   label: string;
   model: string;
   capabilities: ProviderCapabilities;

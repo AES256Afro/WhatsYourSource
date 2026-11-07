@@ -1,14 +1,6 @@
 import type { StoredCheck, StoredSnapshot } from './db';
-import type { VerdictKind } from '../pipeline/schema';
+import { toneForVerdict } from '../pipeline/schema';
 import { buildSnapshotSrcdoc, escapeHtml } from './snapshot';
-
-/** Same mapping as the panel's VerdictBanner, kept here so the export has no UI dependency. */
-function toneForVerdict(kind: VerdictKind): 'ok' | 'warn' | 'bad' | 'muted' {
-  if (kind === 'supported' || kind === 'authentic') return 'ok';
-  if (kind === 'disputed' || kind === 'ai-generated') return 'bad';
-  if (kind === 'unverified') return 'muted';
-  return 'warn';
-}
 
 /** One check as a self-contained HTML file: the result card first, the saved page below it. */
 export function checkToStandaloneHtml(check: StoredCheck, snapshot?: StoredSnapshot | null): string {

@@ -12,7 +12,7 @@ const VERSION = '2023-06-01';
 
 /** Claude via the Messages API with the built-in web search tool, streamed. */
 export class AnthropicProvider implements LlmProvider {
-  id = 'anthropic';
+  id = 'anthropic' as const;
   label = 'Anthropic (Claude)';
   capabilities = { image: true, webSearch: true, urlContext: false };
 

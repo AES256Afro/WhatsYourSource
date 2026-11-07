@@ -1,22 +1,14 @@
 import { useEffect, useRef } from 'react';
 import type { CheckInput } from '@/lib/messaging/protocol';
+import type { CheckErrorCode, RunError } from '@/lib/pipeline/runCheck';
+import type { ProviderId } from '@/lib/storage/settings';
 import { hostOf } from '@/lib/util/url';
-import { googleAiModeUrl } from '@/lib/webmode';
+import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { Alert, External, Refresh, Sliders } from './Icons';
 import { InputCard } from './InputCard';
 
-export interface RunError {
-  code: string;
-  message: string;
-  details?: string;
-  /** Provider id the error came from, for provider-specific hints. */
-  provider?: string;
-  /** For local endpoints: the base URL, so the hint can say which server to start. */
-  endpoint?: string;
-}
-
 /** What to do next, per error code. Never repeats the message itself. */
-const HINT: Record<string, string> = {
+const HINT: Record<CheckErrorCode, string> = {
   'no-key': 'Add an API key in Settings, or open the check in Google AI Mode instead; that needs no key.',
   auth: 'Check the key in Settings.',
   quota: 'Wait a minute, pick the cheaper model, or try another provider.',
@@ -29,11 +21,12 @@ const HINT: Record<string, string> = {
   'image-permission': 'Allow access to that host once and try again, or make sure the image is visible on screen so a screenshot can be used.',
   image: 'Try opening the image in its own tab and checking it from there.',
   'image-page-closed': 'Open the page the image was on, then right-click the image → Check source of this image.',
+  unknown: '',
   unsupported: 'Pick a model that can see images (for Ollama or LM Studio a “vision” or “-VL” model), or use Gemini or Claude for image checks.',
 };
 
 function hintFor(error: RunError): string {
-  const base = HINT[error.code] ?? 'Something unexpected happened. Try again, or use Google AI Mode.';
+  const base = HINT[error.code] || 'Something unexpected happened. Try again, or use Google AI Mode.';
   const local = error.provider === 'openai-compat' && error.endpoint && /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(error.endpoint);
   if (local && (error.code === 'network' || error.code === 'server')) {
     return 'Is Ollama or LM Studio running, with a model loaded? Open Settings and press Test on the local model card.';
@@ -54,7 +47,7 @@ export function ErrorView({
   error: RunError;
   onRetry: () => void;
   /** Opens Settings, scrolled to the provider that failed when known. */
-  onSettings: (provider?: string) => void;
+  onSettings: (provider?: ProviderId) => void;
   onAllowHost?: () => void;
 }) {
   const host = input.kind === 'image' ? hostOf(input.srcUrl) : '';
@@ -99,3 +92,5 @@ export function ErrorView({
     </div>
   );
 }
+
+export type { RunError } from '@/lib/pipeline/runCheck';

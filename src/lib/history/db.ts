@@ -126,7 +126,7 @@ export async function listChecks(opts: ListOptions = {}): Promise<StoredCheck[]>
   const range = opts.before != null ? IDBKeyRange.upperBound(opts.before, true) : null;
   let cursor = await db.transaction('checks').store.index('by-created').openCursor(range, 'prev');
   while (cursor && out.length < limit) {
-    const c = normalizeStored(cursor.value);
+    const c = upgradeStoredCheck(cursor.value);
     const kindOk = !opts.kind || opts.kind === 'all' || c.kind === opts.kind;
     const snapOk = !opts.withSnapshot || c.hasSnapshot;
     const textOk =
@@ -144,11 +144,11 @@ export async function listChecks(opts: ListOptions = {}): Promise<StoredCheck[]>
 
 export async function getCheck(id: string): Promise<StoredCheck | undefined> {
   const c = await (await getDb()).get('checks', id);
-  return c ? normalizeStored(c) : undefined;
+  return c ? upgradeStoredCheck(c) : undefined;
 }
 
 /** Rows written by older builds may lack fields added since; fill them so views never dereference undefined. */
-export function normalizeStored(c: StoredCheck): StoredCheck {
+export function upgradeStoredCheck(c: StoredCheck): StoredCheck {
   const r = c.result;
   const input = r.input as CheckInput & { images?: string[]; links?: string[] };
   return {

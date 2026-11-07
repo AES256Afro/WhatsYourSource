@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { browser } from 'wxt/browser';
-import type { Credibility } from '@/lib/evidence';
+import type { Credibility } from '@/lib/lookups';
 import type { Source } from '@/lib/pipeline/schema';
 import { Count, Label, TextAction } from './common';
 import { Check, Copy, External } from './Icons';

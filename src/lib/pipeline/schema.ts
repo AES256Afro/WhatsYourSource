@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import type { Credibility, FactCheck, FirstCapture } from '../evidence';
+import type { Credibility, FactCheck, FirstCapture } from '../lookups';
 import type { CheckInput } from '../messaging/protocol';
+import type { ProviderId } from '../storage/settings';
 import type { Usage } from '../providers/types';
 
 export const ClaimStatusSchema = z.enum(['supported', 'disputed', 'misleading', 'unverified']);
@@ -19,6 +20,27 @@ export const VerdictKindSchema = z.enum([
   'satire',
 ]);
 export type VerdictKind = z.infer<typeof VerdictKindSchema>;
+
+/** How a verdict kind is coloured and iconed, everywhere (panel, history rows, HTML export). */
+export type Tone = 'ok' | 'warn' | 'bad' | 'muted';
+export function toneForVerdict(kind: VerdictKind): Tone {
+  switch (kind) {
+    case 'supported':
+    case 'authentic':
+      return 'ok';
+    case 'disputed':
+    case 'ai-generated':
+      return 'bad';
+    case 'misleading':
+    case 'misattributed':
+    case 'older-than-claimed':
+    case 'mixed':
+    case 'satire':
+      return 'warn';
+    default:
+      return 'muted';
+  }
+}
 
 export const ConfidenceSchema = z.enum(['high', 'medium', 'low']);
 
@@ -131,7 +153,7 @@ export interface CheckResult {
   id: string;
   createdAt: number;
   input: CheckInput;
-  provider: { id: string; label: string; model: string };
+  provider: { id: ProviderId; label: string; model: string };
   /** The human-readable part of the answer (everything before the JSON block). */
   narrative: string;
   verdict: { label: string; kind: VerdictKind; confidence: 'high' | 'medium' | 'low'; summary: string };

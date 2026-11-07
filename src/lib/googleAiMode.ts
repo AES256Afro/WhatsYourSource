@@ -4,18 +4,14 @@ import { truncate } from './util/url';
 
 /**
  * "Google AI Mode" = Google's own AI answer page, outside the add-on. No key, nothing captured.
+ * In settings this is the `'webmode'` entry of PROVIDER_IDS: chosen like a provider, never an LLM call.
  * `udm=50` selects AI Mode on google.com (observed 2025–2026; if Google changes it, only this file changes).
  * The query is the same question the in-panel check puts to the model: is it true, and where is the source?
  */
-export type WebVariant = 'ai-mode' | 'overview';
+export type GoogleAiModeVariant = 'ai-mode' | 'overview';
 
-/** The user's choice, set once from settings by whichever context builds these URLs. */
-let defaultVariant: WebVariant = 'ai-mode';
-export function configureWebMode(variant: WebVariant): void {
-  defaultVariant = variant;
-}
-
-export function googleAiModeUrl(input: CheckInput, variant: WebVariant = defaultVariant): string {
+/** `variant` is `settings.webmodeVariant`: AI Mode (conversational) or a normal search with its AI Overview. */
+export function googleAiModeUrl(input: CheckInput, variant: GoogleAiModeVariant = 'ai-mode'): string {
   let q: string;
   switch (input.kind) {
     case 'text':

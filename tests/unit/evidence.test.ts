@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { lookup, sourceMixNotes, type CredibilityEntry } from '@/lib/evidence/credibility';
-import { factCheckQuery, parseFactChecks } from '@/lib/evidence/factcheck';
-import { parseCdxTimestamp } from '@/lib/evidence/wayback';
-import { lookupsForPrompt } from '@/lib/evidence';
+import { lookup, sourceMixNotes, type CredibilityEntry } from '@/lib/lookups/credibility';
+import { factCheckQuery, parseFactChecks } from '@/lib/lookups/factcheck';
+import { parseCdxTimestamp } from '@/lib/lookups/wayback';
+import { lookupsForPrompt } from '@/lib/lookups';
 import { buildRequest } from '@/lib/pipeline/prompts';
 import { parseModelResult } from '@/lib/pipeline/schema';
 

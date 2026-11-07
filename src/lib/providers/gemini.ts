@@ -36,7 +36,7 @@ interface GeminiChunk {
 }
 
 export class GeminiProvider implements LlmProvider {
-  id = 'gemini';
+  id = 'gemini' as const;
   label = 'Google AI (Gemini)';
   capabilities = { image: true, webSearch: true, urlContext: true };
 

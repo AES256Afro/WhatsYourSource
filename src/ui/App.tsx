@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
-import { sourceLookups, startLookups } from '@/lib/evidence';
+import { sourceLookups, startLookups } from '@/lib/lookups';
 import { claimsForPrompt, extractClaims } from '@/lib/pipeline/claims';
 import { enforceSnapshotCap, saveCheck } from '@/lib/history/db';
 import { captureFromTab } from '@/lib/history/snapshot';
@@ -15,18 +15,19 @@ import { runCheck } from '@/lib/pipeline/runCheck';
 import type { CheckResult } from '@/lib/pipeline/schema';
 import { createProvider, providerDisplayName } from '@/lib/providers/registry';
 import { providerOrder, providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
-import { configureWebMode, googleAiModeUrl } from '@/lib/webmode';
+import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { CheckingView, type RunState } from './components/CheckingView';
 import { DetailView } from './components/DetailView';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { ErrorView, type RunError } from './components/ErrorView';
+import { ErrorView } from './components/ErrorView';
+import type { RunError } from '@/lib/pipeline/runCheck';
 import { HistoryView } from './components/HistoryView';
 import { HomeView } from './components/HomeView';
 import { Onboarding } from './components/Onboarding';
 import { External, Sliders } from './components/Icons';
 import { RecentList } from './components/RecentList';
 import { ResultView } from './components/ResultView';
-import { PROVIDER_CARD_ID, SettingsView } from './components/SettingsView';
+import { SettingsView } from './components/SettingsView';
 import { TopBar } from './components/TopBar';
 import { useSettings } from './hooks/useSettings';
 
@@ -56,11 +57,10 @@ export function App() {
   const settingsRef = useRef<Settings | null>(null);
   useEffect(() => {
     settingsRef.current = settings;
-    if (settings) configureWebMode(settings.webmodeVariant);
   }, [settings]);
 
-  const openWebMode = useCallback((input: CheckInput) => {
-    void browser.tabs.create({ url: googleAiModeUrl(input) });
+  const openGoogleAiMode = useCallback((input: CheckInput) => {
+    void browser.tabs.create({ url: googleAiModeUrl(input, settingsRef.current?.webmodeVariant) });
   }, []);
 
   const startCheck = useCallback(
@@ -78,7 +78,7 @@ export function App() {
       setSaveError(null);
 
       if (s.defaultProvider === 'webmode') {
-        openWebMode(input);
+        openGoogleAiMode(input);
         setView('home');
         return;
       }
@@ -225,7 +225,13 @@ export function App() {
               finished = ev.result;
               break;
             case 'error':
-              failed = { code: ev.code, message: ev.message, details: ev.details, provider: id };
+              failed = {
+                code: ev.code,
+                message: ev.message,
+                details: ev.details,
+                provider: id,
+                endpoint: id === 'openai-compat' ? s.providers.openaiCompat.baseUrl : undefined,
+              };
               break;
           }
           setRun({ ...state });
@@ -286,7 +292,7 @@ export function App() {
       setView('error');
       finish();
     },
-    [openWebMode, update],
+    [openGoogleAiMode, update],
   );
 
   // Jobs from the background (context menu, shortcut, chip, popup).
@@ -307,8 +313,8 @@ export function App() {
     setDetailId(id);
     setView('detail');
   };
-  const openSettings = (provider?: string) => {
-    setFocusProvider(provider && provider in PROVIDER_CARD_ID ? (provider as ProviderId) : undefined);
+  const openSettings = (provider?: ProviderId) => {
+    setFocusProvider(provider);
     setView('settings');
   };
   const running = busy && view !== 'checking';
@@ -392,7 +398,7 @@ export function App() {
                       Check now
                     </button>
                   ) : (
-                    <button className="wys-btn wys-btn-primary grow" onClick={() => openWebMode(needsSetup)}>
+                    <button className="wys-btn wys-btn-primary grow" onClick={() => openGoogleAiMode(needsSetup)}>
                       Open in Google AI Mode <External size={13} />
                     </button>
                   )}
@@ -423,7 +429,7 @@ export function App() {
           <HomeView
             settings={settings}
             onCheck={(i) => void startCheck(i)}
-            onWebMode={openWebMode}
+            onWebMode={openGoogleAiMode}
             onSettings={() => openSettings()}
             recent={<RecentList onOpen={openDetail} onSeeAll={() => setView('history')} refreshKey={historyTick} />}
           />

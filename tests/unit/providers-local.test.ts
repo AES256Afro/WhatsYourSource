@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { guessVisionFromName, parseLmStudio, parseOllamaShow, parseOllamaTags, serverKind, serverRoot } from '@/lib/providers/localModels';
 import { parseClaims, buildClaimsRequest } from '@/lib/pipeline/claims';
 import { readPublicSettings, publicTriggerTarget } from '@/lib/storage/publicSettings';
-import { configureWebMode, googleAiModeUrl } from '@/lib/webmode';
+import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { presetFor } from '@/lib/providers/registry';
 
 describe('local model capability detection', () => {
@@ -75,8 +75,6 @@ describe('Google web variants', () => {
     const input = { kind: 'text' as const, text: 'hello', pageUrl: '', pageTitle: '' };
     expect(googleAiModeUrl(input, 'ai-mode')).toContain('udm=50&');
     expect(googleAiModeUrl(input, 'overview')).not.toContain('udm=50');
-    configureWebMode('overview');
-    expect(googleAiModeUrl(input)).not.toContain('udm=50');
-    configureWebMode('ai-mode');
+    expect(googleAiModeUrl(input)).toContain('udm=50');
   });
 });

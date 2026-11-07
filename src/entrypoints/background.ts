@@ -3,8 +3,8 @@ import { browser, type Browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
 import { openPanelSync } from '@/lib/panel';
 import { clampSelection, LIMITS, MessageSchema, PostInputSchema, SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
-import { DEFAULT_SETTINGS, loadPublicSettings, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
-import { configureWebMode, googleAiModeUrl } from '@/lib/webmode';
+import { DEFAULT_SETTINGS, loadSettingsWithoutSecrets, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
+import { googleAiModeUrl } from '@/lib/googleAiMode';
 
 /**
  * The background is a router only: it owns the context menus and the keyboard command,
@@ -30,9 +30,8 @@ export default defineBackground(() => {
   let settings: Settings = DEFAULT_SETTINGS;
   const adopt = (s: Settings) => {
     settings = s;
-    configureWebMode(s.webmodeVariant);
   };
-  void loadPublicSettings().then(adopt);
+  void loadSettingsWithoutSecrets().then(adopt);
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[SETTINGS_KEY]) adopt(mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue));
   });
@@ -59,7 +58,7 @@ export default defineBackground(() => {
    */
   function route(tab: MaybeTab, quick: CheckInput, resolve?: () => Promise<CheckInput>): void {
     if (settings.defaultProvider === 'webmode') {
-      void (resolve ? resolve() : Promise.resolve(quick)).then((input) => browser.tabs.create({ url: googleAiModeUrl(input) }));
+      void (resolve ? resolve() : Promise.resolve(quick)).then((input) => browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) }));
       return;
     }
     openPanel(tab);
@@ -83,7 +82,7 @@ export default defineBackground(() => {
       case MENU.selectionWeb: {
         const text = (info.selectionText ?? '').trim();
         if (!text) return;
-        void browser.tabs.create({ url: googleAiModeUrl({ kind: 'text', text, pageUrl, pageTitle }) });
+        void browser.tabs.create({ url: googleAiModeUrl({ kind: 'text', text, pageUrl, pageTitle }, settings.webmodeVariant) });
         return;
       }
       case MENU.image: {
@@ -118,7 +117,7 @@ export default defineBackground(() => {
     if (!t) return;
     const input: CheckInput = /^https?:\/\/\S+$/i.test(t) ? { kind: 'page', url: t, title: '' } : { kind: 'text', text: t, pageUrl: '', pageTitle: '' };
     if (settings.defaultProvider === 'webmode') {
-      void browser.tabs.create({ url: googleAiModeUrl(input) });
+      void browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) });
       return;
     }
     void (async () => {
@@ -137,7 +136,7 @@ export default defineBackground(() => {
     void (async () => {
       // The in-memory copy may still be the defaults right after the worker woke up; re-read now
       // that we are async anyway. (The panel may have opened needlessly; harmless.)
-      adopt(await loadPublicSettings());
+      adopt(await loadSettingsWithoutSecrets());
       target = pageTriggerTarget(settings);
       const activeTab = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
       if (target === 'panel' && !tab) openPanel(activeTab);
@@ -148,7 +147,7 @@ export default defineBackground(() => {
         ? { kind: 'text', text: sel.text, pageUrl: sel.pageUrl, pageTitle: sel.pageTitle, surrounding: sel.surrounding }
         : { kind: 'page', url: pageUrl, title: sel.pageTitle || activeTab?.title || '' };
       if (target === 'webmode') {
-        await browser.tabs.create({ url: googleAiModeUrl(input) });
+        await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) });
       } else {
         await enqueueJob(input, activeTab?.id, activeTab?.windowId);
       }
