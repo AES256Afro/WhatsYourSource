@@ -15,6 +15,15 @@ Every in-panel check is kept in a local history with a saved copy of the page it
 
 See [PLAN.md](PLAN.md) for the architecture, milestones and the UI mockups; [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/PERMISSIONS.md](docs/PERMISSIONS.md) for what is sent where and why each permission exists.
 
+## Install
+
+Until the store listings are live, install from the [latest GitHub release](https://github.com/AES256Afro/WhatsYourSource/releases/latest):
+
+- **Chrome, Edge, Brave:** download `whatsyoursource-<version>-chrome.zip`, unzip it, open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, press **Load unpacked** and pick the unzipped folder. Updates: download the new zip and load it over the old folder, or press the reload icon on the card.
+- **Firefox:** download `whatsyoursource-<version>-firefox.zip`, open `about:debugging#/runtime/this-firefox`, press **Load Temporary Add-on…** and pick the zip. A temporary add-on is removed when Firefox restarts; the Firefox Add-ons build, once reviewed, installs permanently.
+
+Then open the side panel from the toolbar icon, pick how to check sources (a free Gemini key, Google AI Mode with no key, Claude, or a local model), highlight some text and press **Check source**.
+
 ## Development
 
 ```bash
