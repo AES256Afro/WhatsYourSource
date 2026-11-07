@@ -120,7 +120,9 @@ Paste one per box; the dashboard lists exactly the permissions in the manifest.
 
 ### Data usage
 
-**What user data do you plan to collect?** — tick exactly these two:
+**What user data do you plan to collect?** — tick exactly these two.
+
+Why two boxes when nothing is collected by the developer: Chrome's form uses "collect" in the sense of its user-data policy, where *handling* data means "collecting, transmitting, using, or sharing" it, and the policy says disclosure is required "even when data is processed or stored locally". The extension transmits the selected page content to the AI provider the user chose, and stores and transmits the user's own API keys to the provider each belongs to, so both are handled. The boxes are a disclosure of that, not a statement that data reaches the developer; the store page then shows "This developer declares that your data is not being sold…, not used for unrelated purposes, not used for creditworthiness" next to the two types. A dashboard that disagrees with the privacy policy or the behaviour is itself a policy violation, which is the risk in leaving them unticked.
 
 | Data type | Tick | Why |
 |---|---|---|
