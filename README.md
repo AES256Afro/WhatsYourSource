@@ -13,6 +13,19 @@ Every in-panel check is kept in a local history with a saved copy of the page it
 
 **What you can check:** highlighted text (floating chip, right-click, or `Alt+Shift+S`), an image (right-click → *Check source of this image*; EXIF, Content Credentials and a perceptual hash are read on your device first), a social post (right-click anywhere in it → *Check source of this post*), or the whole page.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![A result: verdict, likely original source, assessment](store/01-result.png) | ![The Check source chip on highlighted text](store/02-chip.png) |
+| *A result: the verdict first, then the likely original source, the assessment, the claims and the sources that were read.* | *Highlight text and the "Check source" chip appears; or press Alt+Shift+S, or right-click.* |
+| ![An image check with on-device provenance](store/03-image.png) | ![A saved check with its page snapshot](store/04-saved-page.png) |
+| *An image check: metadata read on your device, then the earliest appearance online.* | *Every check is saved locally with a copy of the page as it was.* |
+| ![Settings: the four ways to check, local model card](store/05-providers.png) | ![First-run screen](store/06-onboarding.png) |
+| *Settings: Gemini with your key, Google AI Mode with no key, Claude, or a local model with a search tool.* | *First run: pick how to check sources; a free Gemini key or no key at all.* |
+| ![A result in dark mode](store/07-result-dark.png) | ![Promo tile](store/promo-1400x560.png) |
+| *Dark mode.* | |
+
 See [PLAN.md](PLAN.md) for the architecture, milestones and the UI mockups; [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/PERMISSIONS.md](docs/PERMISSIONS.md) for what is sent where and why each permission exists.
 
 ## Install
