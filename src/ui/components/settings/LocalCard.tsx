@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { hasAllUrls, hasOrigin, requestAllUrls, requestOrigin } from '@/lib/permissions';
 import { OPENAI_COMPAT_PRESETS, openaiCompatLabel } from '@/lib/providers/registry';
+import { describeLocalModels, type LocalModelInfo } from '@/lib/providers/localModels';
 import { OpenAICompatProvider } from '@/lib/providers/openaiCompat';
 import { createSearchBackend } from '@/lib/search/backends';
 import type { SearchToolId, Settings } from '@/lib/storage/settings';
@@ -18,6 +19,7 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
   const set = (patch: Partial<O>) => update((s) => ({ ...s, providers: { ...s.providers, openaiCompat: { ...s.providers.openaiCompat, ...patch } } }));
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [models, setModels] = useState<string[]>([]);
+  const [info, setInfo] = useState<LocalModelInfo[]>([]);
   const [originOk, setOriginOk] = useState<boolean | null>(null);
   const [allUrls, setAllUrls] = useState<boolean | null>(null);
   const [searxngOk, setSearxngOk] = useState<boolean | null>(null);
@@ -43,11 +45,29 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
       fetchPages: true,
     }).validate();
     if (r.ok) {
-      setModels(r.models ?? []);
-      setStatus({ kind: 'ok', text: `Connected · ${r.models?.length ?? 0} models` });
-      if (!o.model && r.models?.[0]) void set({ model: r.models[0] });
+      const ids = r.models ?? [];
+      setModels(ids);
+      // Ask LM Studio / Ollama what each model can do; the chosen model's answer is remembered so an
+      // image check on a text-only model fails up front with a hint instead of a server error.
+      const described = await describeLocalModels(o.baseUrl, ids);
+      setInfo(described);
+      const chosen = o.model || ids[0] || '';
+      const me = described.find((m) => m.id === chosen);
+      const loaded = described.filter((m) => m.loaded).length;
+      setStatus({
+        kind: 'ok',
+        text: `Connected · ${ids.length} model${ids.length === 1 ? '' : 's'}${loaded ? ` · ${loaded} loaded` : ''}${me?.vision === false ? ' · text only' : me?.vision ? ' · can see images' : ''}`,
+      });
+      void set({ model: chosen, modelVision: me?.vision ?? null, modelTools: me?.tools ?? null, modelContext: me?.contextLength ?? null });
     } else setStatus({ kind: 'bad', text: r.error });
   };
+  const chosenInfo = info.find((m) => m.id === o.model);
+  const capsLine = [
+    chosenInfo?.vision === true ? 'Can see images' : chosenInfo?.vision === false ? 'Text only (no image checks)' : null,
+    chosenInfo?.tools === true ? 'Tool calling' : chosenInfo?.tools === false ? 'No tool calling (search runs up front instead)' : null,
+    chosenInfo?.contextLength ? `${Math.round(chosenInfo.contextLength / 1024)}k context` : null,
+    chosenInfo?.loaded === false ? 'Not loaded in the server yet' : null,
+  ].filter(Boolean);
 
   const allow = async () => {
     const ok = await requestOrigin(o.baseUrl);
@@ -150,6 +170,7 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
         </button>
       </div>
       <StatusLine status={status} />
+      {capsLine.length > 0 && <p className="m-0 text-[11px] leading-[15px] text-ink-2">{capsLine.join(' · ')}</p>}
       {isLocal && (
         <span className="text-[11px] leading-[15px] text-ink-2">
           Download a model with{' '}

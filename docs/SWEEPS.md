@@ -22,7 +22,7 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 | Readability | 2 | 0 | no |
 | Usability | 2 | 0 | no |
 | Visual | 1 | 0 | no |
-| Quality of life | 1 | 0 | no |
+| Quality of life | 2 | 0 | no |
 | Platform features | 2 | 0 | no |
 | Optimization | 2 | 0 | no |
 
@@ -351,5 +351,13 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - Extra evidence: a status line when the lookup is on but no key is set; "No key needed." on the two keyless lookups; a Verify for the fact-check key that runs one real query; the key instructions walk through project → enable API → credentials.
 - Copy as Markdown includes fact-checks, evidence, outlet ratings and archive dates; grounding redirect links print the domain.
 - Elapsed timer can no longer show negative time; the Checking… pill is named "Back to the check in progress"; the error view's button is "Open Settings"; the no-selection hint mentions the `wys` keyword; scheme-less links in the address bar are treated as links.
+
+`clean: no`
+
+### 2026-11-07 · Features sweep 2 — UI half, and quality-of-life sweep 2
+
+- Settings: "List the claims first, then check each one" toggle (two-pass); "Which Google page" (AI Mode / Search with AI Overview) on the Google AI Mode card.
+- Local model card: Test now asks LM Studio or Ollama about the models (vision, tool calling, context length, loaded state), remembers the chosen model's answer, and shows a capability line; a text-only model declines image checks up front.
+- **Second opinion** (QoL): buttons under a result run the same input on each other configured provider.
 
 `clean: no`

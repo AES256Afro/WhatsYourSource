@@ -41,7 +41,21 @@ export function SettingsView({ settings, update, wide, focusProvider }: { settin
         subtitle="No key · opens google.com in a tab · not saved to history"
         isDefault={settings.defaultProvider === 'webmode'}
         onMakeDefault={() => update((s) => ({ ...s, defaultProvider: 'webmode' }))}
-      />
+      >
+        <Row label="Which Google page" hint="AI Mode answers in a conversation; a normal search shows its AI Overview above the results.">
+          {(id) => (
+            <select
+              aria-labelledby={id}
+              className="wys-input h-8 w-auto text-[12px]"
+              value={settings.webmodeVariant}
+              onChange={(e) => update((s) => ({ ...s, webmodeVariant: e.target.value as Settings['webmodeVariant'] }))}
+            >
+              <option value="ai-mode">AI Mode</option>
+              <option value="overview">Search with AI Overview</option>
+            </select>
+          )}
+        </Row>
+      </ProviderCard>
       <AnthropicCard settings={settings} update={update} />
       <LocalCard settings={settings} update={update} />
 
@@ -79,6 +93,9 @@ export function SettingsView({ settings, update, wide, focusProvider }: { settin
       <div className="flex flex-col gap-1.5">
         <Label>Behaviour</Label>
         <div className="wys-card flex flex-col px-3">
+          <Row label="List the claims first, then check each one" hint="One extra, cheap call; each claim gets its own fact-check lookup.">
+            {(id) => <Toggle checked={settings.twoPass} onChange={(v) => update((s) => ({ ...s, twoPass: v }))} labelledBy={id} />}
+          </Row>
           <Row label="If the default provider fails or is over quota, try the next one that has a key">
             {(id) => <Toggle checked={settings.fallback} onChange={(v) => update((s) => ({ ...s, fallback: v }))} labelledBy={id} />}
           </Row>

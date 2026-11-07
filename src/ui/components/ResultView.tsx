@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CheckResult } from '@/lib/pipeline/schema';
+import type { ProviderId } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { ClaimList } from './ClaimList';
 import { EvidencePanel, FactCheckBanner, localeDate, WhatWasSent } from './EvidencePanel';
@@ -26,6 +27,8 @@ export function ResultView({
   snapshotNote,
   embedded,
   searchTool,
+  secondOpinions,
+  onSecondOpinion,
 }: {
   result: CheckResult;
   onRecheck: () => void;
@@ -38,6 +41,9 @@ export function ResultView({
   embedded?: boolean;
   /** Name of the local model's search tool, for the transparency block. */
   searchTool?: string;
+  /** Other configured providers that could give a second opinion on the same input. */
+  secondOpinions?: { id: ProviderId; label: string }[];
+  onSecondOpinion?: (id: ProviderId) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -144,6 +150,16 @@ export function ResultView({
         )}
         {result.notes && <p className="wys-measure m-0 text-[12px] leading-4 text-ink-2">{result.notes}</p>}
         {result.searchSuggestionsHtml && <SearchSuggestions html={result.searchSuggestionsHtml} />}
+        {!embedded && secondOpinions && secondOpinions.length > 0 && onSecondOpinion && (
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-ink-2">
+            <span>Second opinion:</span>
+            {secondOpinions.map((p) => (
+              <button key={p.id} type="button" className="wys-btn h-8 px-2.5 text-[12px]" onClick={() => onSecondOpinion(p.id)}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
         <WhatWasSent result={result} searchTool={searchTool} snapshotSaved={saved && snapshotNote?.includes('snapshot')} />
 
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-ink-2">

@@ -64,7 +64,7 @@ export function App() {
   }, []);
 
   const startCheck = useCallback(
-    async (input: CheckInput, tabId?: number) => {
+    async (input: CheckInput, tabId?: number, only?: ProviderId) => {
       const s = settingsRef.current;
       if (!s) return;
       // Each run gets a token; anything a superseded run tries to show after this point is dropped.
@@ -82,7 +82,8 @@ export function App() {
         setView('home');
         return;
       }
-      const order = providerOrder(s).filter((id) => providerReady(s, id));
+      // `only`: a second opinion runs the same input on one other provider, no fallback chain.
+      const order = only ? [only] : providerOrder(s).filter((id) => providerReady(s, id));
       if (order.length === 0) {
         setNeedsSetup(input);
         setView('settings');
@@ -352,6 +353,10 @@ export function App() {
           <ResultView
             result={result}
             onRecheck={() => startCheck(result.input)}
+            secondOpinions={(['gemini', 'anthropic', 'openai-compat'] as const)
+              .filter((id) => id !== result.provider.id && providerReady(settings, id))
+              .map((id) => ({ id, label: providerDisplayName(id, settings) }))}
+            onSecondOpinion={(id) => void startCheck(result.input, undefined, id)}
             onNewCheck={() => setView('home')}
             searchTool={settings.providers.openaiCompat.searchTool !== 'none' ? settings.providers.openaiCompat.searchTool : undefined}
             saved={!!savedId}
