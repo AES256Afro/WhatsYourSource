@@ -30,6 +30,12 @@ WhatsYourSource answers one question about anything you read online: **is this t
 - **Posts**: right-click anywhere in a social post → Check source of this post. The post's text, links and images are checked together.
 - **Pages**: check the whole page you are on, or paste any text or link into the panel.
 
+**Evidence that does not depend on the AI**
+- Already fact-checked? Published fact-checks from PolitiFact, Snopes, AFP, Full Fact and hundreds more appear above the verdict (free Google Fact Check Tools key).
+- When was it first seen? Wayback Machine dates for the page and the original source.
+- Who is the outlet? Reputation ratings from Wikipedia's perennial-sources list, shipped inside the extension.
+- The case on each side: the strongest evidence for and against, what the post leaves out, and what would change the verdict.
+
 **You choose the AI**
 - **Google AI (Gemini) with your own free key** — Google Search grounding; answers and sources appear in the panel. Default.
 - **Google AI Mode on the web** — no key, no setup: your selection opens on google.com.

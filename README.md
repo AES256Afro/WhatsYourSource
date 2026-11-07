@@ -7,6 +7,8 @@ Browser extension (Chrome + Firefox, Manifest V3) that answers **"is this true, 
 - **Your own frontier model** — Claude, GPT or any OpenAI-compatible API key.
 - **A local model on your device** — Ollama / LM Studio (e.g. Qwen), paired with a search tool so it can find sources.
 
+Beside the AI, every check can also show **published fact-checks** (PolitiFact, Snopes, AFP, Full Fact and others via Google's Fact Check Tools index, free key), **Wayback Machine dates** for the page and the original source, and **outlet reputation** from Wikipedia's perennial-sources list (shipped offline). Type `wys <text or link>` in the address bar to check without leaving the keyboard.
+
 Every in-panel check is kept in a local history with a saved copy of the page it came from. Nothing leaves the browser until you press **Check**.
 
 **What you can check:** highlighted text (floating chip, right-click, or `Alt+Shift+S`), an image (right-click → *Check source of this image*; EXIF, Content Credentials and a perceptual hash are read on your device first), a social post (right-click anywhere in it → *Check source of this post*), or the whole page.

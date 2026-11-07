@@ -60,6 +60,16 @@ export const SettingsSchema = z.object({
     /** Snapshot storage cap; oldest snapshots are dropped first (results are kept). */
     maxMb: z.number().min(10).max(5000),
   }),
+  /** Deterministic lookups that run beside the model and work with every provider. */
+  lookups: z.object({
+    /** Google Fact Check Tools (ClaimReview) — free key from Google Cloud. */
+    factChecks: z.boolean(),
+    factCheckKey: z.string(),
+    /** Wayback Machine first-capture dates. */
+    archive: z.boolean(),
+    /** Source reputation from Wikipedia's perennial-sources list, shipped offline. */
+    credibility: z.boolean(),
+  }),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -84,6 +94,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   privacy: { snapshots: true, chip: true, disabledSites: [] },
   history: { maxMb: 200 },
+  lookups: { factChecks: true, factCheckKey: '', archive: true, credibility: true },
 };
 
 /**
@@ -100,6 +111,7 @@ const SECRET_PATHS: readonly (readonly string[])[] = [
   ['providers', 'openaiCompat', 'braveKey'],
   ['providers', 'openaiCompat', 'tavilyKey'],
   ['providers', 'anthropic', 'apiKey'],
+  ['lookups', 'factCheckKey'],
 ];
 
 type Plain = Record<string, unknown>;

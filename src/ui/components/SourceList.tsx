@@ -1,10 +1,21 @@
 import { useState } from 'react';
 import { browser } from 'wxt/browser';
+import type { Credibility } from '@/lib/evidence';
 import type { Source } from '@/lib/pipeline/schema';
 import { Count, Label, TextAction } from './common';
 import { Check, Copy, External } from './Icons';
 
-export function SourceList({ sources, right }: { sources: Source[]; right?: React.ReactNode }) {
+export function SourceList({
+  sources,
+  right,
+  credibility,
+  notes,
+}: {
+  sources: Source[];
+  right?: React.ReactNode;
+  credibility?: Record<string, Credibility>;
+  notes?: string[];
+}) {
   if (sources.length === 0) return null;
   const verified = sources.filter((x) => x.verified);
   const openAll = () => {
@@ -28,14 +39,41 @@ export function SourceList({ sources, right }: { sources: Source[]; right?: Reac
       >
         Sources <Count n={sources.length} />
       </Label>
-      {sources.map((s) => (
-        <SourceRow key={s.id} source={s} />
+      {notes?.map((n) => (
+        <p key={n} className="m-0 text-[11px] leading-[15px] text-ink-2">
+          {n}
+        </p>
       ))}
+      {sources.map((s) => (
+        <SourceRow key={s.id} source={s} rating={credibility?.[s.domain]} />
+      ))}
+      {credibility && Object.keys(credibility).length > 0 && (
+        <p className="m-0 text-[11px] leading-[15px] text-ink-2">
+          Outlet ratings are Wikipedia editors’ consensus on the outlet as a whole (CC BY-SA), not a verdict on these pages.
+        </p>
+      )}
     </div>
   );
 }
 
-export function SourceRow({ source: s }: { source: Source }) {
+const RATING_TONE: Record<Credibility['status'], string> = {
+  reliable: 'bg-ok-soft text-ok',
+  'no-consensus': 'bg-muted-soft text-ink-2',
+  mixed: 'bg-muted-soft text-ink-2',
+  unreliable: 'bg-warn-soft text-warn',
+  deprecated: 'bg-bad-soft text-bad',
+  blacklisted: 'bg-bad-soft text-bad',
+};
+
+function RatingPill({ rating }: { rating: Credibility }) {
+  return (
+    <span className={`wys-pill px-1.5 py-0 text-[10px] ${RATING_TONE[rating.status]}`} title={`${rating.name}: ${rating.statusLabel}. ${rating.summary}`}>
+      {rating.statusLabel}
+    </span>
+  );
+}
+
+export function SourceRow({ source: s, rating }: { source: Source; rating?: Credibility }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(s.url);
@@ -52,9 +90,12 @@ export function SourceRow({ source: s }: { source: Source }) {
         {number}
         <span className="flex min-w-0 grow flex-col gap-px">
           <span className="truncate text-[13px] leading-[18px] font-medium text-ink">{s.title || s.domain}</span>
-          <span className="text-[12px] text-ink-2">
-            {s.domain}
-            {s.date ? ` · ${s.date}` : ''}
+          <span className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">
+            <span>
+              {s.domain}
+              {s.date ? ` · ${s.date}` : ''}
+            </span>
+            {rating && <RatingPill rating={rating} />}
           </span>
         </span>
         <External size={14} className="mt-[3px] shrink-0 text-ink-3" />

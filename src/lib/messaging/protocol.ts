@@ -165,8 +165,6 @@ export const MessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('wys:get-selection') }),
   /** popup → background: open the side panel for this window/tab. */
   z.object({ type: z.literal('wys:open-panel') }),
-  /** side panel → content: capture the page for history. */
-  z.object({ type: z.literal('wys:capture-snapshot'), highlight: z.string().optional() }),
   /** side panel → content: where is this image on screen? */
   z.object({ type: z.literal('wys:locate-image'), srcUrl: z.string() }),
   /** background → content: extract the post under the last right-click. */

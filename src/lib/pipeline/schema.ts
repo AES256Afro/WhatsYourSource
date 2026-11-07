@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Credibility, FactCheck, FirstCapture } from '../evidence';
 import type { CheckInput } from '../messaging/protocol';
 import type { Usage } from '../providers/types';
 
@@ -77,6 +78,14 @@ export const ModelResultSchema = z.object({
       }),
     ),
   ),
+  evidence: z
+    .object({
+      for: z.preprocess((v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((x) => typeof x === 'string' && x.trim()) : []), z.array(z.string())),
+      against: z.preprocess((v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((x) => typeof x === 'string' && x.trim()) : []), z.array(z.string())),
+    })
+    .nullish(),
+  missingContext: nullableStr,
+  wouldChange: nullableStr,
   notes: nullableStr,
 });
 export type ModelResult = z.infer<typeof ModelResultSchema>;
@@ -134,6 +143,16 @@ export interface CheckResult {
   usage?: Usage;
   notes?: string;
   provenance?: LocalProvenance;
+  /** The strongest points each way, so the reader sees the case, not just the verdict. */
+  evidence?: { for: string[]; against: string[] };
+  missingContext?: string;
+  wouldChange?: string;
+  /** Deterministic lookups, added beside the model's answer. */
+  factChecks?: FactCheck[];
+  pageCapture?: FirstCapture;
+  originalCapture?: FirstCapture;
+  credibility?: Record<string, Credibility>;
+  mixNotes?: string[];
   /** Set when the JSON block was missing or invalid; the narrative still shows. */
   degraded?: boolean;
   rawText: string;

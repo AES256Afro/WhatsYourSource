@@ -45,6 +45,8 @@ export async function prepareImage(input: ImageInput, tabId: number | undefined,
     provenance.phash = phashFromBitmap(model.bitmap);
   } catch {
     /* canvas unavailable */
+  } finally {
+    model.bitmap.close(); // decoded pixels can be several MB; let them go now
   }
   if (img.via === 'screenshot') provenance.exif = undefined;
   const note = img.via === 'screenshot' ? '. Note: these are screenshot pixels, so file metadata is unavailable.' : '';

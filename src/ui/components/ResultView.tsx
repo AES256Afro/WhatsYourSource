@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { CheckResult } from '@/lib/pipeline/schema';
 import { googleAiModeUrl } from '@/lib/webmode';
 import { ClaimList } from './ClaimList';
+import { EvidencePanel, FactCheckBanner, WhatWasSent } from './EvidencePanel';
+import { savePageUrl } from '@/lib/evidence/wayback';
 import { Cite, Label, ProviderBadge, TextAction, formatUsd, timeAgo } from './common';
 import { Check, Copy, External, Logo, Refresh } from './Icons';
 import { InputCard } from './InputCard';
@@ -56,6 +58,7 @@ export function ResultView({
     <div className={embedded ? 'flex flex-col' : 'flex h-full flex-col'}>
       <div className={`flex grow flex-col gap-3.5 p-3.5 ${embedded ? '' : 'overflow-y-auto'}`}>
         {!embedded && <InputCard input={result.input} when={timeAgo(result.createdAt)} clamp />}
+        {result.factChecks && <FactCheckBanner checks={result.factChecks} />}
         <VerdictBanner ref={verdictRef} verdict={result.verdict} />
         {result.degraded && (
           <div className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-[12px] leading-4 text-warn-ink">
@@ -72,7 +75,13 @@ export function ResultView({
               </span>
               <div className="flex min-w-0 grow flex-col gap-1">
                 <span className="text-[14px] leading-[18px] font-semibold">{o.title}</span>
-                {(o.publisher || o.date) && <span className="text-[12px] text-ink-2">{[o.publisher, o.date].filter(Boolean).join(' · ')}</span>}
+                {(o.publisher || o.date || result.originalCapture?.firstCaptured) && (
+                  <span className="text-[12px] text-ink-2">
+                    {[o.publisher, o.date, result.originalCapture?.firstCaptured ? `first archived ${result.originalCapture.firstCaptured}` : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                )}
                 {o.how && <span className="text-[12px] leading-4 text-ink-2">{o.how}</span>}
                 <div className="mt-1 flex items-center gap-3.5">
                   {o.url && (
@@ -95,14 +104,26 @@ export function ResultView({
           <Label>Assessment</Label>
           <Narrative text={result.narrative} />
         </div>
+        <EvidencePanel result={result} />
 
         {result.input.kind === 'image' && result.provenance && <ProvenancePanel provenance={result.provenance} srcUrl={result.input.srcUrl} />}
 
         <ClaimList claims={result.claims} />
-        <SourceList sources={result.sources} right={compare} />
+        <SourceList sources={result.sources} right={compare} credibility={result.credibility} notes={result.mixNotes} />
+        {result.pageCapture && (
+          <p className="m-0 text-[11px] leading-[15px] text-ink-2">
+            {result.pageCapture.firstCaptured
+              ? `This page was first archived by the Wayback Machine on ${result.pageCapture.firstCaptured}.`
+              : 'The Wayback Machine has no capture of this page yet.'}{' '}
+            <a href={savePageUrl(result.pageCapture.url)} target="_blank" rel="noopener noreferrer" className="font-medium no-underline">
+              Archive it now ↗
+            </a>
+          </p>
+        )}
         {result.sources.length === 0 && <div className="flex justify-end">{compare}</div>}
         {result.notes && <p className="wys-measure m-0 text-[12px] leading-4 text-ink-2">{result.notes}</p>}
         {result.searchSuggestionsHtml && <SearchSuggestions html={result.searchSuggestionsHtml} />}
+        <WhatWasSent result={result} />
 
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-ink-2">
           <ProviderBadge label={result.provider.model || result.provider.label} />

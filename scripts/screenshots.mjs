@@ -27,7 +27,7 @@ await page
   .getByRole('button', { name: /Check source/ })
   .first()
   .click();
-await page.getByText('Misattributed', { exact: true }).waitFor({ timeout: 20_000 });
+await page.getByRole('heading', { name: 'Misattributed' }).waitFor({ timeout: 20_000 });
 await page.getByText(/Saved/).waitFor();
 await page.waitForTimeout(400);
 await shot('01-result');
@@ -75,7 +75,7 @@ await page
   .getByRole('button', { name: /Check source/ })
   .first()
   .click();
-await page.getByText('Misattributed', { exact: true }).waitFor({ timeout: 20_000 });
+await page.getByRole('heading', { name: 'Misattributed' }).waitFor({ timeout: 20_000 });
 await page.waitForTimeout(400);
 await shot('07-result-dark');
 await page.emulateMedia({ colorScheme: 'light' });

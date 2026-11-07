@@ -18,6 +18,8 @@ export interface RunOptions {
   /** Second, tool-less call to coerce the output into JSON when the first pass didn't. */
   repair?: boolean;
   image?: { base64: string; mime: string; provenance?: LocalProvenance; provenanceFacts?: string; provenanceMetadata?: string };
+  /** Pre-run lookups to show the model (see `lookupsForPrompt`). */
+  lookups?: string;
 }
 
 export async function* runCheck(input: CheckInput, provider: LlmProvider, signal: AbortSignal, opts: RunOptions = {}): AsyncGenerator<CheckEvent> {
@@ -26,6 +28,7 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
     imageMime: opts.image?.mime,
     provenanceFacts: opts.image?.provenanceFacts,
     provenanceMetadata: opts.image?.provenanceMetadata,
+    lookups: opts.lookups,
   });
 
   let text = '';
@@ -124,6 +127,12 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
     searchSuggestionsHtml: suggestions,
     usage,
     notes: model?.notes ?? undefined,
+    evidence:
+      model?.evidence && (model.evidence.for.length || model.evidence.against.length)
+        ? { for: model.evidence.for, against: model.evidence.against }
+        : undefined,
+    missingContext: model?.missingContext ?? undefined,
+    wouldChange: model?.wouldChange ?? undefined,
     provenance: opts.image?.provenance,
     degraded: !model,
     rawText: text,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
+import { sourceLookups, startLookups } from '@/lib/evidence';
 import { enforceSnapshotCap, saveCheck } from '@/lib/history/db';
 import { captureFromTab } from '@/lib/history/snapshot';
 import { ImageFetchError } from '@/lib/image/bytes';
@@ -95,6 +96,12 @@ export function App() {
       const controller = new AbortController();
       abortRef.current = controller;
       setBusy(true);
+      // Deterministic lookups run beside the model. The fast ones get a short head start so the
+      // model can cite them; whatever is still pending is merged into the result afterwards.
+      const lookups = startLookups(input, s, controller.signal);
+      const lookupsPromise = lookups.all;
+      const lookupsText = await Promise.race([lookups.forPrompt, new Promise<string>((r) => setTimeout(() => r(''), 2500))]);
+      if (stale()) return;
       const finish = () => {
         if (!stale()) setBusy(false);
       };
@@ -166,7 +173,7 @@ export function App() {
         let finished: CheckResult | null = null;
         let failed: RunError | null = null;
 
-        for await (const ev of runCheck(input, provider, controller.signal, image ? { image } : {})) {
+        for await (const ev of runCheck(input, provider, controller.signal, { image, lookups: lookupsText || undefined })) {
           if (stale()) return;
           switch (ev.type) {
             case 'status':
@@ -207,6 +214,28 @@ export function App() {
           setResult(finished);
           setView('result');
           finish();
+          // Evidence that needed the sources: reputation of each outlet, first archive capture of
+          // the original source, plus the pre-run lookups. Shown as they arrive, saved with the result.
+          try {
+            const lookups = await lookupsPromise;
+            const extra = await sourceLookups(
+              finished.sources.map((x) => x.url),
+              finished.originalSource?.url,
+              s,
+              controller.signal,
+            );
+            if (stale()) return;
+            Object.assign(finished, {
+              factChecks: lookups.factChecks.length ? lookups.factChecks : undefined,
+              pageCapture: lookups.pageCapture,
+              originalCapture: extra.originalCapture,
+              credibility: Object.keys(extra.credibility).length ? extra.credibility : undefined,
+              mixNotes: extra.mixNotes.length ? extra.mixNotes : undefined,
+            });
+            setResult({ ...finished });
+          } catch (e) {
+            console.warn('[wys] lookups failed', e);
+          }
           try {
             const snap = await snapshotPromise;
             await saveCheck(finished, snap);

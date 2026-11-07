@@ -29,11 +29,16 @@ export default defineConfig({
       'https://api.openai.com/*',
       'https://api.search.brave.com/*',
       'https://api.tavily.com/*',
+      // Deterministic lookups beside the model: published fact-checks and Wayback first-capture dates.
+      'https://factchecktools.googleapis.com/*',
+      'https://web.archive.org/*',
       'http://localhost/*',
       'http://127.0.0.1/*',
     ],
     // Requested per site, on demand (image bytes, page fetches for local models).
     ...(browser === 'firefox' ? { optional_permissions: ['<all_urls>'] } : { optional_host_permissions: ['<all_urls>'] }),
+    // Type "wys <text>" in the address bar to check it.
+    omnibox: { keyword: 'wys' },
     commands: {
       'check-selection': {
         // Not Ctrl+Shift+S: Firefox binds that to Take Screenshot, and Cmd+Shift+S is taken on macOS.

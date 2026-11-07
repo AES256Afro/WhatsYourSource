@@ -1,8 +1,6 @@
 import { defineContentScript } from '#imports';
 import { browser } from 'wxt/browser';
-import { Readability } from '@mozilla/readability';
-import DOMPurify from 'dompurify';
-import { clampSelection, INLINE_IMAGE_SENTINEL, LIMITS, MessageSchema, type SelectionInfo, type SnapshotPayload } from '@/lib/messaging/protocol';
+import { clampSelection, INLINE_IMAGE_SENTINEL, MessageSchema, type SelectionInfo } from '@/lib/messaging/protocol';
 import { extractPost } from '@/lib/post/extract';
 import { shortcutLabelForPlatform } from '@/lib/shortcut';
 import { DEFAULT_SETTINGS, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
@@ -11,7 +9,9 @@ import { DEFAULT_SETTINGS, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type 
  * Runs on every page, does three small things and nothing else:
  *  1. shows a floating "Check source" chip when text is selected (if enabled),
  *  2. answers "what is selected?" for the background/popup,
- *  3. captures a sanitized copy of the page for history when the side panel asks.
+ *  3. extracts the post under the cursor for "Check source of this post".
+ * Page snapshots for history are a separate script (`snapshot-capture.ts`) injected only when a
+ * check runs, so Readability and DOMPurify never load on pages that are merely being read.
  * Nothing is sent anywhere until the user clicks.
  */
 export default defineContentScript({
@@ -90,13 +90,6 @@ export default defineContentScript({
         case 'wys:get-selection':
           sendResponse(currentSelection() ?? clampSelection({ text: '', pageUrl: location.href, pageTitle: document.title }));
           return false;
-        case 'wys:capture-snapshot':
-          try {
-            sendResponse(captureSnapshot());
-          } catch (e) {
-            sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
-          }
-          return false;
         case 'wys:extract-post':
           try {
             sendResponse(extractPost(lastContextTarget));
@@ -155,56 +148,6 @@ function currentSelection(): SelectionInfo | null {
     pageTitle: document.title,
     surrounding: surrounding && surrounding.length > text.length ? surrounding : undefined,
   });
-}
-
-function captureSnapshot(): SnapshotPayload {
-  const clone = document.cloneNode(true) as Document;
-  let article: ReturnType<Readability['parse']> = null;
-  try {
-    article = new Readability(clone, { keepClasses: false }).parse();
-  } catch {
-    article = null;
-  }
-  const rawHtml = article?.content ?? (document.querySelector('main, article') ?? document.body).innerHTML;
-  // `data:` is allowed so inline images survive, but never as a link target.
-  const dropDataLinks = (node: Element, data: { attrName: string; attrValue: string; keepAttr: boolean }) => {
-    if (data.attrName === 'href' && /^\s*data:/i.test(data.attrValue)) data.keepAttr = false;
-  };
-  DOMPurify.addHook('uponSanitizeAttribute', dropDataLinks);
-  let html: string;
-  try {
-    html = DOMPurify.sanitize(rawHtml, {
-      FORBID_TAGS: [
-        'script',
-        'style',
-        'iframe',
-        'object',
-        'embed',
-        'form',
-        'input',
-        'button',
-        'video',
-        'audio',
-        'source',
-        'link',
-        'meta',
-        'svg',
-        'canvas',
-        'math',
-      ],
-      FORBID_ATTR: ['style', 'srcset', 'sizes', 'loading', 'onerror', 'onload', 'class', 'id', 'ping'],
-      ALLOWED_URI_REGEXP: /^(?:https?|data):/i,
-    });
-  } finally {
-    DOMPurify.removeHook('uponSanitizeAttribute', dropDataLinks);
-  }
-  return {
-    url: location.href.slice(0, LIMITS.url),
-    title: (article?.title || document.title).slice(0, LIMITS.title),
-    html: html.slice(0, 1_500_000),
-    textLength: article?.textContent?.length ?? 0,
-    capturedAt: Date.now(),
-  };
 }
 
 function textSpan(text: string, className?: string): HTMLSpanElement {

@@ -5,7 +5,7 @@ import { Globe, Shield } from './Icons';
 import { AnthropicCard } from './settings/AnthropicCard';
 import { GeminiCard } from './settings/GeminiCard';
 import { LocalCard } from './settings/LocalCard';
-import { CommitInput, DebouncedTextarea, ProviderCard, Row, Toggle } from './settings/primitives';
+import { CommitInput, DebouncedTextarea, ProviderCard, Row, SecretInput, Toggle } from './settings/primitives';
 import { useShortcutLabel } from '../hooks/useShortcutLabel';
 
 type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
@@ -43,6 +43,62 @@ export function SettingsView({ settings, update, wide, focusProvider }: { settin
       />
       <AnthropicCard settings={settings} update={update} />
       <LocalCard settings={settings} update={update} />
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Extra evidence</Label>
+        <p className="m-0 text-[12px] leading-4 text-ink-2">Looked up beside the AI, with no model involved, so they work with every provider.</p>
+        <div className="wys-card flex flex-col px-3">
+          <Row label="Published fact-checks" hint="PolitiFact, Snopes, AFP, Full Fact and others, via Google’s Fact Check Tools index. Needs a free key.">
+            {(id) => (
+              <Toggle
+                checked={settings.lookups.factChecks}
+                onChange={(v) => update((s) => ({ ...s, lookups: { ...s.lookups, factChecks: v } }))}
+                labelledBy={id}
+              />
+            )}
+          </Row>
+          {settings.lookups.factChecks && (
+            <div className="flex flex-col gap-1 py-2">
+              <label htmlFor="wys-fckey" className="text-[13px]">
+                Fact Check Tools API key
+              </label>
+              <SecretInput
+                id="wys-fckey"
+                value={settings.lookups.factCheckKey}
+                onCommit={(v) => void update((s) => ({ ...s, lookups: { ...s.lookups, factCheckKey: v } }))}
+                placeholder="AIza…"
+              />
+              <span className="text-[11px] leading-[15px] text-ink-2">
+                Free: in{' '}
+                <a
+                  href="https://console.cloud.google.com/apis/library/factchecktools.googleapis.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold no-underline"
+                >
+                  Google Cloud
+                </a>{' '}
+                enable “Fact Check Tools API”, then create an API key under Credentials. Your Gemini key from AI Studio may work too if its project has the API
+                enabled.
+              </span>
+            </div>
+          )}
+          <Row label="Wayback Machine dates" hint="When the page and the original source were first archived.">
+            {(id) => (
+              <Toggle checked={settings.lookups.archive} onChange={(v) => update((s) => ({ ...s, lookups: { ...s.lookups, archive: v } }))} labelledBy={id} />
+            )}
+          </Row>
+          <Row label="Outlet reputation" hint="Wikipedia editors’ ratings of outlets (shipped offline, CC BY-SA).">
+            {(id) => (
+              <Toggle
+                checked={settings.lookups.credibility}
+                onChange={(v) => update((s) => ({ ...s, lookups: { ...s.lookups, credibility: v } }))}
+                labelledBy={id}
+              />
+            )}
+          </Row>
+        </div>
+      </div>
 
       <div className="flex flex-col gap-1.5">
         <Label>Behaviour</Label>

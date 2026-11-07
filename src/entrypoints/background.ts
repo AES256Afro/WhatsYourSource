@@ -108,6 +108,23 @@ export default defineBackground(() => {
     }
   });
 
+  // Address bar: "wys <text or link>". Enter is a user action, so the panel may open here.
+  browser.omnibox.onInputEntered.addListener((text) => {
+    const t = text.trim();
+    if (!t) return;
+    const input: CheckInput = /^https?:\/\/\S+$/i.test(t) ? { kind: 'page', url: t, title: '' } : { kind: 'text', text: t, pageUrl: '', pageTitle: '' };
+    if (settings.defaultProvider === 'webmode') {
+      void browser.tabs.create({ url: googleAiModeUrl(input) });
+      return;
+    }
+    void (async () => {
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      openPanel(tab);
+      await enqueueJob(input, undefined, tab?.windowId);
+    })();
+  });
+  void browser.omnibox.setDefaultSuggestion({ description: 'Check whether this is true and find its source: %s' });
+
   browser.commands.onCommand.addListener((command, tab) => {
     if (command !== 'check-selection') return;
     let target = pageTriggerTarget(settings);

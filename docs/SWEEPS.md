@@ -22,9 +22,9 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 | Readability | 1 | 0 | no |
 | Usability | 1 | 0 | no |
 | Visual | 1 | 0 | no |
-| Quality of life | 0 | 0 | no |
-| Platform features | 0 | 0 | no |
-| Optimization | 0 | 0 | no |
+| Quality of life | 1 | 0 | no |
+| Platform features | 1 | 0 | no |
+| Optimization | 1 | 0 | no |
 
 ---
 
@@ -278,5 +278,31 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - Icon stroke widths unified (2.2; 2.4 only for ≤12 px glyphs); radii reduced to 12 px cards / 8 px tiles; one row padding.
 - Narrative, summary and hints are capped at 64 characters per line at wide panel sizes.
 - Store scene: panel widened to 520 px so the verdict and source card dominate thumbnails.
+
+`clean: no`
+
+### 2026-11-07 · Features sweep 1 (platform features, M2 start)
+
+- **Evidence layer** (`src/lib/evidence/`), deterministic and provider-independent: published fact-checks via Google's Fact Check Tools (ClaimReview) index with an optional free key; Wayback Machine first-capture dates for the page and for the original source the model names, with an "Archive it now" link; outlet reputation from Wikipedia's perennial-sources list (492 outlets, 828 domains, CC BY-SA, lazy-loaded) shown as pills on sources, with notes when every source is one outlet or an outlet is rated unreliable.
+- Fact-checks are handed to the model (as data, inside an untrusted block) when they arrive within 2.5 s, so it can cite them; the archive lookup never delays the model.
+- **Schema**: `evidence.for` / `evidence.against`, `missingContext`, `wouldChange`; the prompt asks for the strongest case each way. New "Evidence" card on the result.
+- Settings → Extra evidence card with the three toggles and the key field (key stored with the other secrets).
+- Host permissions for the two lookup hosts; docs updated (PERMISSIONS, PRIVACY, README, store listing).
+
+`clean: no`
+
+### 2026-11-07 · Quality-of-life sweep 1
+
+- Address-bar keyword: `wys <text or link>` runs a check (opens the panel, or Google AI Mode when that is the default).
+- "What was sent, and to whom" block at the bottom of every result: provider and model, the exact content, the page, the searches.
+- "Archive it now" (Wayback Save Page Now) on results.
+
+`clean: no`
+
+### 2026-11-07 · Optimization sweep 1
+
+- The always-on content script carried Readability and DOMPurify for page snapshots (165 KB on every page) → snapshot capture moved to `snapshot-capture.js`, injected with `scripting.executeScript` only into the checked tab at check time; the content script is now 103 KB. Remaining weight is zod (message and settings validation) and the post extractor; candidate for sweep 2 (hand-written validators for the content script's two schemas).
+- Decoded image bitmaps are released (`ImageBitmap.close()`) as soon as the perceptual hash is computed.
+- Reputation dataset is a separate lazy chunk, loaded on the first result that needs it.
 
 `clean: no`

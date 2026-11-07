@@ -47,8 +47,6 @@ export async function installFakes(scenario: string) {
   };
   b.tabs.sendMessage = async (_id: number, msg: { type: string }) => {
     if (msg.type === 'wys:get-selection') return scenario === 'nosel' ? { text: '', pageUrl: SELECTION.pageUrl, pageTitle: SELECTION.pageTitle } : SELECTION;
-    if (msg.type === 'wys:capture-snapshot')
-      return { url: SELECTION.pageUrl, title: SELECTION.pageTitle, html: PAGE_HTML, textLength: 500, capturedAt: Date.now() };
     return null;
   };
   const TAB = {
@@ -63,6 +61,9 @@ export async function installFakes(scenario: string) {
     title: SELECTION.pageTitle,
   };
   b.tabs.query = async () => [TAB];
+  b.scripting = {
+    executeScript: async () => [{ result: { url: SELECTION.pageUrl, title: SELECTION.pageTitle, html: PAGE_HTML, textLength: 500, capturedAt: Date.now() } }],
+  };
   b.tabs.get = async () => TAB;
   b.tabs.create = async ({ url }: { url: string }) => {
     window.open(url, '_blank', 'noopener');
@@ -84,6 +85,7 @@ export async function installFakes(scenario: string) {
       anthropic: { apiKey: '', model: 'claude-sonnet-5-5' },
     },
     privacy: { snapshots: true, chip: true, disabledSites: ['example.com'] },
+    lookups: { factChecks: true, factCheckKey: 'preview-key', archive: true, credibility: true },
   };
   await fakeBrowser.storage.local.set({ settings: base });
 
@@ -123,6 +125,32 @@ export async function installFakes(scenario: string) {
       return new Response(JSON.stringify({ models: [{ name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] }] }), {
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+    if (url.includes('factchecktools.googleapis.com')) {
+      return new Response(
+        JSON.stringify({
+          claims: [
+            {
+              text: 'Albert Einstein said the definition of insanity is doing the same thing over and over and expecting different results.',
+              claimant: 'Viral image',
+              claimDate: '2017-03-20T00:00:00Z',
+              claimReview: [
+                {
+                  publisher: { name: 'Quote Investigator', site: 'quoteinvestigator.com' },
+                  url: 'https://quoteinvestigator.com/2017/03/23/same/',
+                  title: 'Insanity Is Doing the Same Thing…',
+                  reviewDate: '2017-03-23T00:00:00Z',
+                  textualRating: 'Misattributed',
+                },
+              ],
+            },
+          ],
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    if (url.includes('web.archive.org/cdx')) {
+      return new Response(JSON.stringify([['timestamp'], ['20150407100000']]), { headers: { 'Content-Type': 'application/json' } });
     }
     if (url.includes('localhost:11434')) {
       return new Response(JSON.stringify({ error: { message: 'preview: no local server' } }), { status: 503 });

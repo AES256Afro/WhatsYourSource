@@ -19,6 +19,15 @@ Providers you can choose:
 | Anthropic (Claude) | `api.anthropic.com`, with your own key | Web searches are run by Anthropic. |
 | OpenAI-compatible | The endpoint you typed (your own machine for Ollama/LM Studio, or e.g. `api.openai.com`) | A local model never sends anything off your device. If you add a search tool, your search queries go to that tool (SearXNG instance, Brave, Tavily), and pages the model asks to read are fetched by the extension. |
 
+Two optional lookups run beside the AI during a check and can be turned off in Settings → Extra evidence:
+
+| Lookup | Where data goes | What is sent |
+|---|---|---|
+| Published fact-checks | `factchecktools.googleapis.com`, with your own Google Cloud key | The first sentence (up to ~24 words) of the checked text |
+| Wayback Machine dates | `web.archive.org` | The address of the page the content came from, and of the original source the AI found |
+
+Outlet reputation ratings are shipped inside the extension (Wikipedia's perennial-sources list, CC BY-SA) and involve no network request.
+
 The extension never sends data to any other party.
 
 ## What is stored, and where

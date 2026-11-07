@@ -30,8 +30,10 @@ export async function captureFromTab(tabId: number | undefined, highlight?: stri
 
   let payload;
   try {
-    const reply: unknown = await browser.tabs.sendMessage(id, { type: 'wys:capture-snapshot', highlight });
-    const parsed = SnapshotPayloadSchema.safeParse(reply);
+    // The capture script is injected on demand (it carries Readability + DOMPurify); needs activeTab
+    // or a host permission for the page, which every user-initiated check has.
+    const [r] = await browser.scripting.executeScript({ target: { tabId: id }, files: ['/snapshot-capture.js'] });
+    const parsed = SnapshotPayloadSchema.safeParse(r?.result);
     if (!parsed.success) return null;
     if (normalizeUrl(parsed.data.url) !== normalizeUrl(expectedUrl)) return null;
     payload = parsed.data;

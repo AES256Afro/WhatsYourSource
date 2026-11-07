@@ -5,6 +5,9 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 ## [Unreleased]
 
 ### Added
+- Published fact-checks (Google Fact Check Tools index, free key) shown above the verdict and given to the AI; Wayback Machine first-archived dates for the page and the original source with an "Archive it now" link; outlet reputation pills from Wikipedia's perennial-sources list. All three can be switched off under Settings → Extra evidence.
+- The strongest evidence for and against, what the content leaves out, and what would change the verdict, on every result.
+- Address-bar keyword `wys`; a "What was sent, and to whom" block on every result.
 - "New check" on every result; a "Checking…" pill in the top bar leads back to a check in progress; Escape goes back.
 - Verify button for the Gemini key during first run; "Finish without a key" routes checks to Google AI Mode until a key is added.
 - Unverified sources show their address with a copy button; "Open all N" confirms above five tabs.
@@ -17,6 +20,7 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 - Shortcut labels follow the live key binding.
 
 ### Changed
+- Page snapshots are captured by a script injected only at check time; the script that runs on every page is 40% smaller.
 - Result layout answers the two questions in order: verdict first, likely original source second, then the assessment, claims and sources; "Compare in Google AI Mode" is a link, not the primary button.
 - One vocabulary for the four ways to check (Gemini (your key), Google AI Mode (web), Claude (your key), Local or OpenAI-style model) across onboarding, settings, home and errors; settings copy rewritten in plain language.
 - Verify/Test results appear under the button; error hints say what to do and open Settings at the failing provider.

@@ -111,7 +111,7 @@ Three categories run as independent sweeps. A sweep reads the whole relevant sur
 
 Exit: `docs/SWEEPS.md` shows three clean sweeps per category; CI green; `LICENSE` and `CHANGELOG.md` exist.
 
-### M2 — The checking pipeline (features from §2)
+### M2 — The checking pipeline (features from §2) — items 2, 3, 4, 5 landed 2026-11-07 (features sweep 1); 1, 6, 7 pending
 
 1. Claim extraction stage with its own cheap call and schema.
 2. Google Fact Check Tools lookup with an optional key field in settings; "already fact-checked" banner.
