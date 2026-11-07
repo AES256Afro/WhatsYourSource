@@ -1,7 +1,7 @@
 import { GeminiProvider } from '@/lib/providers/gemini';
+import { PROVIDER_LABELS } from '@/lib/providers/registry';
 import { GEMINI_FREE_SEARCHES_PER_MONTH } from '@/lib/providers/pricing';
 import { GEMINI_MODELS, type Settings } from '@/lib/storage/settings';
-import { PROVIDER_NAMES } from '../common';
 import { Sparkle } from '../Icons';
 import { PROVIDER_CARD_ID } from '../SettingsView';
 import { ProviderCard, Row, SecretInput, StatusLine, Toggle } from './primitives';
@@ -19,7 +19,7 @@ export function GeminiCard({ settings, update }: { settings: Settings; update: U
     <ProviderCard
       id={PROVIDER_CARD_ID.gemini}
       icon={<Sparkle size={16} />}
-      title={PROVIDER_NAMES.gemini}
+      title={PROVIDER_LABELS.gemini}
       subtitle={status.kind === 'ok' || status.kind === 'bad' ? status.text : status.kind === 'checking' ? 'Checking…' : idleText}
       subtitleTone={status.kind === 'ok' ? 'ok' : status.kind === 'bad' ? 'bad' : undefined}
       isDefault={settings.defaultProvider === 'gemini'}

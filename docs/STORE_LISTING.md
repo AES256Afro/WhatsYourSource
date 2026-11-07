@@ -85,6 +85,11 @@ Data-use disclosures: the extension does not collect or transmit user data to th
 - Data collection disclosure: `websiteContent` (required) — declared in the manifest. No other category.
 - Privacy policy URL: https://github.com/AES256Afro/WhatsYourSource/blob/main/docs/PRIVACY.md
 - Support URL: https://github.com/AES256Afro/WhatsYourSource/issues
+- Reviewer notes (`web-ext lint` reports 0 errors, 9 warnings, all from libraries or feature detection):
+  - `DANGEROUS_EVAL` in `background.js` and the shared chunk: zod's one-time `Function('')` probe that detects a CSP without `unsafe-eval`; nothing is ever evaluated.
+  - `UNSAFE_VAR_ASSIGNMENT` (innerHTML) in `snapshot-capture.js` and the shared chunk: Mozilla Readability and DOMPurify writing sanitised markup into a detached document while saving a page copy; the copy is only ever displayed inside a sandboxed `srcdoc` frame with its own CSP.
+  - "Unsafe call to import": Vite's lazy chunk loading for the settings view.
+  - `KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION`: the side panel key, which Firefox for Android does not implement; desktop only.
 
 ## Screenshots (store/)
 

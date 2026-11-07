@@ -3,34 +3,36 @@ import type { CheckInput } from '@/lib/messaging/protocol';
 import type { CheckErrorCode, RunError } from '@/lib/pipeline/runCheck';
 import type { ProviderId } from '@/lib/storage/settings';
 import { hostOf } from '@/lib/util/url';
-import { googleAiModeUrl } from '@/lib/googleAiMode';
+import { googleAiModeUrl, type GoogleAiModeVariant } from '@/lib/googleAiMode';
+import { localServer } from '@/lib/providers/localModels';
 import { Alert, External, Refresh, Sliders } from './Icons';
 import { InputCard } from './InputCard';
 
-/** What to do next, per error code. Never repeats the message itself. */
-const HINT: Record<CheckErrorCode, string> = {
+/** What to do next, per error code; `null` when the message says it all. Never repeats the message itself. */
+const HINT: Record<CheckErrorCode, string | null> = {
   'no-key': 'Add an API key in Settings, or open the check in Google AI Mode instead; that needs no key.',
   auth: 'Check the key in Settings.',
   quota: 'Wait a minute, pick the cheaper model, or try another provider.',
-  network: 'Check your connection.',
+  network: 'Check your connection; a content blocker or proxy can also stop the request.',
   blocked: 'Try a shorter selection or a different provider.',
   'bad-request': 'Often an unknown model name: check the model in Settings.',
   server: 'Try again in a moment.',
   empty: 'For a local model, give it a bigger context window or a shorter selection; otherwise try again or another provider.',
-  cancelled: '',
+  cancelled: null,
   'image-permission': 'Allow access to that host once and try again, or make sure the image is visible on screen so a screenshot can be used.',
   image: 'Try opening the image in its own tab and checking it from there.',
   'image-page-closed': 'Open the page the image was on, then right-click the image → Check source of this image.',
-  unknown: '',
+  unknown: 'Try again. If it keeps failing, open Settings and press Verify on the provider, or use Google AI Mode.',
   unsupported: 'Pick a model that can see images (for Ollama or LM Studio a “vision” or “-VL” model), or use Gemini or Claude for image checks.',
 };
 
-function hintFor(error: RunError): string {
-  const base = HINT[error.code] || 'Something unexpected happened. Try again, or use Google AI Mode.';
-  const local = error.provider === 'openai-compat' && error.endpoint && /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(error.endpoint);
+function hintFor(error: RunError): string | null {
+  const base = HINT[error.code];
+  const local = error.provider === 'openai-compat' && error.endpoint && localServer(error.endpoint).isLocal;
   if (local && (error.code === 'network' || error.code === 'server')) {
-    return 'Is Ollama or LM Studio running, with a model loaded? Open Settings and press Test on the local model card.';
+    return 'Is Ollama or LM Studio running, with a model loaded? Open Settings and press Verify on the local model card.';
   }
+  if (!base) return null;
   if (error.code === 'auth' && error.provider === 'gemini') return `${base} Keys from Google AI Studio start with "AIza".`;
   if (error.code === 'auth' && error.provider === 'anthropic') return `${base} Anthropic keys start with "sk-ant-".`;
   return base;
@@ -42,9 +44,11 @@ export function ErrorView({
   onRetry,
   onSettings,
   onAllowHost,
+  webmodeVariant,
 }: {
   input: CheckInput;
   error: RunError;
+  webmodeVariant: GoogleAiModeVariant;
   onRetry: () => void;
   /** Opens Settings, scrolled to the provider that failed when known. */
   onSettings: (provider?: ProviderId) => void;
@@ -86,11 +90,9 @@ export function ErrorView({
           <Sliders size={15} /> Open Settings
         </button>
       </div>
-      <a href={googleAiModeUrl(input)} target="_blank" rel="noopener noreferrer" className="wys-btn no-underline">
+      <a href={googleAiModeUrl(input, webmodeVariant)} target="_blank" rel="noopener noreferrer" className="wys-btn no-underline">
         Open in Google AI Mode instead <External size={14} />
       </a>
     </div>
   );
 }
-
-export type { RunError } from '@/lib/pipeline/runCheck';

@@ -108,5 +108,3 @@ function Elapsed({ since }: { since: number }) {
     </span>
   );
 }
-
-export type { RunState } from '@/lib/pipeline/progress';

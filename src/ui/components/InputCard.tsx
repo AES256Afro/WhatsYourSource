@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { CheckInput } from '@/lib/messaging/protocol';
+import { INLINE_IMAGE_SENTINEL } from '@/lib/messaging/limits';
 import { domainOf, isHttpUrl } from '@/lib/util/url';
 import { Globe, Image, Lines, Link as LinkIcon } from './Icons';
 
@@ -15,7 +16,7 @@ function ImageFrame({ href, children }: { href?: string; children: React.ReactNo
 }
 
 function displayUrl(u: string): string {
-  if (u.startsWith('inline:')) return 'inline image (large)';
+  if (u === INLINE_IMAGE_SENTINEL) return 'inline image (large)';
   if (u.startsWith('data:')) return `inline image (${Math.round((u.length * 3) / 4 / 1024)} KB)`;
   if (u.startsWith('blob:')) return 'in-page image';
   return u.length > 120 ? `${u.slice(0, 117)}…` : u;

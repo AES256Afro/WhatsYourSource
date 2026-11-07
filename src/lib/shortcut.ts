@@ -8,7 +8,7 @@ import { browser } from 'wxt/browser';
 export const DEFAULT_SHORTCUT = 'Alt+Shift+S';
 export const COMMAND_ID = 'check-selection';
 
-export function isMacLike(): boolean {
+function isMacLike(): boolean {
   const uaData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
   const platform = uaData?.platform ?? navigator.userAgent;
   return /mac|iphone|ipad|ipod/i.test(platform);

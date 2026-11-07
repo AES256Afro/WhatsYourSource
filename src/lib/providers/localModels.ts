@@ -13,10 +13,14 @@ export interface LocalModelInfo {
 
 export type LocalServerKind = 'lmstudio' | 'ollama' | 'other';
 
-export function serverKind(baseUrl: string): LocalServerKind {
-  if (/:1234(\/|$)/.test(baseUrl)) return 'lmstudio';
-  if (/:11434(\/|$)/.test(baseUrl)) return 'ollama';
-  return 'other';
+/**
+ * The one answer to "is this server on this machine, and which one?": LM Studio and Ollama are told
+ * apart by their default ports; anything on localhost / 127.0.0.1 / [::1] is local.
+ */
+export function localServer(baseUrl: string): { kind: LocalServerKind; isLocal: boolean } {
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(baseUrl);
+  const kind: LocalServerKind = /:1234(\/|$)/.test(baseUrl) ? 'lmstudio' : /:11434(\/|$)/.test(baseUrl) ? 'ollama' : 'other';
+  return { kind, isLocal };
 }
 
 /** The server root: `http://localhost:11434/v1` → `http://localhost:11434`. */
@@ -83,7 +87,7 @@ export function parseOllamaShow(json: unknown): Pick<LocalModelInfo, 'vision' | 
 /** Ask the server about its models. Falls back to the OpenAI-style list the caller already has. */
 export async function describeLocalModels(baseUrl: string, fallbackIds: string[], signal?: AbortSignal): Promise<LocalModelInfo[]> {
   const root = serverRoot(baseUrl);
-  const kind = serverKind(baseUrl);
+  const { kind } = localServer(baseUrl);
   try {
     if (kind === 'lmstudio') {
       const res = await fetch(`${root}/api/v0/models`, { signal });
@@ -103,7 +107,9 @@ export async function describeLocalModels(baseUrl: string, fallbackIds: string[]
                 body: JSON.stringify({ model: m.id }),
                 signal,
               });
-              if (r.ok) Object.assign(m, parseOllamaShow(await r.json()));
+              // Only what `show` actually knows; an older Ollama without `capabilities` must not erase the name-based guess.
+              if (r.ok)
+                for (const [k, v] of Object.entries(parseOllamaShow(await r.json()))) if (v !== undefined) (m as unknown as Record<string, unknown>)[k] = v;
             } catch {
               /* keep the guess */
             }

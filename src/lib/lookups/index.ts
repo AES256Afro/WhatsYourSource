@@ -73,7 +73,7 @@ export function startLookups(
     l.archive && isHttpUrl(page)
       ? withTimeout(
           firstCapture(page, signal).catch(() => undefined),
-          6000,
+          LOOKUP_BUDGET_MS.archive,
           undefined,
         )
       : Promise.resolve(undefined);
@@ -89,15 +89,21 @@ export interface SourceLookups {
   originalCapture?: FirstCapture;
 }
 
-export async function sourceLookups(sourceUrls: string[], originalUrl: string | undefined, settings: Settings, signal: AbortSignal): Promise<SourceLookups> {
+/** `sourceHostsOrUrls`: the sources' domains (or full URLs); grounding redirect URLs would not rate, their domains do. */
+export async function sourceLookups(
+  sourceHostsOrUrls: string[],
+  originalUrl: string | undefined,
+  settings: Settings,
+  signal: AbortSignal,
+): Promise<SourceLookups> {
   const l = settings.lookups;
-  const domains = sourceUrls.map(domainOf).filter(Boolean);
+  const domains = sourceHostsOrUrls.map(domainOf).filter(Boolean);
   const credibility = l.credibility ? await rateDomains([...domains, ...(originalUrl ? [originalUrl] : [])]).catch(() => ({})) : {};
   const originalCapture =
     l.archive && originalUrl && isHttpUrl(originalUrl)
       ? await withTimeout(
           firstCapture(originalUrl, signal).catch(() => undefined),
-          6000,
+          LOOKUP_BUDGET_MS.archive,
           undefined,
         )
       : undefined;

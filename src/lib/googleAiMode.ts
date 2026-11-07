@@ -1,5 +1,5 @@
 import type { CheckInput } from './messaging/protocol';
-import { QUESTION } from './pipeline/prompts';
+import { IMAGE_QUESTION, PAGE_QUESTION, POST_QUESTION, QUESTION } from './pipeline/prompts';
 import { truncate } from './util/url';
 
 /**
@@ -11,7 +11,7 @@ import { truncate } from './util/url';
 export type GoogleAiModeVariant = 'ai-mode' | 'overview';
 
 /** `variant` is `settings.webmodeVariant`: AI Mode (conversational) or a normal search with its AI Overview. */
-export function googleAiModeUrl(input: CheckInput, variant: GoogleAiModeVariant = 'ai-mode'): string {
+export function googleAiModeUrl(input: CheckInput, variant: GoogleAiModeVariant): string {
   let q: string;
   switch (input.kind) {
     case 'text':
@@ -19,14 +19,14 @@ export function googleAiModeUrl(input: CheckInput, variant: GoogleAiModeVariant 
       break;
     case 'image':
       q = /^https?:/i.test(input.srcUrl)
-        ? `Is this image real, and where can I find its original source? Image: ${truncate(input.srcUrl, 500)} (seen on ${input.pageUrl})`
+        ? `${IMAGE_QUESTION} Image: ${truncate(input.srcUrl, 500)} (seen on ${input.pageUrl})`
         : `Is the image on this page real, and where can I find its original source? ${input.pageUrl}`;
       break;
     case 'page':
-      q = `Is what this page says true, and where can I find the source of this topic? ${input.url}`;
+      q = `${PAGE_QUESTION} ${input.url}`;
       break;
     case 'post':
-      q = `Is this ${input.site} post true, and where can I find the source of what it claims? "${truncate(input.text.replace(/\s+/g, ' ').trim(), 800)}"`;
+      q = `${POST_QUESTION.replace('this post', `this ${input.site} post`)} "${truncate(input.text.replace(/\s+/g, ' ').trim(), 800)}"`;
       break;
   }
   // udm=50 is AI Mode; a plain search shows the AI Overview above the results.

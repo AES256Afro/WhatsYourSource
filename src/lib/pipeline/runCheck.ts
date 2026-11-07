@@ -1,5 +1,5 @@
 import type { CheckInput } from '../messaging/protocol';
-import { toProviderError, type GenEvent, type LlmProvider, type ProviderErrorCode, type RawSource, type Usage } from '../providers/types';
+import { toProviderError, type LlmProvider, type ProviderErrorCode, type RawSource, type Usage } from '../providers/types';
 import type { ProviderId } from '../storage/settings';
 import { buildSources, resolveClaims, resolveOriginal } from './merge';
 import { buildRepairRequest, buildRequest } from './prompts';
@@ -106,7 +106,7 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
   let narrative = extracted.narrative;
   let parsed = parseModelResult(extracted.jsonText);
 
-  if (!parsed.ok && text.trim().length > 0) {
+  if (!parsed.ok) {
     yield { type: 'status', message: 'Tidying up the answer…' };
     try {
       let repairText = '';
@@ -173,5 +173,3 @@ export async function collectCheck(
   }
   return { result, error, events };
 }
-
-export type { GenEvent };

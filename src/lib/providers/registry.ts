@@ -3,6 +3,7 @@ import type { ProviderId, Settings } from '../storage/settings';
 import { AnthropicProvider } from './anthropic';
 import { GeminiProvider } from './gemini';
 import { OpenAICompatProvider } from './openaiCompat';
+import { localServer } from './localModels';
 import type { LlmProvider } from './types';
 
 /**
@@ -24,13 +25,14 @@ export const OPENAI_COMPAT_PRESETS = [
 ] as const;
 
 export function presetFor(baseUrl: string) {
-  return OPENAI_COMPAT_PRESETS.find((p) => p.baseUrl && baseUrl.startsWith(p.baseUrl));
+  const url = baseUrl.replace(/^http:\/\/127\.0\.0\.1(?=[:/]|$)/i, 'http://localhost');
+  return OPENAI_COMPAT_PRESETS.find((p) => p.baseUrl && url.startsWith(p.baseUrl));
 }
 
 export function openaiCompatLabel(baseUrl: string): string {
   const preset = presetFor(baseUrl);
   if (preset) return preset.label.replace(' (local)', '');
-  return /localhost|127\.0\.0\.1/.test(baseUrl) ? 'Local model' : 'Custom endpoint';
+  return localServer(baseUrl).isLocal ? 'Local model' : 'Custom endpoint';
 }
 
 /** Build the provider object for an id from the current settings. Returns null for ids that aren't LLMs (webmode). */
@@ -71,4 +73,11 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
 export function providerDisplayName(id: ProviderId, s: Settings): string {
   if (id === 'openai-compat') return openaiCompatLabel(s.providers.openaiCompat.baseUrl);
   return PROVIDER_LABELS[id];
+}
+
+/** "Gemini (your key) · gemini-3.8-flash": the provider and the model it would run with right now. */
+export function providerRunLabel(id: ProviderId, s: Settings): string {
+  if (id === 'webmode') return PROVIDER_LABELS.webmode;
+  const model = id === 'gemini' ? s.providers.gemini.model : id === 'anthropic' ? s.providers.anthropic.model : s.providers.openaiCompat.model || 'no model';
+  return `${providerDisplayName(id, s)} · ${model}`;
 }

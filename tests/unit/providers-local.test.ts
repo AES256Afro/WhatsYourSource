@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { guessVisionFromName, parseLmStudio, parseOllamaShow, parseOllamaTags, serverKind, serverRoot } from '@/lib/providers/localModels';
+import { guessVisionFromName, localServer, parseLmStudio, parseOllamaShow, parseOllamaTags, serverRoot } from '@/lib/providers/localModels';
 import { parseClaims, buildClaimsRequest } from '@/lib/pipeline/claims';
-import { readPublicSettings, publicTriggerTarget } from '@/lib/storage/publicSettings';
+import { PUBLIC_PROVIDER_IDS, pageTriggerTarget, readPublicSettings } from '@/lib/storage/publicSettings';
+import { PROVIDER_IDS } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { presetFor } from '@/lib/providers/registry';
 
 describe('local model capability detection', () => {
   it('recognises LM Studio and Ollama servers by port', () => {
-    expect(serverKind('http://localhost:1234/v1')).toBe('lmstudio');
-    expect(serverKind('http://127.0.0.1:11434/v1')).toBe('ollama');
-    expect(serverKind('http://localhost:8080/v1')).toBe('other');
+    expect(localServer('http://localhost:1234/v1')).toEqual({ kind: 'lmstudio', isLocal: true });
+    expect(localServer('http://127.0.0.1:11434/v1')).toEqual({ kind: 'ollama', isLocal: true });
+    expect(localServer('http://localhost:8080/v1').kind).toBe('other');
+    expect(localServer('https://api.openai.com/v1').isLocal).toBe(false);
     expect(serverRoot('http://localhost:11434/v1/')).toBe('http://localhost:11434');
   });
   it('reads LM Studio model types and states', () => {
@@ -65,7 +67,7 @@ describe('public settings for the content script', () => {
   it('reads only what it needs and falls back per field', () => {
     const p = readPublicSettings({ privacy: { chip: false, disabledSites: ['a.com', 3] }, shortcutAction: 'nope', defaultProvider: 'webmode' });
     expect(p).toEqual({ chip: false, disabledSites: ['a.com'], shortcutAction: 'panel', defaultProvider: 'webmode' });
-    expect(publicTriggerTarget(p)).toBe('webmode');
+    expect(pageTriggerTarget(p)).toBe('webmode');
     expect(readPublicSettings('garbage').chip).toBe(true);
   });
 });
@@ -75,6 +77,11 @@ describe('Google web variants', () => {
     const input = { kind: 'text' as const, text: 'hello', pageUrl: '', pageTitle: '' };
     expect(googleAiModeUrl(input, 'ai-mode')).toContain('udm=50&');
     expect(googleAiModeUrl(input, 'overview')).not.toContain('udm=50');
-    expect(googleAiModeUrl(input)).toContain('udm=50');
+  });
+});
+
+describe('public settings mirror', () => {
+  it('lists the same provider ids as the schema', () => {
+    expect([...PUBLIC_PROVIDER_IDS].sort()).toEqual([...PROVIDER_IDS].sort());
   });
 });

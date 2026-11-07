@@ -3,8 +3,8 @@ import { browser } from 'wxt/browser';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { onJob, takeJob, type Job } from '@/lib/jobs';
 import type { CheckInput } from '@/lib/messaging/protocol';
-import { providerDisplayName } from '@/lib/providers/registry';
-import { providerOrder, providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
+import { providerDisplayName, providerRunLabel } from '@/lib/providers/registry';
+import { LLM_PROVIDER_IDS, providerOrder, providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
 import { requestOrigin } from '@/lib/permissions';
 import { CheckingView } from './components/CheckingView';
 import { DetailView } from './components/DetailView';
@@ -21,7 +21,7 @@ import { TopBar } from './components/TopBar';
 import { useCheckRun } from './hooks/useCheckRun';
 import { useSettings } from './hooks/useSettings';
 
-type View = 'home' | 'checking' | 'result' | 'error' | 'settings' | 'history' | 'detail';
+import type { View } from './views';
 
 /** The panel: which view is up, and the check run that drives the checking/result/error views. */
 export function App() {
@@ -37,7 +37,7 @@ export function App() {
   }, [settings]);
 
   const openGoogleAiMode = useCallback((input: CheckInput) => {
-    void browser.tabs.create({ url: googleAiModeUrl(input, settingsRef.current?.webmodeVariant) });
+    void browser.tabs.create({ url: googleAiModeUrl(input, settingsRef.current?.webmodeVariant ?? 'ai-mode') });
   }, []);
 
   const { phase, start, cancel, clearSetup, busy } = useCheckRun({
@@ -56,7 +56,7 @@ export function App() {
     const handle = (job: Job) => {
       if (seenJobs.current.has(job.id)) return;
       seenJobs.current.add(job.id);
-      void start(job.input, job.tabId);
+      void start(job.input, { tabId: job.tabId });
     };
     const off = onJob(handle);
     void takeJob().then((job) => job && handle(job));
@@ -99,6 +99,7 @@ export function App() {
   }
 
   const needsSetup = phase.phase === 'setup' ? phase.input : null;
+  const readyProvider = providerOrder(settings).find((id) => providerReady(settings, id));
   const body = (() => {
     switch (view) {
       case 'checking':
@@ -109,11 +110,13 @@ export function App() {
           <ResultView
             result={phase.result}
             onRecheck={() => void start(phase.result.input)}
-            secondOpinions={(['gemini', 'anthropic', 'openai-compat'] as const)
-              .filter((id) => id !== phase.result.provider.id && providerReady(settings, id))
-              .map((id) => ({ id, label: providerDisplayName(id, settings) }))}
-            onSecondOpinion={(id) => void start(phase.result.input, undefined, id)}
+            secondOpinions={LLM_PROVIDER_IDS.filter((id) => id !== phase.result.provider.id && providerReady(settings, id)).map((id) => ({
+              id,
+              label: providerDisplayName(id, settings),
+            }))}
+            onSecondOpinion={(id) => void start(phase.result.input, { only: id })}
             onNewCheck={() => setView('home')}
+            webmodeVariant={settings.webmodeVariant}
             searchTool={settings.providers.openaiCompat.searchTool !== 'none' ? settings.providers.openaiCompat.searchTool : undefined}
             saved={phase.save.status === 'saved'}
             saveError={phase.save.status === 'failed' ? phase.save.message : null}
@@ -128,6 +131,7 @@ export function App() {
             error={phase.error}
             onRetry={() => void start(phase.input)}
             onSettings={openSettings}
+            webmodeVariant={settings.webmodeVariant}
             onAllowHost={
               phase.error.code === 'image-permission' && phase.input.kind === 'image'
                 ? async () => {
@@ -146,11 +150,11 @@ export function App() {
                 <span className="flex items-center gap-1.5 font-semibold text-accent">
                   <Sliders size={15} /> Pick how to check sources
                 </span>
-                <span className="text-ink-2">Add a Google AI key below (free), or open this check on Google’s AI Mode page — no key needed.</span>
+                <span className="text-ink-2">Add a Gemini API key below (free), or open this check in Google AI Mode instead — no key needed.</span>
                 <div className="flex gap-2">
-                  {providerOrder(settings).some((id) => providerReady(settings, id)) ? (
+                  {readyProvider ? (
                     <button className="wys-btn wys-btn-primary grow" onClick={() => void start(needsSetup)}>
-                      Check now
+                      Check now with {providerRunLabel(readyProvider, settings)}
                     </button>
                   ) : (
                     <button className="wys-btn wys-btn-primary grow" onClick={() => openGoogleAiMode(needsSetup)}>
@@ -173,6 +177,7 @@ export function App() {
           <DetailView
             id={detailId}
             onRecheck={(input) => void start(input)}
+            webmodeVariant={settings.webmodeVariant}
             onDeleted={() => {
               setHistoryTick((t) => t + 1);
               setView('history');

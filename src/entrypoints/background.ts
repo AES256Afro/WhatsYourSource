@@ -1,4 +1,5 @@
 import { defineBackground } from '#imports';
+import { COMMAND_ID } from '@/lib/shortcut';
 import { browser, type Browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
 import { openPanelSync } from '@/lib/panel';
@@ -131,7 +132,7 @@ export default defineBackground(() => {
   void browser.omnibox.setDefaultSuggestion({ description: 'Check whether this is true and find its source: %s' });
 
   browser.commands.onCommand.addListener((command, tab) => {
-    if (command !== 'check-selection') return;
+    if (command !== COMMAND_ID) return;
     let target = pageTriggerTarget(settings);
     // Synchronously, while the gesture is fresh. Firefox passes the tab; Chrome may not.
     if (target === 'panel' && tab) openPanel(tab);
@@ -170,7 +171,7 @@ export default defineBackground(() => {
         return true;
       }
       case 'wys:open-webmode': {
-        void browser.tabs.create({ url: googleAiModeUrl(msg.input) }).then(
+        void browser.tabs.create({ url: googleAiModeUrl(msg.input, settings.webmodeVariant) }).then(
           () => sendResponse({ ok: true }),
           (e: unknown) => sendResponse({ ok: false, error: String(e) }),
         );

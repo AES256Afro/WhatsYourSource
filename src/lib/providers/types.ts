@@ -28,8 +28,6 @@ export interface RawSource {
   url: string;
   title?: string;
   domain: string;
-  /** true when the URL came from the search/grounding machinery rather than the model's text. */
-  verified: boolean;
   snippet?: string;
 }
 
@@ -98,4 +96,9 @@ export function toProviderError(e: unknown): ProviderError {
   if (e instanceof DOMException && e.name === 'AbortError') return new ProviderError('cancelled', 'Cancelled.');
   if (e instanceof TypeError) return new ProviderError('network', 'Could not reach the provider.', e.message);
   return new ProviderError('unknown', e instanceof Error ? e.message : String(e));
+}
+
+/** One line for a status row: the message, and the details when there are any. */
+export function describeProviderError(e: { message: string; details?: string }): string {
+  return e.details ? `${e.message} ${e.details}` : e.message;
 }

@@ -38,7 +38,7 @@ body{max-width:820px;margin:32px auto;padding:0 20px;font:15px/1.6 system-ui,-ap
 blockquote{border-left:3px solid #BFD7F5;margin:0;padding:6px 14px;background:#F7F8FA;border-radius:6px}
 small{color:#4B5563}h3{margin-top:24px}
 </style></head><body>
-<p><small>WhatsYourSource · ${e(new Date(check.createdAt).toLocaleString())} · ${e(check.provider)} (${e(check.model)})</small></p>
+<p><small>WhatsYourSource · ${e(new Date(check.createdAt).toLocaleString())} · ${e(check.providerLabel)} (${e(check.model)})</small></p>
 <h1><span class="verdict ${toneForVerdict(r.verdict.kind)}">${e(r.verdict.label)}</span> <small>${e(r.verdict.confidence)} confidence</small></h1>
 <p><strong>${e(r.verdict.summary)}</strong></p>
 ${subject}

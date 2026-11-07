@@ -1,6 +1,15 @@
 import { parseSse } from '../util/sse';
 import { domainOf } from '../util/url';
-import { ProviderError, errorFromResponse, toProviderError, type GenEvent, type GenerateRequest, type LlmProvider, type RawSource } from './types';
+import {
+  ProviderError,
+  errorFromResponse,
+  toProviderError,
+  type GenEvent,
+  type GenerateRequest,
+  type LlmProvider,
+  type RawSource,
+  describeProviderError,
+} from './types';
 
 export interface AnthropicConfig {
   apiKey: string;
@@ -91,7 +100,7 @@ export class AnthropicProvider implements LlmProvider {
             for (const r of Array.isArray(b.content) ? b.content : []) {
               if (r.type !== 'web_search_result' || !r.url || seen.has(r.url)) continue;
               seen.add(r.url);
-              fresh.push({ url: r.url, title: r.title, domain: domainOf(r.url), verified: true, snippet: r.page_age ? `(${r.page_age})` : undefined });
+              fresh.push({ url: r.url, title: r.title, domain: domainOf(r.url), snippet: r.page_age ? `(${r.page_age})` : undefined });
             }
             if (fresh.length) yield { type: 'sources', sources: fresh };
           }
@@ -113,7 +122,7 @@ export class AnthropicProvider implements LlmProvider {
             seen.add(delta.citation.url);
             yield {
               type: 'sources',
-              sources: [{ url: delta.citation.url, title: delta.citation.title, domain: domainOf(delta.citation.url), verified: true }],
+              sources: [{ url: delta.citation.url, title: delta.citation.title, domain: domainOf(delta.citation.url) }],
             };
           }
           break;
@@ -154,7 +163,7 @@ export class AnthropicProvider implements LlmProvider {
       const res = await fetch(`${BASE}/v1/models?limit=100`, { headers: this.headers() });
       if (!res.ok) {
         const err = errorFromResponse(res.status, await res.text().catch(() => ''));
-        return { ok: false, error: err.details ? `${err.message} ${err.details}` : err.message };
+        return { ok: false, error: describeProviderError(err) };
       }
       const j = (await res.json()) as { data?: { id?: string }[] };
       return { ok: true, models: (j.data ?? []).map((m) => m.id ?? '').filter(Boolean) };

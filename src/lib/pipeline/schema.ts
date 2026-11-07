@@ -45,6 +45,11 @@ export function toneForVerdict(kind: VerdictKind): Tone {
 export const ConfidenceSchema = z.enum(['high', 'medium', 'low']);
 
 const nullableStr = z.string().nullish();
+/** A list of non-empty strings, tolerant of nulls, numbers and a missing field. */
+const stringList = z.preprocess(
+  (v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((x) => typeof x === 'string' && x.trim()) : []),
+  z.array(z.string()),
+);
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 
 /** What we ask the model to put in its ```json block. Lenient on purpose; the UI copes with gaps. */
@@ -83,7 +88,7 @@ export const ModelResultSchema = z.object({
           .string()
           .nullish()
           .transform((v) => v ?? ''),
-        sourceUrls: z.preprocess((v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((u) => typeof u === 'string' && u) : []), z.array(z.string())),
+        sourceUrls: stringList,
       }),
     ),
   ),
@@ -102,8 +107,8 @@ export const ModelResultSchema = z.object({
   ),
   evidence: z
     .object({
-      for: z.preprocess((v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((x) => typeof x === 'string' && x.trim()) : []), z.array(z.string())),
-      against: z.preprocess((v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((x) => typeof x === 'string' && x.trim()) : []), z.array(z.string())),
+      for: stringList,
+      against: stringList,
     })
     .nullish(),
   missingContext: nullableStr,
@@ -156,7 +161,7 @@ export interface CheckResult {
   provider: { id: ProviderId; label: string; model: string };
   /** The human-readable part of the answer (everything before the JSON block). */
   narrative: string;
-  verdict: { label: string; kind: VerdictKind; confidence: 'high' | 'medium' | 'low'; summary: string };
+  verdict: { label: string; kind: VerdictKind; confidence: z.infer<typeof ConfidenceSchema>; summary: string };
   originalSource?: OriginalSource;
   claims: Claim[];
   sources: Source[];

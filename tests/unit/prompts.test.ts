@@ -37,8 +37,6 @@ describe('the question put to the model', () => {
   it('is the user’s question: is it true first, then where the source is', () => {
     expect(QUESTION).toBe('Is this true, and where can I find the source of this topic?');
     expect(SYSTEM_PROMPT).toContain(`"${QUESTION}"`);
-    expect(SYSTEM_PROMPT).toMatch(/first sentence answers "is this true\?"/);
-    expect(SYSTEM_PROMPT).toMatch(/put the user's question to the search engine/);
   });
 
   it('is asked verbatim for highlighted text, after the selection, which stays untrusted data', () => {
@@ -66,11 +64,11 @@ describe('the question put to the search engine', () => {
 
   it('is what Google AI Mode receives', () => {
     for (const input of [text, image, page, post]) {
-      const q = decodeURIComponent(googleAiModeUrl(input).split('&q=')[1] ?? '');
+      const q = decodeURIComponent(googleAiModeUrl(input, 'ai-mode').split('&q=')[1] ?? '');
       expect(q).toMatch(/^Is .*(true|real), and where can I find/);
     }
-    expect(decodeURIComponent(googleAiModeUrl(text))).toContain(`${QUESTION} "The definition of insanity`);
-    expect(decodeURIComponent(googleAiModeUrl(post))).toContain('Is this x.com post true');
+    expect(decodeURIComponent(googleAiModeUrl(text, 'ai-mode'))).toContain(`${QUESTION} "The definition of insanity`);
+    expect(decodeURIComponent(googleAiModeUrl(post, 'ai-mode'))).toContain('Is this x.com post true');
   });
 });
 

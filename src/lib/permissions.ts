@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
 
 /** Optional host permissions are requested per origin, on demand, inside a user gesture. */
-export function originPattern(url: string): string | null {
+function originPattern(url: string): string | null {
   try {
     const u = new URL(url);
     if (!/^https?:$/.test(u.protocol)) return null;

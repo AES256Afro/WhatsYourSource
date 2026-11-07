@@ -42,7 +42,9 @@ export function SnapshotPage() {
       {snapshot === undefined ? (
         <div className="p-4 text-[13px] text-ink-2">Loading…</div>
       ) : snapshot === null ? (
-        <div className="p-4 text-[13px] text-ink-2">No saved page for this check. It may have been deleted or evicted to free space.</div>
+        <div className="p-4 text-[13px] text-ink-2">
+          No saved page for this check: the page couldn’t be read, saving was off, or it was removed to free space.
+        </div>
       ) : (
         <iframe title="Saved page" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={srcdoc} className="h-full w-full grow border-0 bg-paper" />
       )}

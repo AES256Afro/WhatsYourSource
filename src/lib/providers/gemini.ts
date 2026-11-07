@@ -1,7 +1,16 @@
 import { parseSse } from '../util/sse';
 import { domainOf } from '../util/url';
 import { estimateUsd } from './pricing';
-import { ProviderError, errorFromResponse, toProviderError, type GenEvent, type GenerateRequest, type LlmProvider, type RawSource } from './types';
+import {
+  ProviderError,
+  errorFromResponse,
+  toProviderError,
+  type GenEvent,
+  type GenerateRequest,
+  type LlmProvider,
+  type RawSource,
+  describeProviderError,
+} from './types';
 
 export interface GeminiConfig {
   apiKey: string;
@@ -134,8 +143,9 @@ export class GeminiProvider implements LlmProvider {
             const uri = c.web?.uri;
             if (!uri || seenSources.has(uri)) continue;
             seenSources.add(uri);
+            // Grounding URIs are vertexaisearch redirects; the chunk's `title` carries the real domain.
             const domain = c.web?.domain || domainOf(c.web?.title ?? uri);
-            fresh.push({ url: uri, title: c.web?.title, domain, verified: true });
+            fresh.push({ url: uri, title: c.web?.title, domain });
           }
           if (fresh.length) yield { type: 'sources', sources: fresh };
         }
@@ -152,7 +162,7 @@ export class GeminiProvider implements LlmProvider {
           if (!url || seenSources.has(url)) continue;
           if (m.urlRetrievalStatus && !/SUCCESS/i.test(m.urlRetrievalStatus)) continue;
           seenSources.add(url);
-          fresh.push({ url, domain: domainOf(url), verified: true });
+          fresh.push({ url, domain: domainOf(url) });
         }
         if (fresh.length) yield { type: 'sources', sources: fresh };
       }
@@ -185,7 +195,7 @@ export class GeminiProvider implements LlmProvider {
       });
       if (!res.ok) {
         const err = errorFromResponse(res.status, await res.text().catch(() => ''));
-        return { ok: false, error: err.details ? `${err.message} ${err.details}` : err.message };
+        return { ok: false, error: describeProviderError(err) };
       }
       const j = (await res.json()) as { models?: { name?: string; supportedGenerationMethods?: string[] }[] };
       const models = (j.models ?? [])

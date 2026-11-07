@@ -19,7 +19,7 @@ export function SourceList({
   if (sources.length === 0) return null;
   const verified = sources.filter((x) => x.verified);
   const openAll = () => {
-    if (verified.length > 5 && !confirm(`Open ${verified.length} tabs?`)) return;
+    if (verified.length > 5 && !confirm(`Open ${verified.length} sources in new tabs?`)) return;
     for (const s of verified) void browser.tabs.create({ url: s.url, active: false });
   };
   return (
@@ -88,7 +88,7 @@ function RatingPill({ rating }: { rating: Credibility }) {
   );
 }
 
-export function SourceRow({ source: s, rating }: { source: Source; rating?: Credibility }) {
+function SourceRow({ source: s, rating }: { source: Source; rating?: Credibility }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(s.url);

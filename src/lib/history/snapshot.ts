@@ -5,8 +5,8 @@ import { normalizeUrl } from '../util/url';
 import type { SnapshotInput, StoredSnapshot } from './db';
 
 /**
- * Ask the page's content script for a sanitized copy of its main content, and try for a
- * visible-area screenshot. Both are best-effort: a restricted page, or one loaded before the
+ * Inject `snapshot-capture.js` into the checked tab for a sanitized copy of its main content, and
+ * try for a visible-area screenshot. Both are best-effort: a restricted page, or one loaded before the
  * extension was installed, simply yields no snapshot.
  */
 export async function captureFromTab(tabId: number | undefined, highlight?: string, expectedUrl?: string): Promise<SnapshotInput | null> {
@@ -122,12 +122,9 @@ table{border-collapse:collapse;max-width:100%}td,th{border:1px solid #E3E6EA;pad
 [data-wys-mark]{background:#FDE68A;box-shadow:0 0 0 4px #FDE68A;border-radius:3px}
 .wys-head{font-size:11px;color:#4B5563;border-bottom:1px solid #E3E6EA;padding-bottom:8px;margin-bottom:14px}
 .wys-head a{color:#0F5FA8}
-</style></head><body><div class="wys-head">Snapshot of <a href="${escapeAttr(snapshot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(snapshot.url)}</a> · captured ${escapeHtml(captured)} · read-only</div>${body}</body></html>`;
+</style></head><body><div class="wys-head">Snapshot of <a href="${escapeHtml(snapshot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(snapshot.url)}</a> · captured ${escapeHtml(captured)} · read-only</div>${body}</body></html>`;
 }
 
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c);
-}
-function escapeAttr(s: string): string {
-  return escapeHtml(s);
 }

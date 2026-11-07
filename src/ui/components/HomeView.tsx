@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { browser } from 'wxt/browser';
-import type { CheckInput, SelectionInfo } from '@/lib/messaging/protocol';
-import { SelectionInfoSchema } from '@/lib/messaging/protocol';
-import { openaiCompatLabel } from '@/lib/providers/registry';
+import type { CheckInput } from '@/lib/messaging/protocol';
+import { PROVIDER_LABELS, providerRunLabel } from '@/lib/providers/registry';
 import { providerReady, type Settings } from '@/lib/storage/settings';
 import { useShortcutLabel } from '../hooks/useShortcutLabel';
-import { getTargetTab } from '@/lib/tabs';
+import { useTargetSelection } from '../hooks/useTargetSelection';
 import { domainOf, truncate } from '@/lib/util/url';
-import { Label, PROVIDER_NAMES, ProviderBadge, TextAction } from './common';
+import { Label, ProviderBadge, TextAction } from './common';
 import { ChevronRight, External, Globe, Image, Logo } from './Icons';
 
 export function HomeView({
@@ -23,8 +21,7 @@ export function HomeView({
   onSettings: () => void;
   recent?: React.ReactNode;
 }) {
-  const [tab, setTab] = useState<{ id?: number; url: string; title: string } | null>(null);
-  const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const { tab, selection } = useTargetSelection(true);
   const [pasted, setPasted] = useState('');
   const [openedNote, setOpenedNote] = useState(false);
   const shortcut = useShortcutLabel();
@@ -34,52 +31,9 @@ export function HomeView({
     landing.current?.focus();
   }, [selection !== null]); // eslint-disable-line react-hooks/exhaustive-deps -- once the selection state is known
 
-  useEffect(() => {
-    let alive = true;
-    const refresh = async () => {
-      const t = await getTargetTab();
-      if (!alive) return;
-      setTab(t ? { id: t.id, url: t.url ?? '', title: t.title ?? '' } : null);
-      if (t?.id == null) return setSelection(null);
-      try {
-        // The content script reports the page URL/title too; we don't hold the `tabs` permission.
-        const reply: unknown = await browser.tabs.sendMessage(t.id, { type: 'wys:get-selection' });
-        const parsed = SelectionInfoSchema.safeParse(reply);
-        if (!alive) return;
-        if (parsed.success) {
-          setTab({ id: t.id, url: parsed.data.pageUrl || t.url || '', title: parsed.data.pageTitle || t.title || '' });
-          setSelection(parsed.data.text.trim() ? parsed.data : null);
-        } else setSelection(null);
-      } catch {
-        if (alive) setSelection(null);
-      }
-    };
-    void refresh();
-    const onActivated = () => void refresh();
-    // onUpdated fires for every tab on every change; only a finished load of the active tab matters here.
-    const onUpdated = (_id: number, info: { status?: string }, t: { active?: boolean }) => {
-      if (info.status === 'complete' && t.active) void refresh();
-    };
-    browser.tabs.onActivated.addListener(onActivated);
-    browser.tabs.onUpdated.addListener(onUpdated);
-    return () => {
-      alive = false;
-      browser.tabs.onActivated.removeListener(onActivated);
-      browser.tabs.onUpdated.removeListener(onUpdated);
-    };
-  }, []);
-
   const webmode = settings.defaultProvider === 'webmode';
   const ready = providerReady(settings);
-  const providerLabel = !ready
-    ? `${PROVIDER_NAMES[settings.defaultProvider]} · no key set`
-    : settings.defaultProvider === 'gemini'
-      ? `Gemini · ${settings.providers.gemini.model}`
-      : settings.defaultProvider === 'openai-compat'
-        ? `${openaiCompatLabel(settings.providers.openaiCompat.baseUrl)} · ${settings.providers.openaiCompat.model || 'no model'}`
-        : settings.defaultProvider === 'anthropic'
-          ? `Claude · ${settings.providers.anthropic.model}`
-          : PROVIDER_NAMES.webmode;
+  const providerLabel = ready ? providerRunLabel(settings.defaultProvider, settings) : `${PROVIDER_LABELS[settings.defaultProvider]} · no key set`;
 
   const pageInput: CheckInput | null = tab?.url && /^https?:/i.test(tab.url) ? { kind: 'page', url: tab.url, title: tab.title } : null;
 
@@ -143,7 +97,7 @@ export function HomeView({
                 aria-label="Open in Google AI Mode"
                 onClick={() => onWebMode({ kind: 'text', ...selection })}
               >
-                <Globe size={15} /> AI Mode
+                <Globe size={15} /> Google AI Mode <External size={13} />
               </button>
             )}
           </div>
@@ -202,7 +156,7 @@ export function HomeView({
           </label>
           <input id="wys-paste" className="wys-input" placeholder="Paste text or a link…" value={pasted} onChange={(e) => setPasted(e.target.value)} />
           <button type="submit" className="wys-btn" disabled={!pasted.trim()}>
-            {webmode ? 'Open in AI Mode ↗' : 'Check'}
+            {webmode ? 'Open in AI Mode ↗' : 'Check source'}
           </button>
         </form>
       </div>

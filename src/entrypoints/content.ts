@@ -1,10 +1,10 @@
 import { defineContentScript } from '#imports';
 import { browser } from 'wxt/browser';
-import { clampSelection, INLINE_IMAGE_SENTINEL } from '@/lib/messaging/limits';
+import { clampSelection, INLINE_IMAGE_SENTINEL, LIMITS } from '@/lib/messaging/limits';
 import type { SelectionInfo } from '@/lib/messaging/protocol';
 import { extractPost } from '@/lib/post/extract';
 import { shortcutLabelForPlatform } from '@/lib/shortcut';
-import { publicTriggerTarget, readPublicSettings, SETTINGS_KEY, type PublicSettings } from '@/lib/storage/publicSettings';
+import { pageTriggerTarget, readPublicSettings, SETTINGS_KEY, type PublicSettings } from '@/lib/storage/publicSettings';
 
 /**
  * Runs on every page, does three small things and nothing else:
@@ -35,7 +35,7 @@ export default defineContentScript({
       const sel = currentSelection();
       chip.hide();
       if (!sel) return;
-      const type = publicTriggerTarget(settings) === 'webmode' ? 'wys:open-webmode' : 'wys:check';
+      const type = pageTriggerTarget(settings) === 'webmode' ? 'wys:open-webmode' : 'wys:check';
       void browser.runtime.sendMessage({ type, input: { kind: 'text', ...sel } }).catch((e: unknown) => console.warn('[wys] could not reach the extension', e));
     });
 
@@ -143,7 +143,7 @@ function currentSelection(): SelectionInfo | null {
   const node = sel.anchorNode;
   const el = node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement;
   const block = el?.closest('p, li, blockquote, td, h1, h2, h3, h4, figcaption, article, section') ?? null;
-  const surrounding = block?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 1200);
+  const surrounding = block?.textContent?.replace(/\s+/g, ' ').trim().slice(0, LIMITS.surroundingForPrompt);
   return clampSelection({
     text,
     pageUrl: location.href,

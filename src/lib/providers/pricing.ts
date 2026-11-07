@@ -14,7 +14,7 @@ const PER_MILLION: Record<string, { input: number; output: number }> = {
 };
 
 /** Gemini 3+: searches beyond the free monthly allowance (shared across models) cost $14 per 1,000. */
-export const GEMINI_SEARCH_USD = 14 / 1000;
+const GEMINI_SEARCH_USD = 14 / 1000;
 export const GEMINI_FREE_SEARCHES_PER_MONTH = 5000;
 
 export function estimateUsd(model: string, inputTokens = 0, outputTokens = 0, searches = 0): number | undefined {

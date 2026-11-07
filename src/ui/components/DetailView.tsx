@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { GoogleAiModeVariant } from '@/lib/googleAiMode';
 import { browser } from 'wxt/browser';
 import { deleteCheck, getCheck, getSnapshot, setNote, type StoredCheck, type StoredSnapshot } from '@/lib/history/db';
 import { checkToStandaloneHtml, downloadText, safeFilename } from '@/lib/history/export';
@@ -16,13 +17,23 @@ const TABS: { id: Tab; label: string; icon?: React.ReactNode }[] = [
   { id: 'page', label: 'Saved page', icon: <Camera size={13} /> },
 ];
 
-export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck: (input: CheckInput) => void; onDeleted: () => void }) {
+export function DetailView({
+  id,
+  onRecheck,
+  onDeleted,
+  webmodeVariant,
+}: {
+  id: string;
+  onRecheck: (input: CheckInput) => void;
+  onDeleted: () => void;
+  webmodeVariant: GoogleAiModeVariant;
+}) {
   const [check, setCheck] = useState<StoredCheck | null | undefined>(undefined);
   const [snapshot, setSnapshot] = useState<StoredSnapshot | null>(null);
   const [tab, setTab] = useState<Tab>('result');
   const [loadImages, setLoadImages] = useState(false);
   const [note, setNoteText] = useState('');
-  const [actionError, guard] = useActionError();
+  const { error: actionError, guard } = useActionError();
   const title = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -45,7 +56,7 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
   }, [check?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- once per loaded row, not on every note edit
 
   if (check === undefined) return <div className="p-3.5 text-[13px] text-ink-2">Loading…</div>;
-  if (check === null) return <div className="p-3.5 text-[13px] text-ink-2">This check was deleted.</div>;
+  if (check === null) return <div className="p-3.5 text-[13px] text-ink-2">This check is no longer in your history.</div>;
 
   const openSnapshotTab = () => {
     void browser.tabs.create({ url: `${browser.runtime.getURL('/snapshot.html')}?id=${encodeURIComponent(check.id)}` });
@@ -54,7 +65,7 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
     downloadText(checkToStandaloneHtml(check, snapshot), `${safeFilename(check.verdictLabel + ' ' + check.title)}.html`),
   );
   const remove = guard('Delete', async () => {
-    if (!confirm('Delete this check and its saved page?')) return;
+    if (!confirm('Delete this check and its saved page? This cannot be undone.')) return;
     await deleteCheck(check.id);
     onDeleted();
   });
@@ -105,6 +116,7 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
           <>
             <ResultView
               result={check.result}
+              webmodeVariant={webmodeVariant}
               onRecheck={() => onRecheck(check.result.input)}
               saved
               snapshotNote={check.hasSnapshot ? 'Saved with page snapshot' : 'Saved'}

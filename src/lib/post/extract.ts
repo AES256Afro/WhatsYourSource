@@ -98,7 +98,7 @@ export function extractPost(target: Element | null, doc: Document = document): P
     permalink,
     author: author || undefined,
     postedAt: postedAt || undefined,
-    text: text.slice(0, 6000),
+    text: text.slice(0, LIMITS.postText),
     images,
     links,
   };

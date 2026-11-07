@@ -8,9 +8,8 @@ const raw: RawSource[] = [
     url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc',
     title: 'quoteinvestigator.com',
     domain: 'quoteinvestigator.com',
-    verified: true,
   },
-  { url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/def', title: 'en.wikiquote.org', domain: 'en.wikiquote.org', verified: true },
+  { url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/def', title: 'en.wikiquote.org', domain: 'en.wikiquote.org' },
 ];
 
 const model: ModelResult = {

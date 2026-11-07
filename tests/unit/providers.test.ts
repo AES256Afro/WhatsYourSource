@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnthropicProvider } from '@/lib/providers/anthropic';
-import { OpenAICompatProvider } from '@/lib/providers/openaiCompat';
+import { NO_SEARCH_TOOL_STATUS, OpenAICompatProvider } from '@/lib/providers/openaiCompat';
 import { collectCheck } from '@/lib/pipeline/runCheck';
 import { createBrave, createSearxng, createTavily } from '@/lib/search/backends';
 import type { SearchBackend } from '@/lib/search/types';
@@ -103,7 +103,7 @@ describe('OpenAICompatProvider', () => {
     expect(events.filter((e) => e.type === 'delta')).toHaveLength(2);
     expect(result!.narrative).toBe('Half answer.');
     expect(result!.degraded).toBe(true);
-    expect(events.some((e) => e.type === 'status' && e.message.includes('No search tool'))).toBe(true);
+    expect(events.some((e) => e.type === 'status' && e.message === NO_SEARCH_TOOL_STATUS)).toBe(true);
   });
 
   it('explains unreachable servers', async () => {

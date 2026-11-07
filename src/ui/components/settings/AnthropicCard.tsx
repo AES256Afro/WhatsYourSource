@@ -1,6 +1,6 @@
 import { AnthropicProvider } from '@/lib/providers/anthropic';
+import { PROVIDER_LABELS } from '@/lib/providers/registry';
 import type { Settings } from '@/lib/storage/settings';
-import { PROVIDER_NAMES } from '../common';
 import { PROVIDER_CARD_ID } from '../SettingsView';
 import { CommitInput, ProviderCard, SecretInput, StatusLine } from './primitives';
 import { useProviderVerify } from './useProviderVerify';
@@ -16,7 +16,7 @@ export function AnthropicCard({ settings, update }: { settings: Settings; update
     <ProviderCard
       id={PROVIDER_CARD_ID.anthropic}
       icon={<span className="text-[13px] font-bold">A</span>}
-      title={PROVIDER_NAMES.anthropic}
+      title={PROVIDER_LABELS.anthropic}
       subtitle={status.kind === 'ok' || status.kind === 'bad' ? status.text : status.kind === 'checking' ? 'Checking…' : idleText}
       subtitleTone={status.kind === 'ok' ? 'ok' : status.kind === 'bad' ? 'bad' : undefined}
       isDefault={settings.defaultProvider === 'anthropic'}

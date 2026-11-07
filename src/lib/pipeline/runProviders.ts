@@ -5,7 +5,7 @@ import type { ProviderId, Settings } from '../storage/settings';
 import { runCheck, type CheckErrorCode, type CheckEvent, type RunError } from './runCheck';
 
 /** Errors worth trying the next configured provider for (when the user turned fallback on). */
-export const FALLBACK_CODES: ReadonlySet<CheckErrorCode> = new Set<CheckErrorCode>([
+const FALLBACK_CODES: ReadonlySet<CheckErrorCode> = new Set<CheckErrorCode>([
   'no-key',
   'auth',
   'quota',

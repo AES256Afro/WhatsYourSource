@@ -26,7 +26,7 @@ describe('settings', () => {
 
 describe('webmode + url helpers', () => {
   it('builds a Google AI Mode URL with the text', () => {
-    const u = googleAiModeUrl({ kind: 'text', text: 'hello world', pageUrl: '', pageTitle: '' });
+    const u = googleAiModeUrl({ kind: 'text', text: 'hello world', pageUrl: '', pageTitle: '' }, 'ai-mode');
     expect(u.startsWith('https://www.google.com/search?udm=50&q=')).toBe(true);
     expect(decodeURIComponent(u)).toContain('"hello world"');
   });

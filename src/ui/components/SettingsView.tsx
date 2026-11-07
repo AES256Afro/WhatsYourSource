@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { PROVIDER_LABELS } from '@/lib/providers/registry';
 import { searchFactChecks } from '@/lib/lookups/factcheck';
 import type { ProviderId, Settings } from '@/lib/storage/settings';
-import { Label, PROVIDER_NAMES } from './common';
+import { Label } from './common';
 import { Globe, Shield } from './Icons';
 import { AnthropicCard } from './settings/AnthropicCard';
 import { GeminiCard } from './settings/GeminiCard';
@@ -46,7 +47,7 @@ export function SettingsView({
       <ProviderCard
         id={PROVIDER_CARD_ID.webmode}
         icon={<Globe size={16} />}
-        title={PROVIDER_NAMES.webmode}
+        title={PROVIDER_LABELS.webmode}
         subtitle="No key · opens google.com in a tab · not saved to history"
         isDefault={settings.defaultProvider === 'webmode'}
         onMakeDefault={() => update((s) => ({ ...s, defaultProvider: 'webmode' }))}
@@ -108,7 +109,11 @@ export function SettingsView({
           <Row label="If the default provider fails or is over quota, try the next one that has a key">
             {(id) => <Toggle checked={settings.fallback} onChange={(v) => update((s) => ({ ...s, fallback: v }))} labelledBy={id} />}
           </Row>
-          <Row label={`${shortcut ?? 'The keyboard shortcut (not set)'} and the floating chip`}>
+          <Row
+            label={
+              shortcut ? `${shortcut} and the floating chip` : 'The floating chip (no keyboard shortcut is set; assign one on the browser’s shortcuts page)'
+            }
+          >
             {(id) => (
               <select
                 aria-labelledby={id}
@@ -251,5 +256,3 @@ function FactCheckKeyField({ settings, update }: { settings: Settings; update: U
     </div>
   );
 }
-
-export { Toggle } from './settings/primitives';

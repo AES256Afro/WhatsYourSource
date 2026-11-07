@@ -21,6 +21,10 @@ export const LIMITS = {
   alt: 400,
   nearby: 1_000,
   excerpt: 4_000,
+  /** A social post's body, after extraction. */
+  postText: 6_000,
+  /** How much of the surrounding paragraph the prompt carries (the job keeps up to `surrounding`). */
+  surroundingForPrompt: 1_200,
 } as const;
 
 const cut = (s: string | undefined, n: number) => (s === undefined ? undefined : s.length > n ? s.slice(0, n) : s);

@@ -1,3 +1,4 @@
+import type { View } from '../views';
 import { ArrowLeft, Clock, Logo, Sliders } from './Icons';
 
 export function TopBar({
@@ -9,7 +10,7 @@ export function TopBar({
   onBack,
   checking,
 }: {
-  view: string;
+  view: View;
   onHome: () => void;
   onHistory: () => void;
   onSettings: () => void;

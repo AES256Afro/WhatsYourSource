@@ -167,7 +167,7 @@ describe('export and stats', () => {
       site: 's',
       verdictLabel: 'v',
       verdictKind: 'supported',
-      provider: 'p',
+      providerLabel: 'p',
       model: 'm',
       hasSnapshot: false,
       note: undefined as unknown as string,

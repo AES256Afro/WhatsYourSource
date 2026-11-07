@@ -15,7 +15,8 @@ export interface PublicSettings {
 export const SETTINGS_KEY = 'settings';
 const d = { chip: true, disabledSites: [] as string[], shortcutAction: 'panel' as const, defaultProvider: 'gemini' as const };
 
-const PROVIDERS: ProviderId[] = ['gemini', 'openai-compat', 'anthropic', 'webmode'];
+/** Mirrors `PROVIDER_IDS` in settings.ts (a value import would pull zod in); a unit test keeps them equal. */
+export const PUBLIC_PROVIDER_IDS: ProviderId[] = ['gemini', 'openai-compat', 'anthropic', 'webmode'];
 
 export function readPublicSettings(raw: unknown): PublicSettings {
   const o = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
@@ -24,11 +25,14 @@ export function readPublicSettings(raw: unknown): PublicSettings {
     chip: typeof privacy.chip === 'boolean' ? privacy.chip : d.chip,
     disabledSites: Array.isArray(privacy.disabledSites) ? privacy.disabledSites.filter((x): x is string => typeof x === 'string') : d.disabledSites,
     shortcutAction: o.shortcutAction === 'webmode' || o.shortcutAction === 'panel' ? o.shortcutAction : d.shortcutAction,
-    defaultProvider: PROVIDERS.includes(o.defaultProvider as ProviderId) ? (o.defaultProvider as ProviderId) : d.defaultProvider,
+    defaultProvider: PUBLIC_PROVIDER_IDS.includes(o.defaultProvider as ProviderId) ? (o.defaultProvider as ProviderId) : d.defaultProvider,
   };
 }
 
-/** Same rule as `pageTriggerTarget` in settings.ts, for the public subset. */
-export function publicTriggerTarget(p: PublicSettings): 'panel' | 'webmode' {
-  return p.shortcutAction === 'webmode' || p.defaultProvider === 'webmode' ? 'webmode' : 'panel';
+/**
+ * Where a check should go when the user triggers it from the page (chip or shortcut) rather than
+ * from inside the panel: the web mode if either the trigger or the default provider says so.
+ */
+export function pageTriggerTarget(s: Pick<PublicSettings, 'shortcutAction' | 'defaultProvider'>): 'panel' | 'webmode' {
+  return s.shortcutAction === 'webmode' || s.defaultProvider === 'webmode' ? 'webmode' : 'panel';
 }

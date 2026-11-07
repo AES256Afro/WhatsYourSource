@@ -1,3 +1,4 @@
+import { LIMITS } from '../messaging/limits';
 import type { CheckInput } from '../messaging/protocol';
 import type { GenerateRequest, Part } from '../providers/types';
 import { domainOf, truncate } from '../util/url';
@@ -7,6 +8,10 @@ import { domainOf, truncate } from '../util/url';
  * the search query for backends that search before the model runs, and is what Google AI Mode gets.
  */
 export const QUESTION = 'Is this true, and where can I find the source of this topic?';
+/** The same question, shaped for the other kinds of input; Google AI Mode asks these verbatim too. */
+export const IMAGE_QUESTION = 'Is this image real, and where can I find its original source?';
+export const PAGE_QUESTION = 'Is what this page says true, and where can I find the source of this topic?';
+export const POST_QUESTION = 'Is this post true, and where can I find the source of what it claims?';
 
 const SCHEMA_DOC = `{
   "verdict": {
@@ -58,7 +63,7 @@ Output format, exactly in this order:
 ${SCHEMA_DOC}
 Every URL in "claims[].sourceUrls" and "originalSource.url" must also appear in "sources". Omit fields you cannot fill (use null), never guess.`;
 
-export const REPAIR_PROMPT = `Convert the assessment below into a single fenced \`\`\`json block matching this shape, and output nothing else:
+const REPAIR_PROMPT = `Convert the assessment below into a single fenced \`\`\`json block matching this shape, and output nothing else:
 ${SCHEMA_DOC}`;
 
 /**
@@ -104,7 +109,7 @@ export function buildRequest(input: CheckInput, extra?: RequestExtras): Generate
       ];
       if (input.surrounding && input.surrounding.trim() !== input.text.trim()) {
         lines.push('Context around the selection on the same page (for disambiguation only):');
-        lines.push(untrusted('context', {}, truncate(input.surrounding, 1200)));
+        lines.push(untrusted('context', {}, truncate(input.surrounding, LIMITS.surroundingForPrompt)));
       }
       lines.push(
         `${QUESTION} Specifically: do the claims in the highlighted text hold up, who originally said or wrote it (author, publication, date), and is the attribution right?`,
@@ -125,7 +130,7 @@ export function buildRequest(input: CheckInput, extra?: RequestExtras): Generate
           `Metadata text embedded in the file (written by whoever made or edited the file, so it is a claim, not a fact): ${untrusted('metadata', {}, truncate(extra.provenanceMetadata, 1500))}`,
         );
       lines.push(
-        'Is this image real, and where can I find its original source? Describe what it shows, say whether it is being presented accurately here, and find its earliest or original appearance online (publisher, date, original caption). Note any signs of editing or AI generation, but do not overclaim.',
+        `${IMAGE_QUESTION} Describe what it shows, say whether it is being presented accurately here, and find its earliest or original appearance online (publisher, date, original caption). Note any signs of editing or AI generation, but do not overclaim.`,
       );
       parts.push({ text: lines.join('\n\n') });
       if (extra?.imageBase64 && extra.imageMime) parts.push({ image: { mime: extra.imageMime, dataBase64: extra.imageBase64 } });
@@ -137,9 +142,7 @@ export function buildRequest(input: CheckInput, extra?: RequestExtras): Generate
         'The user asked about a web page (URL and title in the attributes):',
         untrusted('page', { url: input.url, title: input.title ? truncate(input.title, 120) : undefined }, input.excerpt ? truncate(input.excerpt, 3000) : ''),
       ];
-      lines.push(
-        'Is what this page says true, and where can I find the source of this topic? Who publishes it, is it an original source or a repost, and do its main claims hold up?',
-      );
+      lines.push(`${PAGE_QUESTION} Who publishes it, is it an original source or a repost, and do its main claims hold up?`);
       parts.push({ text: lines.join('\n\n') });
       break;
     }
@@ -154,7 +157,7 @@ export function buildRequest(input: CheckInput, extra?: RequestExtras): Generate
         urls.push(...input.links.slice(0, 8));
       }
       lines.push(
-        'Is this post true, and where can I find the source of what it claims? Identify the specific claims it makes, say whether they hold up, whether the linked material says what the post says it does, and where the claims originally come from (is this the original source or a repost?).',
+        `${POST_QUESTION} Identify the specific claims it makes, say whether they hold up, whether the linked material says what the post says it does, and where the claims originally come from (is this the original source or a repost?).`,
       );
       parts.push({ text: lines.join('\n\n') });
       break;
@@ -184,7 +187,7 @@ export function searchHintFor(input: CheckInput): string {
     case 'text':
       return `${QUESTION} ${firstWords(input.text, 14)}`;
     case 'image':
-      return `Is this image real, and where can I find its original source? ${firstWords(input.alt || input.nearbyText || input.pageTitle || '', 14)}`.trim();
+      return `${IMAGE_QUESTION} ${firstWords(input.alt || input.nearbyText || input.pageTitle || '', 14)}`.trim();
     case 'page':
       return `${QUESTION} ${input.title ? `${input.title} (${domainOf(input.url)})` : input.url}`;
     case 'post':

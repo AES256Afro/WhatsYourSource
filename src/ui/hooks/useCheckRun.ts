@@ -50,7 +50,8 @@ export function useCheckRun(deps: CheckRunDeps) {
     depsRef.current = deps;
   });
 
-  const start = useCallback(async (input: CheckInput, tabId?: number, only?: ProviderId) => {
+  const start = useCallback(async (input: CheckInput, opts: { tabId?: number; only?: ProviderId } = {}) => {
+    const { tabId, only } = opts;
     const s = depsRef.current.settings();
     if (!s) return;
     const myRun = ++runSeq.current;
@@ -101,7 +102,7 @@ export function useCheckRun(deps: CheckRunDeps) {
 
     let image: PreparedImage | undefined;
     if (input.kind === 'image') {
-      let prep = emptyRunState(input, 'Preparing image');
+      let prep = emptyRunState(input, firstLabel, ['Preparing the image…']);
       setPhase({ phase: 'checking', run: prep });
       const prepared = await prepareImageForCheck(
         input,
@@ -126,7 +127,8 @@ export function useCheckRun(deps: CheckRunDeps) {
     })) {
       if (stale()) return;
       if (ev.type === 'provider') {
-        run = emptyRunState(input, ev.label);
+        // Keep what was said so far (image prep, why the previous provider was abandoned) under the new label.
+        run = emptyRunState(input, ev.label, run.statuses);
         setPhase({ phase: 'checking', run });
       } else if (ev.type === 'fallback') {
         run = { ...run, statuses: [...run.statuses, `${ev.error.message} Trying the next provider…`] };

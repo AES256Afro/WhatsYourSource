@@ -23,7 +23,7 @@ export type PrepareStatus = (message: string) => void;
  * Everything that has to happen before the model sees an image. Throws ImageFetchError('permission')
  * when the only way forward is asking the user for host access.
  */
-export async function prepareImage(input: ImageInput, tabId: number | undefined, status: PrepareStatus, signal: AbortSignal): Promise<PreparedImage> {
+async function prepareImage(input: ImageInput, tabId: number | undefined, status: PrepareStatus, signal: AbortSignal): Promise<PreparedImage> {
   status('Fetching the image…');
   let img: ImageBytes;
   try {

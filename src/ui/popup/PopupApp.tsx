@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
 import { openPanelSync } from '@/lib/panel';
-import { SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
-import { getTargetTab } from '@/lib/tabs';
+import type { CheckInput } from '@/lib/messaging/protocol';
+import { providerRunLabel } from '@/lib/providers/registry';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
+import { useTargetSelection } from '../hooks/useTargetSelection';
 import { domainOf } from '@/lib/util/url';
 import { useSettings } from '../hooks/useSettings';
 import { useShortcutLabel } from '../hooks/useShortcutLabel';
@@ -13,29 +13,8 @@ import { Label } from '../components/common';
 
 export function PopupApp() {
   const { settings, update } = useSettings();
-  const [tab, setTab] = useState<{ id?: number; windowId?: number; url: string; title: string } | null>(null);
-  const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const { tab, selection } = useTargetSelection();
   const shortcut = useShortcutLabel();
-
-  useEffect(() => {
-    void (async () => {
-      const t = await getTargetTab();
-      if (!t) return;
-      setTab({ id: t.id, windowId: t.windowId, url: t.url ?? '', title: t.title ?? '' });
-      if (t.id == null) return;
-      try {
-        // The content script reports the page URL/title too; we don't hold the `tabs` permission.
-        const reply: unknown = await browser.tabs.sendMessage(t.id, { type: 'wys:get-selection' });
-        const parsed = SelectionInfoSchema.safeParse(reply);
-        if (parsed.success) {
-          setTab({ id: t.id, windowId: t.windowId, url: parsed.data.pageUrl || t.url || '', title: parsed.data.pageTitle || t.title || '' });
-          if (parsed.data.text.trim()) setSelection(parsed.data);
-        }
-      } catch {
-        /* no content script here */
-      }
-    })();
-  }, []);
 
   const input: CheckInput | null = selection
     ? { kind: 'text', ...selection }
@@ -55,7 +34,7 @@ export function PopupApp() {
 
   const openWeb = () => {
     if (!input) return;
-    void browser.tabs.create({ url: googleAiModeUrl(input) }).then(() => window.close());
+    void browser.tabs.create({ url: googleAiModeUrl(input, settings?.webmodeVariant ?? 'ai-mode') }).then(() => window.close());
   };
 
   return (
@@ -92,7 +71,10 @@ export function PopupApp() {
               <button className="wys-btn wys-btn-primary h-11 text-[14px]" disabled={!input} onClick={checkInPanel}>
                 <Sparkle size={15} /> Check in side panel
               </button>
-              <span className="px-1 text-[11px] leading-[15px] text-ink-2">Uses your own key · answer and sources appear in the panel · saved to history</span>
+              <span className="px-1 text-[11px] leading-[15px] text-ink-2">
+                {settings ? `Uses ${providerRunLabel(settings.defaultProvider, settings)}` : 'Uses your configured provider'} · answer and sources appear in the
+                panel · saved to history
+              </span>
             </div>
             <div className="flex flex-col gap-1.5">
               <button className="wys-btn h-11 text-[14px]" disabled={!input} onClick={openWeb}>
@@ -117,8 +99,8 @@ export function PopupApp() {
             value={settings?.shortcutAction ?? 'panel'}
             onChange={(e) => update((s) => ({ ...s, shortcutAction: e.target.value as 'panel' | 'webmode' }))}
           >
-            <option value="panel">Side panel</option>
-            <option value="webmode">Google AI Mode</option>
+            <option value="panel">Check in the side panel</option>
+            <option value="webmode">Open Google AI Mode</option>
           </select>
         </div>
       </div>

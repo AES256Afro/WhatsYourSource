@@ -1,16 +1,17 @@
 import { useState } from 'react';
+import { PROVIDER_LABELS } from '@/lib/providers/registry';
 import { GeminiProvider } from '@/lib/providers/gemini';
 import { providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
-import { PROVIDER_NAMES } from './common';
 import { Cpu, Globe, Link, Sparkle } from './Icons';
-import { CommitInput, Row, SecretInput, StatusLine, Toggle, type Status } from './settings/primitives';
+import { CommitInput, Row, SecretInput, StatusLine, Toggle } from './settings/primitives';
+import { useProviderVerify } from './settings/useProviderVerify';
 import type { UpdateSettings } from '../hooks/useSettings';
 
 /** Same names as the Settings cards, so what you pick here is what you find there. */
 const CHOICES: { id: ProviderId; title: string; tag: string; tagTone: 'accent' | 'muted' | 'ok'; blurb: string; icon: React.ReactNode }[] = [
   {
     id: 'gemini',
-    title: PROVIDER_NAMES.gemini,
+    title: PROVIDER_LABELS.gemini,
     tag: 'Recommended',
     tagTone: 'accent',
     blurb: 'Free key from Google AI Studio. Searches Google, answers in the panel.',
@@ -18,7 +19,7 @@ const CHOICES: { id: ProviderId; title: string; tag: string; tagTone: 'accent' |
   },
   {
     id: 'webmode',
-    title: PROVIDER_NAMES.webmode,
+    title: PROVIDER_LABELS.webmode,
     tag: 'No setup',
     tagTone: 'muted',
     blurb: 'No key. Opens google.com in a new tab. Not saved to history.',
@@ -26,7 +27,7 @@ const CHOICES: { id: ProviderId; title: string; tag: string; tagTone: 'accent' |
   },
   {
     id: 'anthropic',
-    title: PROVIDER_NAMES.anthropic,
+    title: PROVIDER_LABELS.anthropic,
     tag: 'Bring a key',
     tagTone: 'muted',
     blurb: 'Web search built in. GPT or another API: pick it in Settings afterwards.',
@@ -34,7 +35,7 @@ const CHOICES: { id: ProviderId; title: string; tag: string; tagTone: 'accent' |
   },
   {
     id: 'openai-compat',
-    title: PROVIDER_NAMES['openai-compat'],
+    title: PROVIDER_LABELS['openai-compat'],
     tag: 'Private',
     tagTone: 'ok',
     blurb: 'Ollama or LM Studio on this device; add a search tool so it can find sources.',
@@ -62,17 +63,15 @@ export function Onboarding({
   const [chip, setChip] = useState(settings.privacy.chip);
   const [snapshots, setSnapshots] = useState(settings.privacy.snapshots);
   const [privacyOpen, setPrivacyOpen] = useState(false);
-  const [verify, setVerify] = useState<Status>({ kind: 'idle' });
-
   const geminiKey = settings.providers.gemini.apiKey.trim();
   const anthropicKey = settings.providers.anthropic.apiKey.trim();
-  const keyMissing = (choice === 'gemini' && !geminiKey) || (choice === 'anthropic' && !anthropicKey);
+  const { status: verify, verify: verifyGemini } = useProviderVerify(
+    () => new GeminiProvider(settings.providers.gemini),
+    geminiKey,
+    () => 'Key works.',
+  );
 
-  const verifyGemini = async () => {
-    setVerify({ kind: 'checking' });
-    const r = await new GeminiProvider(settings.providers.gemini).validate();
-    setVerify(r.ok ? { kind: 'ok', text: 'Key works.' } : { kind: 'bad', text: r.error });
-  };
+  const keyMissing = (choice === 'gemini' && !geminiKey) || (choice === 'anthropic' && !anthropicKey);
 
   const finish = async () => {
     // A provider configured in Settings before pressing Finish wins over the untouched radio default.
@@ -84,7 +83,13 @@ export function Onboarding({
     else onDone();
   };
 
-  const buttonText = choice === 'openai-compat' ? 'Continue to settings' : keyMissing ? 'Finish without a key (use Google AI Mode)' : 'Finish setup';
+  // Says where the button goes: Settings for the providers that need more than a key, else home.
+  const buttonText =
+    choice === 'openai-compat' || (choice === 'anthropic' && !keyMissing)
+      ? 'Continue to settings'
+      : keyMissing
+        ? 'Finish without a key (use Google AI Mode)'
+        : 'Finish setup';
 
   return (
     <div className="flex h-full flex-col">

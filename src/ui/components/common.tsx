@@ -101,6 +101,3 @@ export function formatUsd(v: number | undefined): string | null {
   if (v < 0.005) return '< $0.01';
   return `≈ $${v.toFixed(2)}`;
 }
-
-/** The names users see for each way of checking; one table, kept in the provider registry. */
-export { PROVIDER_LABELS as PROVIDER_NAMES } from '@/lib/providers/registry';

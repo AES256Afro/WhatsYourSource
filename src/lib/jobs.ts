@@ -21,7 +21,7 @@ export async function enqueueJob(input: CheckInput, tabId?: number, windowId?: n
  * no tab of its own and belongs to its window; the fallback `sidepanel.html` *window* is itself a
  * tab in a popup window, which no producer can know the id of, so it takes whatever is queued.
  */
-export async function currentWindowId(): Promise<number | undefined> {
+async function currentWindowId(): Promise<number | undefined> {
   try {
     const self = await browser.tabs.getCurrent();
     if (self) return undefined;
@@ -44,7 +44,7 @@ const instanceId = crypto.randomUUID();
  * wait a beat, and run only if my claim is still the one on record. Both contenders read the same
  * final value, so at most one runs.
  */
-export async function claimJob(id: string): Promise<boolean> {
+async function claimJob(id: string): Promise<boolean> {
   const key = `claim:${id}`;
   const before = (await browser.storage.session.get(key))[key];
   if (typeof before === 'string' && before !== instanceId) return false;

@@ -23,7 +23,8 @@ export function buildSources(model: ModelResult | null, raw: RawSource[]): Sourc
       title: cleanTitle(r.title, r.domain),
       url: r.url,
       domain: r.domain || domainOf(r.url),
-      verified: r.verified,
+      // Every raw source came from the search/grounding machinery; only model-named pages (below) are unverified.
+      verified: true,
     };
     out.push(s);
     byNorm.set(norm, s);
@@ -89,7 +90,7 @@ export function resolveOriginal(model: ModelResult | null, sources: Source[]): O
   };
 }
 
-export function findSource(sources: Source[], url: string, opts: { exact?: boolean } = {}): Source | undefined {
+function findSource(sources: Source[], url: string, opts: { exact?: boolean } = {}): Source | undefined {
   if (!url) return undefined;
   const norm = normalizeUrl(url);
   const exact = sources.find((s) => normalizeUrl(s.url) === norm);

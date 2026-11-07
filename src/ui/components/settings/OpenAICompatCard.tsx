@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { hasAllUrls, hasOrigin, requestAllUrls, requestOrigin } from '@/lib/permissions';
-import { OPENAI_COMPAT_PRESETS, openaiCompatLabel } from '@/lib/providers/registry';
-import { describeLocalModels, type LocalModelInfo } from '@/lib/providers/localModels';
+import { OPENAI_COMPAT_PRESETS, openaiCompatLabel, PROVIDER_LABELS } from '@/lib/providers/registry';
+import { describeLocalModels, localServer, type LocalModelInfo } from '@/lib/providers/localModels';
 import { OpenAICompatProvider } from '@/lib/providers/openaiCompat';
 import { createSearchBackend } from '@/lib/search/backends';
 import type { SearchToolId, Settings } from '@/lib/storage/settings';
 import { hostOf } from '@/lib/util/url';
 import { Alert, Cpu } from '../Icons';
-import { PROVIDER_NAMES } from '../common';
 import { PROVIDER_CARD_ID } from '../SettingsView';
 import { CommitInput, ProviderCard, Row, SecretInput, StatusLine } from './primitives';
 import { useProviderVerify } from './useProviderVerify';
@@ -24,7 +23,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
   const [searxngOk, setSearxngOk] = useState<boolean | null>(null);
 
   // Only plain http on this machine is covered by the built-in host permission; https://localhost needs an Allow.
-  const isLocal = /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(o.baseUrl);
+  const isLocal = localServer(o.baseUrl).isLocal && /^http:/i.test(o.baseUrl);
   const isOpenAI = o.baseUrl.startsWith('https://api.openai.com');
   const preset = OPENAI_COMPAT_PRESETS.find((p) => p.baseUrl && o.baseUrl.startsWith(p.baseUrl))?.id ?? 'custom';
 
@@ -70,7 +69,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
 
   const needsPermission = !isLocal && !isOpenAI && originOk === false;
   const cleartextKey = /^http:\/\//i.test(o.baseUrl) && !isLocal && o.apiKey.trim().length > 0;
-  const title = PROVIDER_NAMES['openai-compat'];
+  const title = PROVIDER_LABELS['openai-compat'];
 
   return (
     <ProviderCard
@@ -131,7 +130,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
           </span>
         </div>
       )}
-      {needsPermission && <PermissionNote text={`Allow the extension to talk to ${hostOf(o.baseUrl) || o.baseUrl}`} onAllow={allow} />}
+      {needsPermission && <PermissionNote text="The model server is on another host" host={hostOf(o.baseUrl) || o.baseUrl} onAllow={allow} />}
       <div className="flex items-center gap-2">
         <label htmlFor="wys-ockey" className="w-[70px] shrink-0 text-[13px]">
           API key
@@ -158,7 +157,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
           ))}
         </datalist>
         <button className="wys-btn h-8 px-2.5 text-[12px]" aria-disabled={status.kind === 'checking'} onClick={() => status.kind !== 'checking' && void test()}>
-          {status.kind === 'checking' ? '…' : 'Test'}
+          {status.kind === 'checking' ? '…' : 'Verify'}
         </button>
       </div>
       <StatusLine status={status} />
@@ -173,7 +172,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
           <a href="https://lmstudio.ai" target="_blank" rel="noopener noreferrer" className="font-semibold no-underline">
             LM Studio
           </a>
-          , start its server, then press Test. Ollama works as is; in LM Studio turn on “Enable CORS” in the server settings.
+          , start its server, then press Verify. Ollama works as is; in LM Studio turn on “Enable CORS” in the server settings.
         </span>
       )}
 
@@ -193,10 +192,10 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
             value={o.searchTool}
             onChange={(e) => set({ searchTool: e.target.value as SearchToolId })}
           >
-            <option value="none">None (answers from memory)</option>
-            <option value="searxng">SearXNG (your own search server)</option>
-            <option value="brave">Brave Search (API key)</option>
-            <option value="tavily">Tavily (API key)</option>
+            <option value="none">None — answers from memory, no sources</option>
+            <option value="searxng">SearXNG — your own search server</option>
+            <option value="brave">Brave Search — needs an API key</option>
+            <option value="tavily">Tavily — needs an API key</option>
           </select>
         )}
       </Row>
@@ -215,7 +214,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
             />
           </div>
           {o.searxngUrl && searxngOk === false && (
-            <PermissionNote text={`Allow the extension to reach ${hostOf(o.searxngUrl) || o.searxngUrl}`} onAllow={allowSearxng} />
+            <PermissionNote text="The search server is on another host" host={hostOf(o.searxngUrl) || o.searxngUrl} onAllow={allowSearxng} />
           )}
           <span className="text-[11px] leading-[15px] text-ink-2">
             Your SearXNG must allow JSON results (in its settings.yml: <code className="rounded bg-surface-2 px-1">search.formats: [html, json]</code>). The
@@ -250,7 +249,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
               <span className="text-[12px] text-ink-2">Allowed</span>
             ) : (
               <button className="wys-btn h-8 px-2.5 text-[12px]" aria-describedby={id} onClick={() => void allowAll()}>
-                Allow
+                Allow all sites
               </button>
             )
           }
@@ -260,12 +259,12 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
   );
 }
 
-function PermissionNote({ text, onAllow }: { text: string; onAllow: () => void }) {
+function PermissionNote({ text, host, onAllow }: { text: string; host: string; onAllow: () => void }) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-accent-line bg-accent-wash px-2.5 py-2 text-[12px]">
       <span className="grow text-ink-2">{text}</span>
       <button className="wys-btn h-7 px-2.5 text-[12px]" onClick={onAllow}>
-        Allow
+        Allow {host}
       </button>
     </div>
   );

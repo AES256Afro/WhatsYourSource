@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CheckResult } from '@/lib/pipeline/schema';
 import type { ProviderId } from '@/lib/storage/settings';
-import { googleAiModeUrl } from '@/lib/googleAiMode';
+import { googleAiModeUrl, type GoogleAiModeVariant } from '@/lib/googleAiMode';
 import { ClaimList } from './ClaimList';
 import { EvidencePanel, FactCheckBanner, localeDate, WhatWasSent } from './EvidencePanel';
 import { savePageUrl } from '@/lib/lookups/wayback';
@@ -26,6 +26,7 @@ export function ResultView({
   saveError,
   snapshotNote,
   embedded,
+  webmodeVariant,
   searchTool,
   secondOpinions,
   onSecondOpinion,
@@ -39,6 +40,8 @@ export function ResultView({
   snapshotNote?: string;
   /** Inside the history detail view: no action bar, no own scroll container, the header already names the subject. */
   embedded?: boolean;
+  /** Which Google page "Compare in Google AI Mode" opens. */
+  webmodeVariant: GoogleAiModeVariant;
   /** Name of the local model's search tool, for the transparency block. */
   searchTool?: string;
   /** Other configured providers that could give a second opinion on the same input. */
@@ -58,7 +61,7 @@ export function ResultView({
   }, [embedded, result.id]);
   const o = result.originalSource;
   const compare = (
-    <TextAction href={googleAiModeUrl(result.input)}>
+    <TextAction href={googleAiModeUrl(result.input, webmodeVariant)}>
       Compare in Google AI Mode <span aria-hidden="true">↗</span>
     </TextAction>
   );
@@ -71,7 +74,7 @@ export function ResultView({
         <VerdictBanner ref={verdictRef} verdict={result.verdict} />
         {result.degraded && (
           <div className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-[12px] leading-4 text-warn-ink">
-            The model answered in prose only, so read the assessment below; claims and sources could not be extracted. Re-check to try again.
+            The model answered in prose only, so read the assessment below; claims and sources could not be extracted. Press Re-check below to try again.
           </div>
         )}
 
@@ -224,7 +227,7 @@ function fmtK(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
-export function toMarkdown(r: CheckResult): string {
+function toMarkdown(r: CheckResult): string {
   const lines: string[] = [];
   const subject =
     r.input.kind === 'text'

@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { CheckInput } from '../messaging/protocol';
+import type { ProviderId } from '../storage/settings';
 import type { CheckResult, VerdictKind } from '../pipeline/schema';
 import { domainOf, truncate } from '../util/url';
 
@@ -17,7 +18,8 @@ export interface StoredCheck {
   site: string;
   verdictLabel: string;
   verdictKind: VerdictKind;
-  provider: string;
+  /** Display label of the provider that ran the check (the result holds the id and model too). */
+  providerLabel: string;
   model: string;
   hasSnapshot: boolean;
   note: string;
@@ -28,7 +30,7 @@ export interface StoredSnapshot {
   checkId: string;
   url: string;
   title: string;
-  /** Sanitized main-content HTML (Readability + DOMPurify in the content script). */
+  /** Sanitized main-content HTML (Readability + DOMPurify, run by `snapshot-capture.js` injected into the checked tab). */
   html: string;
   capturedAt: number;
   /** The checked text, so the detail view can mark it. */
@@ -47,7 +49,7 @@ interface WysDB extends DBSchema {
 
 let dbPromise: Promise<IDBPDatabase<WysDB>> | null = null;
 
-export function getDb(): Promise<IDBPDatabase<WysDB>> {
+function getDb(): Promise<IDBPDatabase<WysDB>> {
   dbPromise ??= openDB<WysDB>('whatsyoursource', 2, {
     upgrade(db, oldVersion, _newVersion, tx) {
       if (oldVersion < 1) {
@@ -69,7 +71,7 @@ export function resetDbForTests() {
   dbPromise = null;
 }
 
-export function summarizeInput(input: CheckInput): { title: string; site: string } {
+function summarizeInput(input: CheckInput): { title: string; site: string } {
   switch (input.kind) {
     case 'text':
       return { title: truncate(input.text.replace(/\s+/g, ' ').trim(), 140), site: domainOf(input.pageUrl) };
@@ -93,7 +95,7 @@ export async function saveCheck(result: CheckResult, snapshot?: SnapshotInput | 
     site,
     verdictLabel: result.verdict.label,
     verdictKind: result.verdict.kind,
-    provider: result.provider.label,
+    providerLabel: result.provider.label,
     model: result.provider.model,
     hasSnapshot: !!snapshot,
     note: '',
@@ -148,7 +150,16 @@ export async function getCheck(id: string): Promise<StoredCheck | undefined> {
 }
 
 /** Rows written by older builds may lack fields added since; fill them so views never dereference undefined. */
+/** Rows written before the result carried a provider id only have the label; guess the id from it. */
+function providerIdFromLabel(label: string): ProviderId {
+  if (/gemini|google/i.test(label)) return 'gemini';
+  if (/claude|anthropic/i.test(label)) return 'anthropic';
+  return 'openai-compat';
+}
+
 export function upgradeStoredCheck(c: StoredCheck): StoredCheck {
+  const legacy = c as StoredCheck & { provider?: string };
+  if (!c.providerLabel && legacy.provider) c = { ...c, providerLabel: legacy.provider };
   const r = c.result;
   const input = r.input as CheckInput & { images?: string[]; links?: string[] };
   return {
@@ -166,7 +177,7 @@ export function upgradeStoredCheck(c: StoredCheck): StoredCheck {
       sources: r.sources ?? [],
       searchQueries: r.searchQueries ?? [],
       verdict: r.verdict ?? { label: 'Assessment', kind: 'unverified', confidence: 'low', summary: '' },
-      provider: r.provider ?? { id: c.provider ?? '', label: c.provider ?? '', model: c.model ?? '' },
+      provider: r.provider ?? { id: providerIdFromLabel(c.providerLabel), label: c.providerLabel, model: c.model ?? '' },
       input: input.kind === 'post' ? { ...input, images: input.images ?? [], links: input.links ?? [] } : input,
     },
   };

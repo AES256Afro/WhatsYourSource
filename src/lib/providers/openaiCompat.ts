@@ -3,7 +3,16 @@ import { fetchPageText } from '../search/fetchPage';
 import type { SearchBackend, SearchHit } from '../search/types';
 import { parseSse } from '../util/sse';
 import { domainOf, normalizeUrl, truncate } from '../util/url';
-import { ProviderError, errorFromResponse, toProviderError, type GenEvent, type GenerateRequest, type LlmProvider, type RawSource } from './types';
+import {
+  ProviderError,
+  errorFromResponse,
+  toProviderError,
+  type GenEvent,
+  type GenerateRequest,
+  type LlmProvider,
+  type RawSource,
+  describeProviderError,
+} from './types';
 
 /**
  * Any OpenAI-style `chat/completions` endpoint: Ollama, LM Studio, llama.cpp, vLLM, OpenAI itself.
@@ -56,6 +65,13 @@ const TOOLS = [
 
 const MAX_ROUNDS = 6;
 
+/** Shown while a local model answers without a search tool; the action is in Settings. */
+export const NO_SEARCH_TOOL_STATUS = 'No search tool configured — answering from the model alone. Pick one in Settings to get sources.';
+
+function unreachableHint(base: string): string {
+  return `Could not reach ${base}. Is the server running, and does it allow requests from browser extensions (CORS)?`;
+}
+
 export class OpenAICompatProvider implements LlmProvider {
   id = 'openai-compat' as const;
   label: string;
@@ -100,7 +116,7 @@ export class OpenAICompatProvider implements LlmProvider {
     const search = !req.plain && req.wantSearch ? this.cfg.search : null;
 
     if (!search) {
-      if (!req.plain && req.wantSearch) yield { type: 'status', message: 'No search tool configured — answering from the model alone' };
+      if (!req.plain && req.wantSearch) yield { type: 'status', message: NO_SEARCH_TOOL_STATUS };
       yield* this.streamAnswer(
         [
           { role: 'system', content: req.system },
@@ -212,7 +228,7 @@ export class OpenAICompatProvider implements LlmProvider {
               content = `Title: ${page.title}\nURL: ${page.url}\n\n${page.text}${page.truncated ? '\n[truncated]' : ''}`;
               if (!seen.has(stored)) {
                 seen.add(stored);
-                yield { type: 'sources', sources: [{ url: stored, title: page.title || domainOf(stored), domain: domainOf(stored), verified: true }] };
+                yield { type: 'sources', sources: [{ url: stored, title: page.title || domainOf(stored), domain: domainOf(stored) }] };
               }
             } catch (e) {
               content = `Could not fetch (${e instanceof Error ? e.message : String(e)}). The extension may lack permission for this site.`;
@@ -328,8 +344,7 @@ export class OpenAICompatProvider implements LlmProvider {
       res = await fetch(`${this.base}${path}`, { method: 'POST', headers: this.headers(), body: JSON.stringify(body), signal });
     } catch (e) {
       const err = toProviderError(e);
-      if (err.code === 'network')
-        err.details = `Could not reach ${this.base}. Is the server running, and does it allow requests from browser extensions (CORS)?`;
+      if (err.code === 'network') err.details = unreachableHint(this.base);
       throw err;
     }
     if (!res.ok) throw errorFromResponse(res.status, await res.text().catch(() => ''));
@@ -341,7 +356,7 @@ export class OpenAICompatProvider implements LlmProvider {
       const res = await fetch(`${this.base}/models`, { headers: this.headers() });
       if (!res.ok) {
         const err = errorFromResponse(res.status, await res.text().catch(() => ''));
-        return { ok: false, error: err.details ? `${err.message} ${err.details}` : err.message };
+        return { ok: false, error: describeProviderError(err) };
       }
       const j = (await res.json()) as { data?: { id?: string }[]; models?: { name?: string }[] };
       const models = (j.data ?? []).map((m) => m.id ?? '').filter(Boolean);
@@ -351,7 +366,7 @@ export class OpenAICompatProvider implements LlmProvider {
       const err = toProviderError(e);
       return {
         ok: false,
-        error: err.code === 'network' ? `Could not reach ${this.base}. Is the server running, and does it allow browser extensions (CORS)?` : err.message,
+        error: err.code === 'network' ? unreachableHint(this.base) : err.message,
       };
     }
   }
@@ -392,7 +407,7 @@ function hitsToSources(hits: SearchHit[], seen: Set<string>): RawSource[] {
   for (const h of hits) {
     if (seen.has(h.url)) continue;
     seen.add(h.url);
-    out.push({ url: h.url, title: h.title, domain: domainOf(h.url), verified: true, snippet: h.snippet });
+    out.push({ url: h.url, title: h.title, domain: domainOf(h.url), snippet: h.snippet });
   }
   return out;
 }

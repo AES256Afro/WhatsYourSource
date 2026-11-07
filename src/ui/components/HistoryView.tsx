@@ -69,7 +69,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
 
   const groups = useMemo(() => groupByDay(items ?? []), [items]);
 
-  const [actionError, guard] = useActionError();
+  const { error: actionError, guard } = useActionError();
   const clearAll = guard('Clear all', async () => {
     if (!confirm('Delete all saved checks and page snapshots? This cannot be undone.')) return;
     await clearHistory();
@@ -213,7 +213,7 @@ function groupByDay(items: StoredCheck[]): { label: string; items: StoredCheck[]
   return Array.from(groups, ([label, items]) => ({ label, items }));
 }
 
-export function fmtBytes(n: number): string {
+function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;

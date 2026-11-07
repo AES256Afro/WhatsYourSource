@@ -4,8 +4,10 @@ import { browser } from 'wxt/browser';
 /** `'webmode'` is Google AI Mode on google.com: chosen like a provider, but never an LLM call (`createProvider` returns null for it). */
 export const PROVIDER_IDS = ['gemini', 'openai-compat', 'anthropic', 'webmode'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
+/** The providers that are LLM calls; `'webmode'` opens Google AI Mode in a tab instead. */
+export const LLM_PROVIDER_IDS = ['gemini', 'anthropic', 'openai-compat'] as const satisfies readonly ProviderId[];
 
-export const SEARCH_TOOLS = ['none', 'searxng', 'brave', 'tavily'] as const;
+const SEARCH_TOOLS = ['none', 'searxng', 'brave', 'tavily'] as const;
 export type SearchToolId = (typeof SEARCH_TOOLS)[number];
 
 /**
@@ -233,7 +235,7 @@ export async function loadSettings(): Promise<Settings> {
   return withSecrets;
 }
 
-/** Settings without keys, for the content script. */
+/** Settings without keys: what the background keeps in memory (the content script reads `publicSettings` instead). */
 export async function loadSettingsWithoutSecrets(): Promise<Settings> {
   const stored = await browser.storage.local.get(SETTINGS_KEY);
   return mergeSettings(DEFAULT_SETTINGS, stored[SETTINGS_KEY]);
@@ -287,17 +289,11 @@ export function providerReady(s: Settings, id: ProviderId = s.defaultProvider): 
 export function providerOrder(s: Settings): ProviderId[] {
   const order: ProviderId[] = [s.defaultProvider];
   if (s.fallback) {
-    for (const id of ['gemini', 'anthropic', 'openai-compat'] as const) {
+    for (const id of LLM_PROVIDER_IDS) {
       if (id !== s.defaultProvider && providerReady(s, id)) order.push(id);
     }
   }
   return order.filter((id) => id !== 'webmode');
 }
 
-/**
- * Where a check should go when the user triggers it from the page (chip or shortcut) rather than
- * from inside the panel: the web mode if either the trigger or the default provider says so.
- */
-export function pageTriggerTarget(s: Settings): 'panel' | 'webmode' {
-  return s.shortcutAction === 'webmode' || s.defaultProvider === 'webmode' ? 'webmode' : 'panel';
-}
+export { pageTriggerTarget } from './publicSettings';
