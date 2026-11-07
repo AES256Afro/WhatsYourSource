@@ -1,4 +1,5 @@
 import type { LocalProvenance } from '@/lib/pipeline/schema';
+import { isHttpUrl } from '@/lib/util/url';
 import { Label } from './common';
 import { External, Shield } from './Icons';
 
@@ -50,7 +51,13 @@ export function ProvenancePanel({ provenance: p, srcUrl }: { provenance: LocalPr
       </div>
       <div className="flex flex-col gap-1.5">
         <Label>Reverse image search</Label>
-        <div className="grid grid-cols-4 gap-1.5">
+        {!isHttpUrl(srcUrl) && (
+          <span className="text-[11px] leading-[15px] text-ink-2">
+            This image is embedded in the page rather than hosted at a URL, so reverse-image services cannot be given a link. Save it and upload it to them
+            instead.
+          </span>
+        )}
+        <div className={`grid grid-cols-4 gap-1.5 ${isHttpUrl(srcUrl) ? '' : 'hidden'}`}>
           {reverse.map(([name, url]) => (
             <a key={name} href={url} target="_blank" rel="noopener noreferrer" className="wys-btn h-9 px-2 text-[12px] no-underline">
               {name} <External size={11} className="text-ink-3" />

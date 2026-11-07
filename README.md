@@ -23,8 +23,14 @@ npm run build:all      # .output/chrome-mv3 and .output/firefox-mv3
 npm test               # unit tests (vitest)
 npm run test:e2e       # loads .output/chrome-mv3 into Chromium/Edge with Playwright and runs a mocked check end to end
 npm run preview        # side panel + popup in a plain browser tab against a fake browser API
-                       # (?scenario=fresh|home|popup|local) — handy for UI work without reloading the extension
+                       # (?scenario=fresh|home|popup|local|image) — handy for UI work without reloading the extension
+npm run lint           # ESLint (type-aware) · npm run format — Prettier
+npm run screenshots    # store screenshots + promo tiles into store/ (needs `npm run preview` running)
 ```
+
+See [MILESTONES.md](MILESTONES.md) for the plan to release, [docs/SWEEPS.md](docs/SWEEPS.md) for the audit ledger and [docs/STORE_LISTING.md](docs/STORE_LISTING.md) for the store copy.
+
+On Firefox, the floating chip opens the panel in a small window (Firefox only lets the sidebar open from the context menu, the toolbar button or the shortcut); the other triggers open the real sidebar.
 
 Load the unpacked build from `.output/chrome-mv3` (chrome://extensions → Developer mode → Load unpacked) or run `npm run dev:firefox`, which launches Firefox with the extension temporarily installed.
 

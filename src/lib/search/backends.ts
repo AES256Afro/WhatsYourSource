@@ -10,7 +10,7 @@ export function createSearxng(baseUrl: string): SearchBackend {
     label: 'SearXNG',
     async search(query, signal) {
       if (!base) throw new SearchError('Set your SearXNG URL in settings.');
-      const u = `${base}/search?q=${encodeURIComponent(query)}&format=json&language=en`;
+      const u = `${base}/search?q=${encodeURIComponent(query)}&format=json`;
       const res = await fetch(u, { signal, headers: { Accept: 'application/json' } });
       if (!res.ok) throw new SearchError('SearXNG returned an error.', await readError(res));
       const j = (await res.json()) as { results?: { title?: string; url?: string; content?: string; publishedDate?: string | null }[] };

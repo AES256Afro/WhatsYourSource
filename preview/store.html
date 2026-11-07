@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsYourSource store screenshot</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #ffffff; font-family: Georgia, 'Times New Roman', serif; color: #1c1c1c; }
+      .scene { display: flex; width: 1280px; height: 800px; overflow: hidden; background: #fff; color: #1c1c1c; }
+      .browser { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+      .chrome { height: 44px; background: #f1f3f4; display: flex; align-items: center; gap: 10px; padding: 0 14px; font: 13px system-ui, sans-serif; color: #5f6368; border-bottom: 1px solid #dadce0; }
+      .chrome .dots span { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; }
+      .chrome .url { flex: 1; background: #fff; border-radius: 999px; padding: 6px 14px; border: 1px solid #dadce0; }
+      .chrome .ext { width: 26px; height: 26px; border-radius: 6px; background: #0f5fa8; display: inline-flex; align-items: center; justify-content: center; }
+      .page { flex: 1; overflow: hidden; position: relative; padding: 40px 64px; }
+      .kicker { font: 600 12px/1 system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #b3261e; }
+      h1 { font-size: 34px; line-height: 1.15; margin: 14px 0 10px; letter-spacing: -0.01em; }
+      .byline { font: 13px system-ui, sans-serif; color: #666; margin-bottom: 26px; }
+      p { font-size: 17px; line-height: 1.6; margin: 0 0 18px; max-width: 640px; }
+      mark { background: #b4d5fe; color: inherit; padding: 1px 0; }
+      .chip { position: absolute; display: inline-flex; align-items: center; gap: 8px; padding: 7px 11px 7px 9px; background: #15181C; color: #fff; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.28); font: 600 13px/1 system-ui, sans-serif; white-space: nowrap; }
+      .chip .kbd { font-size: 11px; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,.18); color: #E5E7EB; }
+      figure { margin: 0 0 18px; max-width: 640px; }
+      figure .img { height: 240px; border-radius: 8px; background: linear-gradient(135deg, #0F5FA8, #F5D77A); display: flex; align-items: center; justify-content: center; color: #fff; font: 600 18px system-ui, sans-serif; }
+      figcaption { font: 12px system-ui, sans-serif; color: #666; margin-top: 6px; }
+      .panel { width: 400px; flex: none; border-left: 1px solid #dadce0; display: flex; flex-direction: column; background: #fff; }
+      .panel .head { height: 44px; background: #f1f3f4; border-bottom: 1px solid #dadce0; display: flex; align-items: center; padding: 0 12px; font: 13px system-ui, sans-serif; color: #5f6368; gap: 8px; }
+      #root { flex: 1; min-height: 0; }
+      .scene.dark { background: #15181c; color: #e8eaed; }
+      .scene.dark .chrome, .scene.dark .panel .head { background: #202124; color: #bdc1c6; border-color: #3c4043; }
+      .scene.dark .chrome .url { background: #303134; border-color: #3c4043; color: #e8eaed; }
+      .scene.dark .page { background: #1b1f24; }
+      .scene.dark mark { background: #2f5478; }
+      .scene.dark .byline, .scene.dark figcaption { color: #9aa0a6; }
+      .scene.dark .panel { border-color: #3c4043; }
+    </style>
+  </head>
+  <body>
+    <div class="scene" id="scene">
+      <div class="browser">
+        <div class="chrome">
+          <span class="dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></span>
+          <span class="url">medium.com/@author/why-we-keep-repeating-ourselves</span>
+          <span class="ext"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.5-4.5"/><path d="M8 10.5l1.8 1.8 3.2-3.6"/></svg></span>
+        </div>
+        <div class="page" id="page">
+          <div class="kicker">Opinion · Work</div>
+          <h1>Why we keep repeating ourselves</h1>
+          <div class="byline">A. Writer · 6 min read · Updated today</div>
+          <p>Most teams don’t fail because they lack ideas. They fail because they repeat the same plan with slightly different slides.</p>
+          <p id="quote">As Einstein put it, <mark>“the definition of insanity is doing the same thing over and over again and expecting different results.”</mark> The line gets a laugh in every kickoff meeting, and then the meeting proceeds exactly as before.</p>
+          <div class="chip" id="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8FC1F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.5-4.5"/><path d="M8 10.5l1.8 1.8 3.2-3.6"/></svg>Check source <span class="kbd">Alt+Shift+S</span></div>
+          <figure id="figure" hidden><div class="img">[photo in the post]</div><figcaption>Photo attached to the post</figcaption></figure>
+          <p>Repetition isn’t the problem — unexamined repetition is. The fix is not a better quote but a short, honest review of what actually changed between attempts.</p>
+          <p>That review has three questions. What did we assume last time? Which assumption turned out wrong? What are we doing differently because of it?</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="head"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F5FA8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.5-4.5"/><path d="M8 10.5l1.8 1.8 3.2-3.6"/></svg> WhatsYourSource</div>
+        <div id="root"></div>
+      </div>
+    </div>
+    <script type="module" src="./store.tsx"></script>
+  </body>
+</html>

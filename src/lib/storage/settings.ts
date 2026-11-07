@@ -7,9 +7,14 @@ export type ProviderId = (typeof PROVIDER_IDS)[number];
 export const SEARCH_TOOLS = ['none', 'searxng', 'brave', 'tavily'] as const;
 export type SearchToolId = (typeof SEARCH_TOOLS)[number];
 
-/** Checked 2026-10-12 against ai.google.dev/gemini-api/docs/models. The 2.5 series shuts down 2026-10-16. */
+/**
+ * Checked 2026-11-07 against aistudio.google.com/docs/models. The 2.5 series is deprecated and is
+ * routed to 3.x models from 2026-12-01; the 2.0 series is shut down. The Verify button lists whatever
+ * the key can actually use, so this is only the starting menu.
+ */
 export const GEMINI_MODELS = [
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash — best quality' },
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash — best balance (default)' },
+  { id: 'gemini-4-argon', label: 'Gemini 4 Argon — flagship, pricier' },
   { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite — fast and cheap' },
   { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite — cheapest' },
 ] as const;
@@ -213,12 +218,18 @@ export async function saveSettings(next: Settings): Promise<void> {
   await browser.storage.local.set({ [SETTINGS_KEY]: stripSecrets(parsed), [SECRETS_KEY]: collectSecrets(parsed) });
 }
 
-/** Read-modify-write helper for call sites that only know a path. */
-export async function updateSettings(mutate: (s: Settings) => Settings): Promise<Settings> {
-  const current = await loadSettings();
-  const next = mutate(structuredClone(current));
-  await saveSettings(next);
-  return next;
+let updateQueue: Promise<unknown> = Promise.resolve();
+
+/** Read-modify-write helper, serialized so two quick edits (blur + click) cannot drop each other. */
+export function updateSettings(mutate: (s: Settings) => Settings): Promise<Settings> {
+  const run = updateQueue.then(async () => {
+    const current = await loadSettings();
+    const next = mutate(structuredClone(current));
+    await saveSettings(next);
+    return next;
+  });
+  updateQueue = run.catch(() => undefined);
+  return run;
 }
 
 /** Fires with the full settings (keys included) whenever either storage key changes. Extension pages only. */

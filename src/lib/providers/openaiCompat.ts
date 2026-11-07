@@ -2,7 +2,7 @@ import { formatHits } from '../search/backends';
 import { fetchPageText } from '../search/fetchPage';
 import type { SearchBackend, SearchHit } from '../search/types';
 import { parseSse } from '../util/sse';
-import { domainOf, truncate } from '../util/url';
+import { domainOf, normalizeUrl, truncate } from '../util/url';
 import { ProviderError, errorFromResponse, toProviderError, type GenEvent, type GenerateRequest, type LlmProvider, type RawSource } from './types';
 
 /**
@@ -130,6 +130,9 @@ export class OpenAICompatProvider implements LlmProvider {
       { role: 'user', content: userContent },
     ];
     const seen = new Set<string>();
+    // The model may only read pages it got from web_search or that the checked content itself linked.
+    // Otherwise a prompt injection could make it carry the checked text to any URL it likes.
+    const readable = new Set((req.urls ?? []).map(normalizeUrl));
     const queries: string[] = [];
     let inputTokens = 0;
     let outputTokens = 0;
@@ -178,6 +181,7 @@ export class OpenAICompatProvider implements LlmProvider {
             yield { type: 'status', message: `Searching: ${truncate(q, 60)}` };
             try {
               const hits = await search.search(q, signal);
+              for (const h of hits) readable.add(normalizeUrl(h.url));
               content = formatHits(hits);
               const fresh = hitsToSources(hits, seen);
               if (fresh.length) yield { type: 'sources', sources: fresh };
@@ -190,6 +194,8 @@ export class OpenAICompatProvider implements LlmProvider {
           const url = str(args.url).trim();
           if (!this.cfg.fetchPages) content = 'Page fetching is disabled by the user. Rely on search snippets.';
           else if (!/^https?:\/\//i.test(url)) content = 'Invalid URL.';
+          else if (!readable.has(normalizeUrl(url)))
+            content = 'Only pages returned by web_search, or linked from the checked content, can be read. Search for it first.';
           else {
             yield { type: 'status', message: `Reading ${domainOf(url)}` };
             try {

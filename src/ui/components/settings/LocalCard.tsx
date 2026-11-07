@@ -19,7 +19,8 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
   const [allUrls, setAllUrls] = useState<boolean | null>(null);
   const [searxngOk, setSearxngOk] = useState<boolean | null>(null);
 
-  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(o.baseUrl);
+  // Only plain http on this machine is covered by the built-in host permission; https://localhost needs an Allow.
+  const isLocal = /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(o.baseUrl);
   const isOpenAI = o.baseUrl.startsWith('https://api.openai.com');
   const preset = OPENAI_COMPAT_PRESETS.find((p) => p.baseUrl && o.baseUrl.startsWith(p.baseUrl))?.id ?? 'custom';
 
@@ -53,6 +54,7 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
   const allowSearxng = async () => setSearxngOk(await requestOrigin(o.searxngUrl));
 
   const needsPermission = !isLocal && !isOpenAI && originOk === false;
+  const cleartextKey = /^http:\/\//i.test(o.baseUrl) && !isLocal && o.apiKey.trim().length > 0;
   const title = isOpenAI ? 'OpenAI' : isLocal ? 'Local model (OpenAI-compatible)' : 'OpenAI-compatible endpoint';
 
   return (
@@ -102,7 +104,15 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
           className="h-8 min-w-0 grow text-[12px]"
         />
       </div>
-      {needsPermission && <PermissionNote text={`Allow the extension to talk to ${new URL(o.baseUrl).host}`} onAllow={allow} />}
+      {cleartextKey && (
+        <div className="flex gap-2 rounded-lg bg-bad-soft px-2.5 py-2 text-[12px] leading-4 text-bad-ink">
+          <Alert size={14} className="mt-0.5 shrink-0 text-bad" />
+          <span>
+            This endpoint is plain http and not on this machine, so the API key travels unencrypted across the network. Use https, or leave the key empty.
+          </span>
+        </div>
+      )}
+      {needsPermission && <PermissionNote text={`Allow the extension to talk to ${hostOf(o.baseUrl) || o.baseUrl}`} onAllow={allow} />}
       <div className="flex items-center gap-2">
         <label htmlFor="wys-ockey" className="w-[70px] shrink-0 text-[13px]">
           API key
@@ -180,7 +190,9 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
               className="h-8 min-w-0 grow text-[12px]"
             />
           </div>
-          {o.searxngUrl && searxngOk === false && <PermissionNote text={`Allow the extension to reach ${hostOf(o.searxngUrl)}`} onAllow={allowSearxng} />}
+          {o.searxngUrl && searxngOk === false && (
+            <PermissionNote text={`Allow the extension to reach ${hostOf(o.searxngUrl) || o.searxngUrl}`} onAllow={allowSearxng} />
+          )}
           <span className="text-[11px] text-ink-2">Your instance must have the JSON format enabled (`search.formats: [html, json]`).</span>
         </>
       )}

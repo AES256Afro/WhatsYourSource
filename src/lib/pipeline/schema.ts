@@ -22,14 +22,21 @@ export type VerdictKind = z.infer<typeof VerdictKindSchema>;
 export const ConfidenceSchema = z.enum(['high', 'medium', 'low']);
 
 const nullableStr = z.string().nullish();
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 
 /** What we ask the model to put in its ```json block. Lenient on purpose; the UI copes with gaps. */
 export const ModelResultSchema = z.object({
   verdict: z.object({
-    label: z.string().min(1),
+    label: z
+      .string()
+      .nullish()
+      .transform((v) => v?.trim() || 'Assessment'),
     kind: VerdictKindSchema.catch('unverified'),
     confidence: ConfidenceSchema.catch('medium'),
-    summary: z.string().default(''),
+    summary: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? ''),
   }),
   originalSource: z
     .object({
@@ -40,25 +47,33 @@ export const ModelResultSchema = z.object({
       how: nullableStr,
     })
     .nullish(),
-  claims: z
-    .array(
+  claims: z.preprocess(
+    (v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((c) => isRecord(c) && typeof c.text === 'string' && c.text.trim()) : []),
+    z.array(
       z.object({
         text: z.string().min(1),
         status: ClaimStatusSchema.catch('unverified'),
-        note: z.string().default(''),
-        sourceUrls: z.array(z.string()).default([]),
+        note: z
+          .string()
+          .nullish()
+          .transform((v) => v ?? ''),
+        sourceUrls: z.preprocess((v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((u) => typeof u === 'string' && u) : []), z.array(z.string())),
       }),
-    )
-    .default([]),
-  sources: z
-    .array(
+    ),
+  ),
+  sources: z.preprocess(
+    (v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((s) => isRecord(s) && typeof s.url === 'string' && s.url.trim()) : []),
+    z.array(
       z.object({
-        title: z.string().default(''),
+        title: z
+          .string()
+          .nullish()
+          .transform((v) => v ?? ''),
         url: z.string().min(1),
         date: nullableStr,
       }),
-    )
-    .default([]),
+    ),
+  ),
   notes: nullableStr,
 });
 export type ModelResult = z.infer<typeof ModelResultSchema>;
@@ -143,7 +158,7 @@ export function extractJsonBlock(text: string): { narrative: string; jsonText: s
 
 export function parseModelResult(jsonText: string | null): { ok: true; value: ModelResult } | { ok: false; error: string } {
   if (!jsonText) return { ok: false, error: 'no JSON block' };
-  const attempts = [jsonText, repairJson(jsonText)];
+  const attempts = [jsonText, repairJson(jsonText, false), repairJson(jsonText, true)];
   let lastError = '';
   for (const t of attempts) {
     try {
@@ -158,10 +173,13 @@ export function parseModelResult(jsonText: string | null): { ok: true; value: Mo
   return { ok: false, error: lastError };
 }
 
-/** Common LLM JSON slips: trailing commas, smart quotes, unterminated final brace. */
-export function repairJson(s: string): string {
+/**
+ * Common LLM JSON slips: trailing commas and an unterminated final brace; optionally smart quotes
+ * (last resort, since replacing them inside string values can make things worse).
+ */
+export function repairJson(s: string, smartQuotes = true): string {
   let t = s.trim();
-  t = t.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+  if (smartQuotes) t = t.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
   t = t.replace(/,\s*([}\]])/g, '$1');
   const opens = (t.match(/{/g) ?? []).length;
   const closes = (t.match(/}/g) ?? []).length;

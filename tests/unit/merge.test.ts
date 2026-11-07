@@ -70,3 +70,18 @@ describe('resolveClaims / resolveOriginal', () => {
     expect(o.sourceId).toBe(s.find((x) => x.domain === 'archive.org')!.id);
   });
 });
+
+describe('original source linking', () => {
+  it('only links the original-source card on an exact URL match, never a same-domain redirect', () => {
+    const s = buildSources(model, raw);
+    const o = resolveOriginal(
+      {
+        ...model,
+        originalSource: { title: 'Some other QI page', url: 'https://quoteinvestigator.com/2020/01/01/other/', publisher: 'QI', date: null, how: null },
+      },
+      s,
+    )!;
+    expect(o.url).toBe('https://quoteinvestigator.com/2020/01/01/other/');
+    expect(o.sourceId).toBeUndefined();
+  });
+});

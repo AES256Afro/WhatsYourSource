@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getShortcutLabel, shortcutLabelForPlatform } from '@/lib/shortcut';
 
-/** The keyboard shortcut as currently bound, for labels. Starts with the platform default. */
-export function useShortcutLabel(): string {
-  const [label, setLabel] = useState(() => shortcutLabelForPlatform());
+/** The keyboard shortcut as currently bound, for labels; null when the user removed the binding. Starts with the platform default. */
+export function useShortcutLabel(): string | null {
+  const [label, setLabel] = useState<string | null>(() => shortcutLabelForPlatform());
   useEffect(() => {
     let alive = true;
     void getShortcutLabel().then((l) => alive && setLabel(l));

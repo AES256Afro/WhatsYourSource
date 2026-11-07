@@ -17,14 +17,15 @@ export type CheckEvent =
 export interface RunOptions {
   /** Second, tool-less call to coerce the output into JSON when the first pass didn't. */
   repair?: boolean;
-  image?: { base64: string; mime: string; provenance?: LocalProvenance; provenanceSummary?: string };
+  image?: { base64: string; mime: string; provenance?: LocalProvenance; provenanceFacts?: string; provenanceMetadata?: string };
 }
 
 export async function* runCheck(input: CheckInput, provider: LlmProvider, signal: AbortSignal, opts: RunOptions = {}): AsyncGenerator<CheckEvent> {
   const req = buildRequest(input, {
     imageBase64: opts.image?.base64,
     imageMime: opts.image?.mime,
-    provenanceSummary: opts.image?.provenanceSummary,
+    provenanceFacts: opts.image?.provenanceFacts,
+    provenanceMetadata: opts.image?.provenanceMetadata,
   });
 
   let text = '';

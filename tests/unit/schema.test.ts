@@ -63,3 +63,23 @@ describe('repairJson', () => {
     expect(JSON.parse(repairJson('{"a":{"b":1}'))).toEqual({ a: { b: 1 } });
   });
 });
+
+describe('lenient model result', () => {
+  it('drops null or empty sources and claims instead of failing the whole result', () => {
+    const r = parseModelResult(
+      '{"verdict":{"label":null,"kind":"supported","confidence":"high","summary":null},"claims":[{"text":"ok","status":"supported","sourceUrls":[null,"https://a.example"]},{"text":"","status":"x"},null],"sources":[{"title":null,"url":"https://a.example"},{"title":"no url","url":null},null]}',
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value.verdict.label).toBe('Assessment');
+      expect(r.value.claims).toHaveLength(1);
+      expect(r.value.claims[0]?.sourceUrls).toEqual(['https://a.example']);
+      expect(r.value.sources).toHaveLength(1);
+    }
+  });
+  it('tries without smart-quote replacement before with it', () => {
+    const r = parseModelResult('{"verdict":{"label":"x","kind":"supported","confidence":"high","summary":"she said “hi”",},}');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.verdict.summary).toBe('she said “hi”');
+  });
+});

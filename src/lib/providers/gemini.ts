@@ -67,7 +67,8 @@ export class GeminiProvider implements LlmProvider {
       generationConfig: { temperature: 0.2 },
     };
 
-    yield { type: 'status', message: tools.length ? 'Asking Google AI (with Google Search)…' : 'Asking Google AI…' };
+    const searching = !req.plain && req.wantSearch && this.cfg.grounding;
+    yield { type: 'status', message: searching ? 'Asking Google AI (with Google Search)…' : 'Asking Google AI…' };
 
     let res: Response;
     try {

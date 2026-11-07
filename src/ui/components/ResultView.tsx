@@ -88,13 +88,13 @@ export function ResultView({
 
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-ink-2">
           <ProviderBadge label={result.provider.model || result.provider.label} />
-          <span>
+          <span title={usd && result.searchQueries.length ? 'Upper bound: searches are only billed past the provider’s free allowance.' : undefined}>
             {[
               result.searchQueries.length ? `${result.searchQueries.length} search${result.searchQueries.length === 1 ? '' : 'es'}` : null,
               result.usage?.inputTokens || result.usage?.outputTokens
                 ? `${fmtK((result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0))} tokens`
                 : null,
-              usd,
+              usd ? (result.searchQueries.length ? `up to ${usd}` : usd) : null,
             ]
               .filter(Boolean)
               .join(' · ')}

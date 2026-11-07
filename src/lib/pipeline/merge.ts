@@ -15,7 +15,7 @@ export function buildSources(model: ModelResult | null, raw: RawSource[]): Sourc
   let nextId = 1;
 
   for (const r of raw) {
-    if (!r.url) continue;
+    if (!r.url || !isHttpUrl(r.url)) continue;
     const norm = normalizeUrl(r.url);
     if (byNorm.has(norm)) continue;
     const s: Source = {
@@ -77,7 +77,8 @@ export function resolveClaims(model: ModelResult | null, sources: Source[]): Cla
 export function resolveOriginal(model: ModelResult | null, sources: Source[]): OriginalSource | undefined {
   const o = model?.originalSource;
   if (!o || (!o.title && !o.url)) return undefined;
-  const match = o.url ? findSource(sources, o.url) : undefined;
+  // Exact page only: a same-domain grounding redirect would open a different article under this card.
+  const match = o.url ? findSource(sources, o.url, { exact: true }) : undefined;
   return {
     title: o.title || match?.title || o.url || '',
     url: match?.url ?? (o.url && isHttpUrl(o.url) ? o.url : undefined),
@@ -88,14 +89,12 @@ export function resolveOriginal(model: ModelResult | null, sources: Source[]): O
   };
 }
 
-export function findSource(sources: Source[], url: string): Source | undefined {
+export function findSource(sources: Source[], url: string, opts: { exact?: boolean } = {}): Source | undefined {
   if (!url) return undefined;
   const norm = normalizeUrl(url);
-  return (
-    sources.find((s) => normalizeUrl(s.url) === norm) ??
-    sources.find((s) => s.domain === domainOf(url) && s.verified) ??
-    sources.find((s) => s.domain === domainOf(url))
-  );
+  const exact = sources.find((s) => normalizeUrl(s.url) === norm);
+  if (exact || opts.exact) return exact;
+  return sources.find((s) => s.domain === domainOf(url) && s.verified) ?? sources.find((s) => s.domain === domainOf(url));
 }
 
 function cleanTitle(title: string | undefined, domain: string): string {

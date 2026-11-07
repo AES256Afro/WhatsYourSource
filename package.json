@@ -23,7 +23,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"preview/**/*.{ts,tsx}\" \"scripts/**/*.mjs\" \"*.{ts,js,json,md}\" \"docs/*.md\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"preview/**/*.{ts,tsx}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"preview/**/*.{ts,tsx}\"",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",

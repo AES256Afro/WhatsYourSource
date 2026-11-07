@@ -18,12 +18,28 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 - The floating chip and the shortcut open Google AI Mode directly when that is the chosen trigger or default, without opening the side panel.
 
 ### Fixed
+- Starting a new check while one was running no longer leaves the panel on "Cancelled".
+- A check now runs in one panel even when several windows have the panel open.
+- Model answers with a missing source URL or an empty claim no longer fall back to the "prose only" banner.
+- Post text from X, Reddit and similar keeps its line breaks instead of running together.
+- Two quick settings edits can no longer overwrite each other; the storage-limit field no longer rewrites itself while typing.
+- History groups and dates are correct across daylight-saving changes and across years.
+- "Likely original source" links only when it is exactly that page.
+- Local models on Firefox: the default MV3 content-security policy upgraded `http://localhost` calls to `https`, so Ollama and LM Studio never answered.
+- The floating chip no longer appears while selecting text you are typing in a form field or editor.
+- "Open all" sources opens every link, not just the first (popup blockers stopped the rest).
+- Gemini price estimates were double the current list price for 3.8 Flash; `gemini-4-argon` added to the model menu.
 - The keyboard shortcut lost the user gesture and opened a detached window instead of the side panel.
 - One invalid stored setting no longer resets every other setting to its default.
 - Pasted text is no longer attributed to the page that happened to be open.
 - Progress row said "Searched Google" for every provider.
 
 ### Security
+- Image metadata and every page-derived field (title, URL, author, time, links) are passed to the model as untrusted data; the untrusted delimiter can no longer be closed by content.
+- A local model may only read pages that its own search returned or that the checked content linked.
+- Page snapshots are taken only of the page the check came from, never of whatever tab is active.
+- The floating chip responds only to selections made by real input, and never inside form fields or editors.
+- Plain-http endpoints off this machine show a warning before a key travels unencrypted.
 - API keys are stored apart from the settings the content script reads on web pages.
 - The local-model `fetch_page` tool only reaches public hosts, never the user's own endpoints, and caps response bodies.
 - Saved pages are never rendered from a `blob:` URL with the extension's origin; `data:` links are stripped from snapshots.

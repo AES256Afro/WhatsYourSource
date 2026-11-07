@@ -25,13 +25,13 @@ export function shortcutLabelForPlatform(binding = DEFAULT_SHORTCUT): string {
     .replace(/\+/g, '');
 }
 
-/** The live binding from the browser, or the default when it cannot be read. */
-export async function getShortcutLabel(): Promise<string> {
+/** The live binding from the browser, the default when it cannot be read, or null when the user unbound it. */
+export async function getShortcutLabel(): Promise<string | null> {
   try {
     const all = await browser.commands.getAll();
     const cmd = all.find((c) => c.name === COMMAND_ID);
     if (cmd?.shortcut) return shortcutLabelForPlatform(cmd.shortcut);
-    if (cmd && !cmd.shortcut) return 'not set';
+    if (cmd && !cmd.shortcut) return null;
   } catch {
     /* no commands API here */
   }

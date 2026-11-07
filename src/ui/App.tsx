@@ -42,6 +42,7 @@ export function App() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [historyTick, setHistoryTick] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
+  const runSeq = useRef(0);
   const seenJobs = useRef(new Set<string>());
   const settingsRef = useRef<Settings | null>(null);
   useEffect(() => {
@@ -56,6 +57,9 @@ export function App() {
     async (input: CheckInput, tabId?: number) => {
       const s = settingsRef.current;
       if (!s) return;
+      // Each run gets a token; anything a superseded run tries to show after this point is dropped.
+      const myRun = ++runSeq.current;
+      const stale = () => runSeq.current !== myRun;
       abortRef.current?.abort();
       setError(null);
       setResult(null);
@@ -74,8 +78,9 @@ export function App() {
         return;
       }
 
-      // Capture the page as it is *now*, in parallel with the AI call.
-      const snapshotPromise = s.privacy.snapshots ? captureFromTab(tabId, input.kind === 'text' ? input.text : undefined) : Promise.resolve(null);
+      // Capture the page as it is *now*, in parallel with the AI call. Only the page the input came from.
+      const pageOfInput = input.kind === 'page' ? input.url : input.pageUrl;
+      const snapshotPromise = s.privacy.snapshots ? captureFromTab(tabId, input.kind === 'text' ? input.text : undefined, pageOfInput) : Promise.resolve(null);
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -92,12 +97,14 @@ export function App() {
             input,
             tabId,
             (m) => {
+              if (stale()) return;
               prep.statuses = [...prep.statuses, m];
               setRun({ ...prep });
             },
             controller.signal,
           );
         } catch (e) {
+          if (stale()) return;
           const err = e instanceof ImageFetchError ? e : null;
           setError({
             input,
@@ -115,6 +122,7 @@ export function App() {
           setView('error');
           return;
         }
+        if (stale()) return;
       }
 
       for (const id of order) {
@@ -135,7 +143,7 @@ export function App() {
         let failed: RunError | null = null;
 
         for await (const ev of runCheck(input, provider, controller.signal, image ? { image } : {})) {
-          if (controller.signal.aborted) break;
+          if (stale()) return;
           switch (ev.type) {
             case 'status':
               if (!ev.done) state.statuses = [...state.statuses, ev.message];
@@ -157,13 +165,14 @@ export function App() {
               finished = ev.result;
               break;
             case 'error':
-              failed = { code: ev.code, message: ev.message, details: ev.details };
+              failed = { code: ev.code, message: ev.message, details: ev.details, provider: id };
               break;
           }
           setRun({ ...state });
           if (finished || failed) break;
         }
 
+        if (stale()) return;
         if (controller.signal.aborted) {
           setError({ input, error: { code: 'cancelled', message: 'Cancelled.' } });
           setView('error');
@@ -175,6 +184,7 @@ export function App() {
           try {
             const snap = await snapshotPromise;
             await saveCheck(finished, snap);
+            if (stale()) return;
             setSavedId(finished.id);
             setSavedWithSnapshot(!!snap);
             setHistoryTick((t) => t + 1);
@@ -245,7 +255,7 @@ export function App() {
             onAllowHost={
               error.error.code === 'image-permission' && error.input.kind === 'image'
                 ? async () => {
-                    const ok = await requestOrigin((error.input as { srcUrl: string }).srcUrl);
+                    const ok = await requestOrigin(error.input.kind === 'image' ? error.input.srcUrl : '');
                     if (ok) void startCheck(error.input);
                   }
                 : undefined
@@ -262,9 +272,22 @@ export function App() {
                 </span>
                 <span className="text-ink-2">Add a Google AI key below (free), or open this check on Google’s AI Mode page — no key needed.</span>
                 <div className="flex gap-2">
-                  <button className="wys-btn wys-btn-primary grow" onClick={() => openWebMode(needsSetup)}>
-                    Open in Google AI Mode <External size={13} />
-                  </button>
+                  {providerOrder(settings).some((id) => providerReady(settings, id)) ? (
+                    <button
+                      className="wys-btn wys-btn-primary grow"
+                      onClick={() => {
+                        const pending = needsSetup;
+                        setNeedsSetup(null);
+                        void startCheck(pending);
+                      }}
+                    >
+                      Check now
+                    </button>
+                  ) : (
+                    <button className="wys-btn wys-btn-primary grow" onClick={() => openWebMode(needsSetup)}>
+                      Open in Google AI Mode <External size={13} />
+                    </button>
+                  )}
                   <button className="wys-btn" onClick={() => setNeedsSetup(null)}>
                     Dismiss
                   </button>

@@ -2,13 +2,15 @@ import type { ImageInput } from '../messaging/protocol';
 import type { LocalProvenance } from '../pipeline/schema';
 import { ImageFetchError, fetchImageBytes, prepareForModel, screenshotImage, type ImageBytes } from './bytes';
 import { phashFromBitmap } from './phash';
-import { provenanceSummary, readProvenance } from './provenance';
+import { provenanceFacts, provenanceMetadata, provenanceSummary, readProvenance } from './provenance';
 
 export interface PreparedImage {
   base64: string;
   mime: string;
   provenance: LocalProvenance;
   provenanceSummary: string;
+  provenanceFacts: string;
+  provenanceMetadata: string;
   via: ImageBytes['via'];
 }
 
@@ -45,6 +47,14 @@ export async function prepareImage(input: ImageInput, tabId: number | undefined,
     /* canvas unavailable */
   }
   if (img.via === 'screenshot') provenance.exif = undefined;
-  const summary = provenanceSummary(provenance) + (img.via === 'screenshot' ? '. Note: these are screenshot pixels, so file metadata is unavailable.' : '');
-  return { base64: model.base64, mime: model.mime, provenance, provenanceSummary: summary, via: img.via };
+  const note = img.via === 'screenshot' ? '. Note: these are screenshot pixels, so file metadata is unavailable.' : '';
+  return {
+    base64: model.base64,
+    mime: model.mime,
+    provenance,
+    provenanceSummary: provenanceSummary(provenance) + note,
+    provenanceFacts: provenanceFacts(provenance) + note,
+    provenanceMetadata: provenanceMetadata(provenance),
+    via: img.via,
+  };
 }

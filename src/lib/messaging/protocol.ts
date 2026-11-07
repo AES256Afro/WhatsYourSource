@@ -5,43 +5,62 @@ import { z } from 'zod';
  * is validated with these schemas. Page-derived strings are never trusted beyond "it's a string".
  */
 
+/**
+ * Every string here is page-controlled. Lengths are bounded so a crafted page cannot stuff kilobytes
+ * into the model's framing text; the producers (content script, extractor) truncate to these first.
+ */
+export const LIMITS = {
+  text: 12_000,
+  surrounding: 2_000,
+  url: 2_048,
+  title: 300,
+  short: 120,
+  alt: 400,
+  nearby: 1_000,
+  excerpt: 4_000,
+} as const;
+
+const url = z.string().max(LIMITS.url);
+const httpUrl = url.refine((u) => /^https?:\/\//i.test(u), 'http(s) only');
+
 export const TextInputSchema = z.object({
   kind: z.literal('text'),
-  text: z.string().min(1),
-  pageUrl: z.string(),
-  pageTitle: z.string(),
+  text: z.string().min(1).max(LIMITS.text),
+  pageUrl: url,
+  pageTitle: z.string().max(LIMITS.title),
   /** A little context around the selection (same paragraph), to help disambiguate. */
-  surrounding: z.string().optional(),
+  surrounding: z.string().max(LIMITS.surrounding).optional(),
 });
 
 export const ImageInputSchema = z.object({
   kind: z.literal('image'),
-  srcUrl: z.string(),
-  pageUrl: z.string(),
-  pageTitle: z.string(),
-  alt: z.string().optional(),
-  nearbyText: z.string().optional(),
+  /** http(s), data: or blob: — whatever the page used; only http(s) is ever linked. */
+  srcUrl: z.string().max(2_000_000),
+  pageUrl: url,
+  pageTitle: z.string().max(LIMITS.title),
+  alt: z.string().max(LIMITS.alt).optional(),
+  nearbyText: z.string().max(LIMITS.nearby).optional(),
 });
 
 export const PageInputSchema = z.object({
   kind: z.literal('page'),
-  url: z.string(),
-  title: z.string(),
-  excerpt: z.string().optional(),
+  url,
+  title: z.string().max(LIMITS.title),
+  excerpt: z.string().max(LIMITS.excerpt).optional(),
 });
 
 /** A social post (or any article-like block) extracted from under the cursor. */
 export const PostInputSchema = z.object({
   kind: z.literal('post'),
-  pageUrl: z.string(),
-  pageTitle: z.string(),
-  site: z.string(),
-  permalink: z.string().optional(),
-  author: z.string().optional(),
-  postedAt: z.string().optional(),
-  text: z.string().min(1),
-  images: z.array(z.string()).max(6),
-  links: z.array(z.string()).max(12),
+  pageUrl: url,
+  pageTitle: z.string().max(LIMITS.title),
+  site: z.string().max(LIMITS.short),
+  permalink: httpUrl.optional(),
+  author: z.string().max(LIMITS.short).optional(),
+  postedAt: z.string().max(LIMITS.short).optional(),
+  text: z.string().min(1).max(LIMITS.text),
+  images: z.array(httpUrl).max(6),
+  links: z.array(httpUrl).max(12),
 });
 
 export const CheckInputSchema = z.discriminatedUnion('kind', [TextInputSchema, ImageInputSchema, PageInputSchema, PostInputSchema]);
@@ -56,15 +75,17 @@ export const JobSchema = z.object({
   id: z.string(),
   createdAt: z.number(),
   tabId: z.number().optional(),
+  /** The window whose panel should run it; other open panels ignore it. */
+  windowId: z.number().optional(),
   input: CheckInputSchema,
 });
 export type Job = z.infer<typeof JobSchema>;
 
 export const SelectionInfoSchema = z.object({
-  text: z.string(),
-  pageUrl: z.string(),
-  pageTitle: z.string(),
-  surrounding: z.string().optional(),
+  text: z.string().max(LIMITS.text),
+  pageUrl: url,
+  pageTitle: z.string().max(LIMITS.title),
+  surrounding: z.string().max(LIMITS.surrounding).optional(),
 });
 export type SelectionInfo = z.infer<typeof SelectionInfoSchema>;
 

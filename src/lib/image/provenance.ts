@@ -49,20 +49,31 @@ export async function readProvenance(bytes: Uint8Array, mime: string): Promise<L
   return out;
 }
 
-export function provenanceSummary(p: LocalProvenance): string {
+/** Facts the extension measured itself. Safe to present to the model as reliable. */
+export function provenanceFacts(p: LocalProvenance): string {
   const bits: string[] = [];
   if (p.width && p.height) bits.push(`${p.width}x${p.height} ${p.mime ?? ''}`.trim());
-  bits.push(p.c2pa?.present ? 'C2PA Content Credentials present (unverified)' : 'no C2PA Content Credentials');
-  if (p.exif && Object.keys(p.exif).length)
-    bits.push(
-      'metadata: ' +
-        Object.entries(p.exif)
-          .map(([k, v]) => `${k}=${v}`)
-          .join('; '),
-    );
-  else bits.push('no EXIF/XMP metadata (typical after social-media upload)');
-  if (p.aiHints?.length) bits.push('AI-generation hints in metadata: ' + p.aiHints.join('; '));
+  if (p.bytes) bits.push(`${Math.round(p.bytes / 1024)} KB`);
+  bits.push(p.c2pa?.present ? 'a C2PA Content Credentials manifest is present (not verified)' : 'no C2PA Content Credentials');
+  bits.push(
+    p.exif && Object.keys(p.exif).length ? `${Object.keys(p.exif).length} metadata fields present` : 'no EXIF/XMP metadata (typical after social-media upload)',
+  );
+  if (p.aiHints?.length) bits.push('metadata names an AI generator: ' + p.aiHints.join('; '));
   return bits.join('. ');
+}
+
+/** The free text inside the file. Whoever made or edited the file wrote it, so it is a claim, not a fact. */
+export function provenanceMetadata(p: LocalProvenance): string {
+  if (!p.exif) return '';
+  return Object.entries(p.exif)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n');
+}
+
+/** One-line summary for the UI and history. */
+export function provenanceSummary(p: LocalProvenance): string {
+  const meta = provenanceMetadata(p);
+  return provenanceFacts(p) + (meta ? `. Metadata: ${meta.replace(/\n/g, '; ')}` : '');
 }
 
 function pick(out: Record<string, string>, src: Record<string, unknown>, key: string, label: string) {

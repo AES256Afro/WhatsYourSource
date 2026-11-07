@@ -14,7 +14,9 @@ export function googleAiModeUrl(input: CheckInput): string {
       q = `${QUESTION} "${truncate(input.text.replace(/\s+/g, ' ').trim(), 900)}"`;
       break;
     case 'image':
-      q = `Is this image real, and where can I find its original source? Image: ${input.srcUrl} (seen on ${input.pageUrl})`;
+      q = /^https?:/i.test(input.srcUrl)
+        ? `Is this image real, and where can I find its original source? Image: ${truncate(input.srcUrl, 500)} (seen on ${input.pageUrl})`
+        : `Is the image on this page real, and where can I find its original source? ${input.pageUrl}`;
       break;
     case 'page':
       q = `Is what this page says true, and where can I find the source of this topic? ${input.url}`;

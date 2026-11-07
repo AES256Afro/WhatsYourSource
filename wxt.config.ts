@@ -17,6 +17,9 @@ export default defineConfig({
     short_name: 'WhatsYourSource',
     description: 'Check the source of highlighted text, images and posts with the AI of your choice: Google AI by default, your own key, or a local model.',
     permissions: ['contextMenus', 'storage', 'unlimitedStorage', 'activeTab', 'scripting'],
+    // Firefox's MV3 default is "script-src 'self'; upgrade-insecure-requests", which silently turns
+    // http://localhost:11434 into https:// and breaks every local model. Say exactly what we want.
+    content_security_policy: { extension_pages: "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none';" },
     host_permissions: [
       'https://generativelanguage.googleapis.com/*',
       'https://api.anthropic.com/*',
@@ -40,7 +43,7 @@ export default defineConfig({
           browser_specific_settings: {
             gecko: {
               id: 'whatsyoursource@aes256afro.github.io',
-              strict_min_version: '128.0',
+              strict_min_version: '140.0',
               // AMO requires this. The only thing ever sent off-device is the content the user
               // explicitly asks to check, to the AI provider they configured.
               data_collection_permissions: { required: ['websiteContent'] },

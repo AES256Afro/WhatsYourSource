@@ -1,7 +1,18 @@
 import type { CheckInput } from '@/lib/messaging/protocol';
-import { domainOf } from '@/lib/util/url';
+import { domainOf, isHttpUrl } from '@/lib/util/url';
 import { Label } from './common';
 import { Globe, Image, Lines, Link as LinkIcon } from './Icons';
+
+function ImageFrame({ href, children }: { href?: string; children: React.ReactNode }) {
+  const cls = 'block overflow-hidden rounded-[10px] border border-line bg-surface-2';
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+      {children}
+    </a>
+  ) : (
+    <div className={cls}>{children}</div>
+  );
+}
 
 function displayUrl(u: string): string {
   if (u.startsWith('data:')) return `inline image (${Math.round((u.length * 3) / 4 / 1024)} KB)`;
@@ -74,10 +85,10 @@ export function InputCard({ input, when, clamp }: { input: CheckInput; when?: st
           {input.kind === 'page' && (input.title ? `${input.title} — ${input.url}` : input.url)}
         </p>
       </div>
-      {input.kind === 'image' && (
-        <a href={input.srcUrl} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-[10px] border border-line bg-surface-2">
+      {input.kind === 'image' && /^(https?:|data:image\/|blob:)/i.test(input.srcUrl) && (
+        <ImageFrame href={isHttpUrl(input.srcUrl) ? input.srcUrl : undefined}>
           <img src={input.srcUrl} alt={input.alt ?? 'The checked image'} className="block max-h-[180px] w-full object-contain" loading="lazy" />
-        </a>
+        </ImageFrame>
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import type { PostInput } from '../messaging/protocol';
+import { LIMITS, type PostInput } from '../messaging/protocol';
 
 /**
  * Generic post extraction: from the element the user right-clicked, walk up to the nearest
@@ -49,7 +49,7 @@ export function extractPost(target: Element | null, doc: Document = document): P
   const author = container.getAttribute('author') ?? (authorEl?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
 
   const timeEl = container.querySelector('time[datetime], time');
-  const postedAt = timeEl?.getAttribute('datetime') ?? timeEl?.textContent?.trim() ?? undefined;
+  const postedAt = (timeEl?.getAttribute('datetime') ?? timeEl?.textContent?.replace(/\s+/g, ' ').trim() ?? '').slice(0, LIMITS.short);
 
   const permalink =
     absolute((container as HTMLElement).getAttribute('permalink')) ??
@@ -64,7 +64,7 @@ export function extractPost(target: Element | null, doc: Document = document): P
   const images: string[] = [];
   for (const img of Array.from(container.querySelectorAll('img'))) {
     const src = img.currentSrc || img.src;
-    if (!src || !/^https?:/i.test(src)) continue;
+    if (!src || !/^https?:/i.test(src) || src.length > LIMITS.url) continue;
     if (/avatar|profile|emoji|icon|logo|badge/i.test(src + ' ' + (img.alt ?? '') + ' ' + img.className)) continue;
     const w = img.naturalWidth || img.width;
     const h = img.naturalHeight || img.height;
@@ -91,9 +91,9 @@ export function extractPost(target: Element | null, doc: Document = document): P
 
   return {
     kind: 'post',
-    pageUrl: location.href,
-    pageTitle: doc.title,
-    site,
+    pageUrl: location.href.slice(0, LIMITS.url),
+    pageTitle: doc.title.slice(0, LIMITS.title),
+    site: site.slice(0, LIMITS.short),
     permalink,
     author: author || undefined,
     postedAt: postedAt || undefined,
@@ -127,19 +127,39 @@ function visibleText(el: Element): string {
   const clone = el.cloneNode(true) as Element;
   for (const junk of Array.from(clone.querySelectorAll('script, style, noscript, svg, button, [aria-hidden="true"], [role="button"], nav, form')))
     junk.remove();
-  const raw = (clone as HTMLElement).innerText ?? clone.textContent ?? '';
-  return raw
+  // `innerText` on a detached clone is plain textContent (no layout → no line breaks), so SPA markup
+  // with no whitespace between elements would glue author, time and paragraphs together.
+  const BLOCK = /^(P|DIV|LI|BR|H[1-6]|BLOCKQUOTE|PRE|TR|SECTION|ARTICLE|HEADER|FOOTER|UL|OL|TABLE|FIGCAPTION|DD|DT|HR)$/;
+  const out: string[] = [];
+  const walk = (n: Node) => {
+    if (n.nodeType === Node.TEXT_NODE) {
+      out.push(n.nodeValue ?? '');
+      return;
+    }
+    if (n.nodeType !== Node.ELEMENT_NODE) return;
+    const tag = (n as Element).tagName;
+    if (BLOCK.test(tag)) out.push('\n');
+    for (const c of Array.from(n.childNodes)) walk(c);
+    if (BLOCK.test(tag)) out.push('\n');
+    else if (tag === 'TD' || tag === 'TH' || tag === 'SPAN' || tag === 'A') out.push(' ');
+  };
+  walk(clone);
+  return out
+    .join('')
     .split('\n')
-    .map((l) => l.trim())
+    .map((l) => l.replace(/\s+/g, ' ').trim())
     .filter(Boolean)
     .join('\n')
     .replace(/\n{3,}/g, '\n\n');
 }
-
+/** Absolute http(s) URL, or nothing: `javascript:`, `data:` and friends never leave the page. */
 function absolute(href: string | null | undefined): string | undefined {
   if (!href) return undefined;
   try {
-    return new URL(href, location.href).toString();
+    const u = new URL(href, location.href);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return undefined;
+    const s = u.toString();
+    return s.length <= LIMITS.url ? s : undefined;
   } catch {
     return undefined;
   }

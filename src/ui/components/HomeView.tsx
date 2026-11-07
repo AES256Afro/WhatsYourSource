@@ -50,12 +50,16 @@ export function HomeView({
     };
     void refresh();
     const onActivated = () => void refresh();
+    // onUpdated fires for every tab on every change; only a finished load of the active tab matters here.
+    const onUpdated = (_id: number, info: { status?: string }, t: { active?: boolean }) => {
+      if (info.status === 'complete' && t.active) void refresh();
+    };
     browser.tabs.onActivated.addListener(onActivated);
-    browser.tabs.onUpdated.addListener(onActivated);
+    browser.tabs.onUpdated.addListener(onUpdated);
     return () => {
       alive = false;
       browser.tabs.onActivated.removeListener(onActivated);
-      browser.tabs.onUpdated.removeListener(onActivated);
+      browser.tabs.onUpdated.removeListener(onUpdated);
     };
   }, []);
 
@@ -104,8 +108,14 @@ export function HomeView({
         </div>
       ) : (
         <div className="rounded-xl border border-dashed border-line-2 p-3 text-[12px] leading-[17px] text-ink-2">
-          Highlight text on the page and a <strong className="text-ink">Check source</strong> chip appears — or press{' '}
-          <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">{shortcut}</kbd>. Right-click an image to check it.
+          Highlight text on the page and a <strong className="text-ink">Check source</strong> chip appears
+          {shortcut ? (
+            <>
+              {' '}
+              — or press <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">{shortcut}</kbd>
+            </>
+          ) : null}
+          . Right-click an image to check it.
         </div>
       )}
 

@@ -73,3 +73,24 @@ describe('pageTriggerTarget', () => {
     expect(pageTriggerTarget({ ...DEFAULT_SETTINGS, defaultProvider: 'webmode' })).toBe('webmode');
   });
 });
+
+describe('jobs are per window', () => {
+  it('ignores jobs addressed to another window', async () => {
+    const { jobIsForWindow } = await import('@/lib/jobs');
+    const base = { id: 'j', createdAt: 1, input: { kind: 'page' as const, url: 'https://e.com', title: '' } };
+    expect(jobIsForWindow({ ...base, windowId: 7 }, 7)).toBe(true);
+    expect(jobIsForWindow({ ...base, windowId: 7 }, 8)).toBe(false);
+    expect(jobIsForWindow(base, 8)).toBe(true);
+    expect(jobIsForWindow({ ...base, windowId: 7 }, undefined)).toBe(true);
+  });
+  it('serializes overlapping updates', async () => {
+    const { updateSettings, loadSettings } = await import('@/lib/storage/settings');
+    await Promise.all([
+      updateSettings((s) => ({ ...s, providers: { ...s.providers, gemini: { ...s.providers.gemini, apiKey: 'k1' } } })),
+      updateSettings((s) => ({ ...s, privacy: { ...s.privacy, chip: false } })),
+    ]);
+    const s = await loadSettings();
+    expect(s.providers.gemini.apiKey).toBe('k1');
+    expect(s.privacy.chip).toBe(false);
+  });
+});

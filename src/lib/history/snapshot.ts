@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { SnapshotPayloadSchema } from '../messaging/protocol';
 import { getTargetTab } from '../tabs';
+import { normalizeUrl } from '../util/url';
 import type { SnapshotInput, StoredSnapshot } from './db';
 
 /**
@@ -8,7 +9,10 @@ import type { SnapshotInput, StoredSnapshot } from './db';
  * visible-area screenshot. Both are best-effort: a restricted page, or one loaded before the
  * extension was installed, simply yields no snapshot.
  */
-export async function captureFromTab(tabId: number | undefined, highlight?: string): Promise<SnapshotInput | null> {
+export async function captureFromTab(tabId: number | undefined, highlight?: string, expectedUrl?: string): Promise<SnapshotInput | null> {
+  // Pasted text has no page; and a re-check or a popup-triggered check must never snapshot whatever
+  // tab happens to be active (it could be the user's bank). Only the page that was checked.
+  if (!expectedUrl || !/^https?:/i.test(expectedUrl)) return null;
   let id = tabId;
   let windowId: number | undefined;
   try {
@@ -29,6 +33,7 @@ export async function captureFromTab(tabId: number | undefined, highlight?: stri
     const reply: unknown = await browser.tabs.sendMessage(id, { type: 'wys:capture-snapshot', highlight });
     const parsed = SnapshotPayloadSchema.safeParse(reply);
     if (!parsed.success) return null;
+    if (normalizeUrl(parsed.data.url) !== normalizeUrl(expectedUrl)) return null;
     payload = parsed.data;
   } catch {
     return null;

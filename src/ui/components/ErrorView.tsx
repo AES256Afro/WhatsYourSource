@@ -1,4 +1,5 @@
 import type { CheckInput } from '@/lib/messaging/protocol';
+import { hostOf } from '@/lib/util/url';
 import { googleAiModeUrl } from '@/lib/webmode';
 import { Alert, External, Refresh, Sliders } from './Icons';
 import { InputCard } from './InputCard';
@@ -7,11 +8,13 @@ export interface RunError {
   code: string;
   message: string;
   details?: string;
+  /** Provider id the error came from, for provider-specific hints. */
+  provider?: string;
 }
 
 const HINT: Record<string, string> = {
   'no-key': 'Add an API key in settings, or open the check in Google AI Mode instead — that needs no key.',
-  auth: 'The provider rejected the key. Check it in settings; keys from Google AI Studio start with “AIza”.',
+  auth: 'The provider rejected the key. Check it in settings.',
   quota: 'You hit a rate limit or quota. Wait a minute, pick the cheaper model, or try another provider.',
   network: 'Couldn’t reach the provider. Check your connection, or for a local model, that the server is running.',
   blocked: 'The provider declined this content. Try a shorter selection or a different provider.',
@@ -48,7 +51,11 @@ export function ErrorView({
           {error.details && <span className="text-[11px] leading-[15px] text-bad-ink/80 wrap-break-word">{error.details}</span>}
         </div>
       </div>
-      <p className="m-0 text-[13px] leading-[19px] text-ink-2">{HINT[error.code] ?? 'Something unexpected happened. Try again, or use Google AI Mode.'}</p>
+      <p className="m-0 text-[13px] leading-[19px] text-ink-2">
+        {HINT[error.code] ?? 'Something unexpected happened. Try again, or use Google AI Mode.'}
+        {error.code === 'auth' && error.provider === 'gemini' && ' Keys from Google AI Studio start with “AIza”.'}
+        {error.code === 'auth' && error.provider === 'anthropic' && ' Anthropic keys start with “sk-ant-”.'}
+      </p>
       {onAllowHost && host && (
         <button className="wys-btn wys-btn-primary" onClick={onAllowHost}>
           Allow access to {host} and retry
@@ -67,12 +74,4 @@ export function ErrorView({
       </a>
     </div>
   );
-}
-
-function hostOf(u: string): string {
-  try {
-    return new URL(u).host;
-  } catch {
-    return '';
-  }
 }

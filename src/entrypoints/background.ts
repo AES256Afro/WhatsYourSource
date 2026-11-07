@@ -1,6 +1,7 @@
 import { defineBackground } from '#imports';
 import { browser, type Browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
+import { openPanelSync } from '@/lib/panel';
 import { MessageSchema, PostInputSchema, SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
 import { DEFAULT_SETTINGS, loadPublicSettings, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/webmode';
@@ -19,11 +20,6 @@ const MENU = {
 } as const;
 
 type MaybeTab = Browser.tabs.Tab | undefined;
-
-interface PanelApis {
-  sidePanel?: { open(opts: { windowId?: number; tabId?: number }): Promise<void> };
-  sidebarAction?: { open(): Promise<void> };
-}
 
 export default defineBackground(() => {
   /**
@@ -69,6 +65,7 @@ export default defineBackground(() => {
           await enqueueJob(
             { kind: 'text', text: sel.text, pageUrl: sel.pageUrl || pageUrl, pageTitle: sel.pageTitle || pageTitle, surrounding: sel.surrounding },
             tab?.id,
+            tab?.windowId,
           );
         })();
         return;
@@ -86,7 +83,7 @@ export default defineBackground(() => {
           return;
         }
         openPanel(tab);
-        void enqueueJob({ kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle }, tab?.id);
+        void enqueueJob({ kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle }, tab?.id, tab?.windowId);
         return;
       }
       case MENU.post: {
@@ -103,7 +100,7 @@ export default defineBackground(() => {
             }
           }
           if (settings.defaultProvider === 'webmode') await browser.tabs.create({ url: googleAiModeUrl(input) });
-          else await enqueueJob(input, tab?.id);
+          else await enqueueJob(input, tab?.id, tab?.windowId);
         })();
         return;
       }
@@ -114,7 +111,7 @@ export default defineBackground(() => {
           return;
         }
         openPanel(tab);
-        void enqueueJob(input, tab?.id);
+        void enqueueJob(input, tab?.id, tab?.windowId);
         return;
       }
     }
@@ -122,20 +119,26 @@ export default defineBackground(() => {
 
   browser.commands.onCommand.addListener((command, tab) => {
     if (command !== 'check-selection') return;
-    const target = pageTriggerTarget(settings);
+    let target = pageTriggerTarget(settings);
     // Synchronously, while the gesture is fresh. Firefox passes the tab; Chrome may not.
     if (target === 'panel' && tab) openPanel(tab);
     void (async () => {
+      // The in-memory copy may still be the defaults right after the worker woke up; re-read now
+      // that we are async anyway. (The panel may have opened needlessly; harmless.)
+      settings = await loadPublicSettings();
+      target = pageTriggerTarget(settings);
       const activeTab = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
       if (target === 'panel' && !tab) openPanel(activeTab);
       const sel = await resolveSelection(activeTab, '');
+      const pageUrl = sel.pageUrl || activeTab?.url || '';
+      if (!sel.text && !/^https?:/i.test(pageUrl)) return; // nothing selected, on a page we cannot read
       const input: CheckInput = sel.text
         ? { kind: 'text', text: sel.text, pageUrl: sel.pageUrl, pageTitle: sel.pageTitle, surrounding: sel.surrounding }
-        : { kind: 'page', url: sel.pageUrl || activeTab?.url || '', title: sel.pageTitle || activeTab?.title || '' };
+        : { kind: 'page', url: pageUrl, title: sel.pageTitle || activeTab?.title || '' };
       if (target === 'webmode') {
         await browser.tabs.create({ url: googleAiModeUrl(input) });
       } else {
-        await enqueueJob(input, activeTab?.id);
+        await enqueueJob(input, activeTab?.id, activeTab?.windowId);
       }
     })();
   });
@@ -147,7 +150,7 @@ export default defineBackground(() => {
     switch (msg.type) {
       case 'wys:check': {
         openPanel(sender.tab);
-        void enqueueJob(msg.input, sender.tab?.id).then(
+        void enqueueJob(msg.input, sender.tab?.id, sender.tab?.windowId).then(
           () => sendResponse({ ok: true }),
           (e: unknown) => sendResponse({ ok: false, error: String(e) }),
         );
@@ -170,33 +173,8 @@ export default defineBackground(() => {
     }
   });
 
-  /**
-   * Must be called synchronously inside the user-gesture handler (no await before it),
-   * otherwise Chrome's sidePanel.open and Firefox's sidebarAction.open refuse.
-   */
   function openPanel(tab: MaybeTab) {
-    const apis = browser as unknown as PanelApis;
-    const fallback = () => browser.windows.create({ url: browser.runtime.getURL('/sidepanel.html'), type: 'popup', width: 420, height: 840 });
-    try {
-      if (apis.sidePanel?.open) {
-        const opts = tab?.windowId != null ? { windowId: tab.windowId } : { tabId: tab?.id };
-        apis.sidePanel.open(opts).catch((e: unknown) => {
-          console.warn('[wys] sidePanel.open failed, opening a window instead', e);
-          void fallback();
-        });
-        return;
-      }
-      if (apis.sidebarAction?.open) {
-        apis.sidebarAction.open().catch((e: unknown) => {
-          console.warn('[wys] sidebarAction.open failed, opening a window instead', e);
-          void fallback();
-        });
-        return;
-      }
-    } catch (e) {
-      console.warn('[wys] no side panel API', e);
-    }
-    void fallback();
+    openPanelSync(tab);
   }
 
   /** Ask the content script for the richer selection (context paragraph); fall back to the menu's text. */

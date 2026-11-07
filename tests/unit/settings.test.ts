@@ -46,3 +46,12 @@ describe('shortcut labels', () => {
     expect(shortcutLabelForPlatform('Ctrl+Shift+S')).toMatch(/Ctrl\+Shift\+S|⌘⇧S/);
   });
 });
+
+describe('pricing', () => {
+  it('prices by the longest matching model prefix', async () => {
+    const { estimateUsd } = await import('@/lib/providers/pricing');
+    expect(estimateUsd('gemini-3.5-flash-lite', 1_000_000, 0)).toBeCloseTo(0.3, 5);
+    expect(estimateUsd('gemini-3.8-flash', 1_000_000, 1_000_000, 1)).toBeCloseTo(0.75 + 3.75 + 0.014, 5);
+    expect(estimateUsd('unknown-model', 10, 10)).toBeUndefined();
+  });
+});

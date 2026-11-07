@@ -139,15 +139,23 @@ export function HistoryRow({ check: c, onOpen, compact }: { check: StoredCheck; 
 function groupByDay(items: StoredCheck[]): { label: string; items: StoredCheck[] }[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const yesterday = today.getTime() - 86_400_000;
+  const y = new Date(today);
+  y.setDate(y.getDate() - 1); // calendar day, so DST changes don't shift the boundary
+  const yesterday = y.getTime();
   const groups = new Map<string, StoredCheck[]>();
   for (const c of items) {
+    const d = new Date(c.createdAt);
     const label =
       c.createdAt >= today.getTime()
         ? 'Today'
         : c.createdAt >= yesterday
           ? 'Yesterday'
-          : new Date(c.createdAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+          : d.toLocaleDateString([], {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              ...(d.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}),
+            });
     groups.set(label, [...(groups.get(label) ?? []), c]);
   }
   return Array.from(groups, ([label, items]) => ({ label, items }));

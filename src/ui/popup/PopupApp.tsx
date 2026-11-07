@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
+import { openPanelSync } from '@/lib/panel';
 import { SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
 import { getTargetTab } from '@/lib/tabs';
 import { googleAiModeUrl } from '@/lib/webmode';
@@ -9,11 +10,6 @@ import { useSettings } from '../hooks/useSettings';
 import { useShortcutLabel } from '../hooks/useShortcutLabel';
 import { External, Logo, Sliders, Sparkle } from '../components/Icons';
 import { Label } from '../components/common';
-
-interface PanelApis {
-  sidePanel?: { open(opts: { windowId?: number; tabId?: number }): Promise<void> };
-  sidebarAction?: { open(): Promise<void> };
-}
 
 export function PopupApp() {
   const { settings, update } = useSettings();
@@ -50,15 +46,8 @@ export function PopupApp() {
   /** Open the panel synchronously (user gesture), then hand over the job. */
   const checkInPanel = () => {
     if (!input) return;
-    const apis = browser as unknown as PanelApis;
-    try {
-      if (apis.sidePanel?.open) void apis.sidePanel.open(tab?.windowId != null ? { windowId: tab.windowId } : { tabId: tab?.id });
-      else if (apis.sidebarAction?.open) void apis.sidebarAction.open();
-      else void browser.runtime.sendMessage({ type: 'wys:open-panel' });
-    } catch {
-      void browser.runtime.sendMessage({ type: 'wys:open-panel' });
-    }
-    void enqueueJob(input, tab?.id).then(() => window.close());
+    openPanelSync(tab ?? undefined, () => void browser.runtime.sendMessage({ type: 'wys:open-panel' }));
+    void enqueueJob(input, tab?.id, tab?.windowId).then(() => window.close());
   };
 
   const openWeb = () => {
@@ -106,7 +95,7 @@ export function PopupApp() {
         <div className="h-px bg-line" />
         <div className="flex items-center gap-2">
           <label htmlFor="wys-default-action" className="text-[13px]">
-            Default when I press {shortcut}
+            Default when I press {shortcut ?? 'the shortcut'}
           </label>
           <span className="grow" />
           <select

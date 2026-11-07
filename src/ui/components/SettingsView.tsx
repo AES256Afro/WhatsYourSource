@@ -4,7 +4,7 @@ import { Globe, Shield } from './Icons';
 import { AnthropicCard } from './settings/AnthropicCard';
 import { GeminiCard } from './settings/GeminiCard';
 import { LocalCard } from './settings/LocalCard';
-import { DebouncedTextarea, ProviderCard, Row, Toggle } from './settings/primitives';
+import { CommitInput, DebouncedTextarea, ProviderCard, Row, Toggle } from './settings/primitives';
 import { useShortcutLabel } from '../hooks/useShortcutLabel';
 
 type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
@@ -14,7 +14,8 @@ export function SettingsView({ settings, update, wide }: { settings: Settings; u
   return (
     <div className={`flex flex-col gap-4 p-3.5 ${wide ? 'mx-auto max-w-[720px]' : ''}`}>
       <p className="m-0 text-[12px] leading-[17px] text-ink-2">
-        Your selection is sent only to the provider marked as default, and only when you press Check. Keys stay on this device.
+        Your selection is sent only when you press Check, to the provider marked as default (and, if you enable it below, to the fallback provider; a local
+        model’s search tool also receives the search queries). Keys stay on this device.
       </p>
 
       <GeminiCard settings={settings} update={update} />
@@ -34,7 +35,7 @@ export function SettingsView({ settings, update, wide }: { settings: Settings; u
           <Row label="If the default provider fails or is over quota, try the next configured one">
             <Toggle checked={settings.fallback} onChange={(v) => update((s) => ({ ...s, fallback: v }))} />
           </Row>
-          <Row label={`${shortcut} and the floating chip`}>
+          <Row label={`${shortcut ?? 'The keyboard shortcut (not set)'} and the floating chip`}>
             <select
               className="wys-input h-8 w-auto text-[12px]"
               value={settings.shortcutAction}
@@ -61,18 +62,15 @@ export function SettingsView({ settings, update, wide }: { settings: Settings; u
           </Row>
           <Row label="Page snapshot storage limit" hint="Oldest snapshots are removed first; results are kept.">
             <span className="inline-flex items-center gap-1 text-[12px] text-ink-2">
-              <input
+              <CommitInput
+                id="wys-maxmb"
                 type="number"
-                min={10}
-                max={5000}
-                step={10}
-                className="wys-input h-8 w-20 text-[12px]"
-                value={settings.history.maxMb}
-                onChange={(e) => {
-                  const v = Math.min(5000, Math.max(10, Number(e.target.value) || 10));
+                className="h-8 w-20 text-[12px]"
+                value={String(settings.history.maxMb)}
+                onCommit={(raw) => {
+                  const v = Math.min(5000, Math.max(10, Math.round(Number(raw)) || 10));
                   void update((s) => ({ ...s, history: { ...s.history, maxMb: v } }));
                 }}
-                aria-label="Snapshot storage limit in megabytes"
               />
               MB
             </span>

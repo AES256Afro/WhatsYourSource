@@ -2,7 +2,7 @@ import { defineContentScript } from '#imports';
 import { browser } from 'wxt/browser';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
-import { MessageSchema, type SelectionInfo, type SnapshotPayload } from '@/lib/messaging/protocol';
+import { LIMITS, MessageSchema, type SelectionInfo, type SnapshotPayload } from '@/lib/messaging/protocol';
 import { extractPost } from '@/lib/post/extract';
 import { shortcutLabelForPlatform } from '@/lib/shortcut';
 import { DEFAULT_SETTINGS, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
@@ -35,14 +35,25 @@ export default defineContentScript({
       void browser.runtime.sendMessage({ type, input: { kind: 'text', ...sel } }).catch((e: unknown) => console.warn('[wys] could not reach the extension', e));
     });
 
+    // A page can set a selection itself (getSelection().addRange) and park it under the pointer so a
+    // click meant for the page lands on the chip. Only selections that follow real input count.
+    let lastUserInput = 0;
+    const noteInput = (e: Event) => {
+      if (e.isTrusted) lastUserInput = Date.now();
+    };
+    ctx.addEventListener(document, 'pointerup', noteInput, { capture: true, passive: true });
+    ctx.addEventListener(document, 'keyup', noteInput, { capture: true, passive: true });
+
     let timer: number | undefined;
     const schedule = () => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         if (!chipAllowed()) return chip.hide();
+        if (Date.now() - lastUserInput > 1500) return chip.hide();
         const sel = window.getSelection();
         if (!sel || sel.isCollapsed || sel.toString().trim().length < 3) return chip.hide();
         if (chip.contains(sel.anchorNode)) return;
+        if (isEditable(sel.anchorNode) || isEditable(sel.focusNode)) return chip.hide();
         const range = sel.getRangeAt(0);
         const rects = range.getClientRects();
         const last = rects[rects.length - 1] ?? range.getBoundingClientRect();
@@ -110,6 +121,14 @@ export default defineContentScript({
   },
 });
 
+/** Text the user is typing (inputs, textareas, contenteditable) is theirs, not something to check. */
+function isEditable(node: Node | null): boolean {
+  const el = node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement;
+  if (!el) return false;
+  if (el.closest('input, textarea, select')) return true;
+  return el.closest('[contenteditable]:not([contenteditable="false"])') !== null;
+}
+
 function currentSelection(): SelectionInfo | null {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed) return null;
@@ -121,8 +140,8 @@ function currentSelection(): SelectionInfo | null {
   const surrounding = block?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 1200);
   return {
     text: text.slice(0, 8000),
-    pageUrl: location.href,
-    pageTitle: document.title,
+    pageUrl: location.href.slice(0, LIMITS.url),
+    pageTitle: document.title.slice(0, LIMITS.title),
     surrounding: surrounding && surrounding.length > text.length ? surrounding : undefined,
   };
 }
@@ -169,8 +188,8 @@ function captureSnapshot(): SnapshotPayload {
     DOMPurify.removeHook('uponSanitizeAttribute', dropDataLinks);
   }
   return {
-    url: location.href,
-    title: article?.title || document.title,
+    url: location.href.slice(0, LIMITS.url),
+    title: (article?.title || document.title).slice(0, LIMITS.title),
     html: html.slice(0, 1_500_000),
     textLength: article?.textContent?.length ?? 0,
     capturedAt: Date.now(),

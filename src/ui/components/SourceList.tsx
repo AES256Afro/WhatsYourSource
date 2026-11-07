@@ -1,3 +1,4 @@
+import { browser } from 'wxt/browser';
 import type { Source } from '@/lib/pipeline/schema';
 import { Count, Label } from './common';
 import { External } from './Icons';
@@ -5,7 +6,7 @@ import { External } from './Icons';
 export function SourceList({ sources }: { sources: Source[] }) {
   if (sources.length === 0) return null;
   const openAll = () => {
-    for (const s of sources.filter((x) => x.verified)) window.open(s.url, '_blank', 'noopener');
+    for (const s of sources.filter((x) => x.verified)) void browser.tabs.create({ url: s.url, active: false });
   };
   return (
     <div className="flex flex-col gap-1.5">

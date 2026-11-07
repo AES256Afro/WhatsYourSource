@@ -4,15 +4,16 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 
 ## Decisions needed
 
+- **Firefox chip behaviour.** Firefox refuses `sidebarAction.open()` from a message handler, so a chip click there opens a small panel *window* (now reused, not stacked) while the context menu and shortcut open the real sidebar. Options: accept (current), or make the chip on Firefox open Google AI Mode / show a hint to use the shortcut. Your call.
 - **License.** I added an MIT `LICENSE` under the name "AES256Afro" because the stores and AMO's source submission require one. Change the name or the license if you want something else (Apache-2.0 adds a patent grant; GPL would force forks to stay open).
 
 ## Stage 1 status
 
 | Category | Sweeps run | Consecutive clean | Retired |
 |---|---|---|---|
-| Code | 1 | 0 | no |
-| Bug | 1 | 0 | no |
-| Security | 1 | 0 | no |
+| Code | 3 | 0 | no |
+| Bug | 3 | 0 | no |
+| Security | 3 | 0 | no |
 
 ## Stage 2 status
 
@@ -75,3 +76,74 @@ Findings and fixes:
 Checked and found fine: message validation with zod on every boundary; model output rendered as text only; `credentials: 'omit'` on image fetches; keys sent in headers not URLs; `anthropic-dangerous-direct-browser-access` is appropriate for a BYOK extension; no remote code; `npm audit` pending (next sweep).
 
 `clean: no`
+
+### 2026-11-07 · Live verification (part of bug sweep 2)
+
+- Google AI Mode `udm=50`: works (AI Mode tab renders the question and streams an answer).
+- Google Lens `lens.google.com/uploadbyurl?url=`: works (redirects to Lens results with Exact/Visual matches).
+- TinEye `tineye.com/search?url=`: serves a Cloudflare browser check first in a headless pane; a normal browser passes it. Kept.
+- Gemini models (aistudio.google.com/docs/models, 2026-11-07): `gemini-3.8-flash` current, `gemini-3.6-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite` stable, `gemini-4-argon` is the new flagship; 2.5 series deprecated and routed to 3.x from 2026-12-01; 2.0 series shut down. Menu updated (Argon added); the Verify button still lists whatever the key can use.
+- Gemini pricing (aistudio.google.com/docs/pricing): the table in `pricing.ts` was double the current price for 3.8 Flash ($0.75/$3.75 per 1M, not $1.50/$7.50). Updated; longest-prefix matching so Flash-Lite is not priced as Flash; test added. Grounding: 5,000 free/month shared across Gemini 3+, then $14/1k — unchanged.
+- `npm audit`: 0 vulnerabilities in production dependencies (what ships). 12 remain in dev-only tooling (web-ext's `fx-runner`/`shell-quote`, `sharp`'s libvips for the icon script, `minimatch`, `deepmerge`); none runs in the extension.
+
+### 2026-11-07 · Code sweep 2
+
+- `PanelApis` + open-the-panel logic duplicated in background and popup → `src/lib/panel.ts` `openPanelSync()`.
+- `hostOf()` duplicated in `ErrorView` and `LocalCard` → `src/lib/util/url.ts`.
+- `App.tsx`: `as { srcUrl: string }` cast replaced by narrowing.
+
+`clean: no`
+
+### 2026-11-07 · Bug sweep 2
+
+- **Firefox local models were broken**: Firefox's MV3 default extension CSP is `script-src 'self'; upgrade-insecure-requests`, which rewrites `http://localhost:11434` to `https://` and every Ollama/LM Studio call fails. Explicit `content_security_policy.extension_pages` set for both browsers (`wxt.config.ts`).
+- Chip appeared while selecting text inside inputs, textareas and contenteditable editors (the user's own typing) → suppressed.
+- Home view subscribed to `tabs.onUpdated` for every tab and every change, sending a message each time → only a completed load of the active tab.
+- "Open all" sources used `window.open` in a loop, which popup blockers stop after the first → `tabs.create` with `active: false`.
+
+`clean: no`
+
+### 2026-11-07 · Security sweep 2
+
+- Extension pages CSP now also `object-src 'none'; base-uri 'none'; frame-ancestors 'none'` (Chrome's default allowed `object-src 'self'`).
+- Reviewed and fine: generated manifests for both browsers (no `web_accessible_resources`, `<all_urls>` optional, `storage.session` not exposed to content scripts, `sidebar_action.open_at_install` off); the Gemini key is sent only as a header to `generativelanguage.googleapis.com`; the popup and panel validate every tab reply.
+
+`clean: no`
+
+### 2026-11-07 · Sweep 3 (code, bug, security) — with two independent read-only audits
+
+Two fresh-context auditors (one bug lens, one security lens) read the whole tree. Everything they found was fixed in this sweep; their "checked and sound" lists are kept as regression intent.
+
+**Process finding (code)**: the sweep-2 patch script aborted midway and four fixes logged as done had never landed (CSP, chip-in-editable-fields, `tabs.onUpdated` filter, open-all via `tabs.create`). Caught by the security auditor. Re-applied, and the ledger now only records a fix after the build that contains it is green. A CSP presence check is part of the manifest review below.
+
+**Security**
+- Image metadata (EXIF/XMP/IPTC/PNG text, author-controlled) was handed to the model as "trustworthy facts" → split into measured facts (dimensions, format, C2PA presence, field count) and an `untrusted('metadata')` block; the system prompt says attributes are data too. Test: `prompts.test.ts` "page-derived fields".
+- `fetch_page` could be steered by injected page text to any public URL carrying the checked content (exfiltration) and the fetched page was then shown as a *verified* source → the tool now only reads URLs that this run's `web_search` returned or that the checked content itself linked; anything else is refused with a hint to search first.
+- Pasted text, re-checks and popup/shortcut checks snapshotted *whatever tab was active* (a bank page could land in history) → `captureFromTab` requires the input's page URL and refuses when the content script reports a different URL; pasted text never snapshots.
+- Page-derived strings (title, URL, site, author, time, permalink, image and link lists) sat outside the untrusted block and some were unbounded (`<time datetime>` of any length) → all moved inside `untrusted()` blocks or attributes; `LIMITS` in the protocol bound every field, producers truncate first; `permalink`, `images[]`, `links[]` must be http(s).
+- The untrusted delimiter could be closed by content (`</untrusted_content>` in a selection) → delimiters in body and attributes are defanged; attribute quotes escaped. Test in `security.test.ts`.
+- Raw search/grounding URLs were not scheme-checked before becoming links; `absolute()` in the extractor accepted `javascript:` permalinks → `buildSources` filters with `isHttpUrl`, the extractor returns only http(s), `InputCard` links only http(s) and only renders http/data-image/blob sources.
+- A page could create a selection under the pointer so a click meant for the page landed on the chip → the chip shows only within 1.5 s of a trusted `pointerup`/`keyup`, and never inside editable elements.
+- Plain-http non-local endpoints sent the API key in cleartext without a word → red warning in the Local card.
+- `isPublicHttpUrl` gaps: 192.0.0.0/24, 198.18.0.0/15, 6to4 and NAT64 embeddings; mapped IPv4 was blocked by accident (serialized as `::ffff:7f00:1`) → proper IPv6 expansion; tests for all forms.
+- Accepted risk, documented: DNS rebinding (public name resolving to a private address) cannot be detected from an extension page.
+
+**Bugs**
+- Starting a check while another streamed left the UI on "Cancelled" for the whole new run (the aborted run's error landed after the new run's view change) → every run carries a token; a superseded run never writes to state again.
+- One job ran in every open panel (per-window side panels/sidebars + the fallback window): double provider calls, double history rows → jobs carry `windowId`; panels take only their own.
+- The fallback popup window stacked a new window per chip click (Firefox: `sidebarAction.open` cannot be called from a message handler, so the chip always falls back; Chrome sometimes) → an existing panel window is focused instead. Firefox users get a window from the chip and the sidebar from the menu/shortcut; noted in README.
+- Model JSON with a `null` source URL or an empty claim text failed the whole parse, triggered the repair pass and then "degraded" → nulls and empties are dropped per item; `label`/`summary` default.
+- `visibleText` used `innerText` on a detached clone (= `textContent`, no line breaks) so SPA posts glued author, time and paragraphs together → a walker inserts breaks after block elements. Test in `post.test.ts`.
+- Background settings copy is defaults right after a service-worker restart → the shortcut handler re-reads settings in its async half and routes to web mode correctly; empty-page inputs (restricted tabs) are dropped.
+- `updateSettings` read-modify-write raced (blur-commit + click) → serialized through a promise chain. Test in `settings-storage.test.ts`.
+- Snapshot storage limit input rewrote itself on every keystroke ("5" → 10 → "100") → draft input, committed on blur/Enter.
+- Gemini status said "with Google Search" when only URL context was on; auth hint mentioned "AIza" for every provider; settings copy said "only to the default provider" (false with fallback or a search tool); "not set" shortcut rendered as "press not set"; cost footer showed a search charge free-tier users never pay → all reworded (now "up to ≈ $x" with a tooltip).
+- Original-source card could link to a *different* page on the same domain through a grounding redirect → links only on an exact URL match.
+- Inline (`data:`) images produced a multi-megabyte google.com URL and dead reverse-image links → AI Mode gets a description, reverse-image row explains and hides.
+- History "Yesterday" was off by an hour after DST; dates older than a year lacked the year → calendar arithmetic, year shown when it differs.
+- `https://localhost` counted as local but has no host permission → only `http://` localhost is "local"; https gets the Allow note.
+- Parking a check behind "needs setup" never ran it after the key was entered → "Check now" button appears once a provider is ready.
+- SearXNG forced `language=en` → removed.
+- `repairJson` replaced smart quotes inside string values, making a near-valid block worse → tried last.
+
+`clean: no` (all three categories)

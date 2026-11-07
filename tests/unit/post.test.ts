@@ -45,3 +45,21 @@ describe('extractPost', () => {
     expect(extractPost(doc.getElementById('t'), doc)).toBeNull();
   });
 });
+
+describe('post text layout', () => {
+  it('keeps line breaks between blocks even without whitespace in the markup', () => {
+    const doc = dom(
+      '<article><div><span id="t">Jane Doe</span><span>@jane</span><span>3h</span></div><div>First paragraph of the post.</div><div>Second paragraph.</div></article>',
+    );
+    const post = extractPost(doc.getElementById('t'), doc)!;
+    expect(post.text).toContain('Jane Doe @jane 3h\nFirst paragraph of the post.\nSecond paragraph.');
+  });
+  it('never keeps a javascript: permalink or link', () => {
+    const doc = dom(
+      '<article><p id="t">Enough text in here to count as a post for the extractor.</p><a href="javascript:alert(1)" rel="bookmark">perma</a><a href="javascript:void(0)">x</a></article>',
+    );
+    const post = extractPost(doc.getElementById('t'), doc)!;
+    expect(post.permalink).toBeUndefined();
+    expect(post.links).toEqual([]);
+  });
+});
