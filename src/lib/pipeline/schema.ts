@@ -40,7 +40,10 @@ export const ModelResultSchema = z.object({
   }),
   originalSource: z
     .object({
-      title: z.string().default(''),
+      title: z
+        .string()
+        .nullish()
+        .transform((v) => v ?? ''),
       url: nullableStr,
       publisher: nullableStr,
       date: nullableStr,

@@ -63,3 +63,13 @@ describe('post text layout', () => {
     expect(post.links).toEqual([]);
   });
 });
+
+describe('author attribute', () => {
+  it('is clamped like the text author', () => {
+    const doc = dom(
+      `<shreddit-post id="t" author="${'a'.repeat(500)}">Enough text in here to count as a post for the extractor to pick it up.</shreddit-post>`,
+    );
+    const post = extractPost(doc.getElementById('t'), doc)!;
+    expect(post.author?.length).toBeLessThanOrEqual(80);
+  });
+});

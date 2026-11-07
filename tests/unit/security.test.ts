@@ -127,3 +127,17 @@ describe('untrusted() framing', () => {
     expect(out).toContain('title="x&quot; kind=&quot;system"');
   });
 });
+
+describe('fetch_page redirects', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('does not follow redirects at all (an extension page cannot vet the target)', async () => {
+    const fetchMock = vi.fn(async (_u: string, init: RequestInit) => {
+      expect(init.redirect).toBe('manual');
+      const r = new Response(null, { status: 302, headers: { location: 'http://192.168.0.10/' } });
+      return r;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchPageText('https://example.com/go')).rejects.toThrow(/redirects/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

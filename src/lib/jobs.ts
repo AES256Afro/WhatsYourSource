@@ -1,5 +1,5 @@
 import { browser } from 'wxt/browser';
-import { JobSchema, type CheckInput, type Job } from './messaging/protocol';
+import { clampInput, JobSchema, type CheckInput, type Job } from './messaging/protocol';
 
 /**
  * The background hands work to the side panel through `storage.session`, not messaging:
@@ -9,14 +9,20 @@ import { JobSchema, type CheckInput, type Job } from './messaging/protocol';
 const KEY = 'pendingJob';
 
 export async function enqueueJob(input: CheckInput, tabId?: number, windowId?: number): Promise<Job> {
-  const job: Job = { id: crypto.randomUUID(), createdAt: Date.now(), tabId, windowId, input };
+  const job: Job = { id: crypto.randomUUID(), createdAt: Date.now(), tabId, windowId, input: clampInput(input) };
   await browser.storage.session.set({ [KEY]: job });
   return job;
 }
 
-/** The window this page belongs to (side panel, sidebar or popup window), or undefined. */
+/**
+ * The browser window this panel serves, or undefined when it serves any. A side panel / sidebar has
+ * no tab of its own and belongs to its window; the fallback `sidepanel.html` *window* is itself a
+ * tab in a popup window, which no producer can know the id of, so it takes whatever is queued.
+ */
 export async function currentWindowId(): Promise<number | undefined> {
   try {
+    const self = await browser.tabs.getCurrent();
+    if (self) return undefined;
     return (await browser.windows.getCurrent()).id;
   } catch {
     return undefined;

@@ -12,6 +12,8 @@ export interface GenerateRequest {
   wantSearch: boolean;
   /** URLs the provider may read in full (Gemini URL context; tool loop `fetch`). */
   urls?: string[];
+  /** The page the content came from: readable by the tool loop, but not pushed into Gemini's URL context. */
+  pageUrl?: string;
   /** Hint for a repair/second pass: plain completion, no tools. */
   plain?: boolean;
   /** A ready-made search query for providers that must search before the model runs. */

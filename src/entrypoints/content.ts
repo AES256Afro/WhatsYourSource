@@ -2,7 +2,7 @@ import { defineContentScript } from '#imports';
 import { browser } from 'wxt/browser';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
-import { LIMITS, MessageSchema, type SelectionInfo, type SnapshotPayload } from '@/lib/messaging/protocol';
+import { clampSelection, LIMITS, MessageSchema, type SelectionInfo, type SnapshotPayload } from '@/lib/messaging/protocol';
 import { extractPost } from '@/lib/post/extract';
 import { shortcutLabelForPlatform } from '@/lib/shortcut';
 import { DEFAULT_SETTINGS, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
@@ -18,7 +18,8 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
   main(ctx) {
-    // Only the public half of the settings (no API keys) is ever read on a web page.
+    // Only the public half of the settings (no API keys) is read here. (storage.onChanged still
+    // delivers every change to this isolated world; the `secrets` key is ignored, never kept.)
     let settings: Settings = DEFAULT_SETTINGS;
     void browser.storage.local.get(SETTINGS_KEY).then((r) => {
       settings = mergeSettings(DEFAULT_SETTINGS, r[SETTINGS_KEY]);
@@ -39,10 +40,14 @@ export default defineContentScript({
     // click meant for the page lands on the chip. Only selections that follow real input count.
     let lastUserInput = 0;
     const noteInput = (e: Event) => {
-      if (e.isTrusted) lastUserInput = Date.now();
+      if (!e.isTrusted) return;
+      lastUserInput = Date.now();
+      // A slow drag-select ends with pointerup but no further selectionchange: re-evaluate now.
+      if (e.type === 'pointerup' || e.type === 'keyup') schedule();
     };
-    ctx.addEventListener(document, 'pointerup', noteInput, { capture: true, passive: true });
-    ctx.addEventListener(document, 'keyup', noteInput, { capture: true, passive: true });
+    // pointerdown/keydown as well as the *up* events: a held shift+arrow repeats keydown for as long
+    // as the user extends the selection, and a drag-select is a pointerdown long before its pointerup.
+    for (const ev of ['pointerdown', 'pointerup', 'keydown', 'keyup'] as const) ctx.addEventListener(document, ev, noteInput, { capture: true, passive: true });
 
     let timer: number | undefined;
     const schedule = () => {
@@ -138,12 +143,12 @@ function currentSelection(): SelectionInfo | null {
   const el = node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement;
   const block = el?.closest('p, li, blockquote, td, h1, h2, h3, h4, figcaption, article, section') ?? null;
   const surrounding = block?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 1200);
-  return {
-    text: text.slice(0, 8000),
-    pageUrl: location.href.slice(0, LIMITS.url),
-    pageTitle: document.title.slice(0, LIMITS.title),
+  return clampSelection({
+    text,
+    pageUrl: location.href,
+    pageTitle: document.title,
     surrounding: surrounding && surrounding.length > text.length ? surrounding : undefined,
-  };
+  });
 }
 
 function captureSnapshot(): SnapshotPayload {

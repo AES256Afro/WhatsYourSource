@@ -149,7 +149,8 @@ export function buildRequest(input: CheckInput, extra?: RequestExtras): Generate
     }
   }
 
-  return { system: SYSTEM_PROMPT, parts, wantSearch: true, urls, searchHint: searchHintFor(input) };
+  const pageUrl = input.kind === 'page' ? input.url : input.pageUrl;
+  return { system: SYSTEM_PROMPT, parts, wantSearch: true, urls, pageUrl: /^https?:/i.test(pageUrl) ? pageUrl : undefined, searchHint: searchHintFor(input) };
 }
 
 /**

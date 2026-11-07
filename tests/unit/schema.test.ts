@@ -83,3 +83,13 @@ describe('lenient model result', () => {
     if (r.ok) expect(r.value.verdict.summary).toBe('she said “hi”');
   });
 });
+
+describe('nullable original source title', () => {
+  it('does not fail the parse', () => {
+    const r = parseModelResult(
+      '{"verdict":{"label":"x","kind":"supported","confidence":"high","summary":"s"},"originalSource":{"title":null,"url":"https://a.example","publisher":null,"date":null,"how":null}}',
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.originalSource?.url).toBe('https://a.example');
+  });
+});

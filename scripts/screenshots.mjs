@@ -43,18 +43,24 @@ await page.getByText(/Saved/).waitFor();
 await page.waitForTimeout(400);
 await shot('03-image');
 
-// 4. History with the saved page open (needs a saved check: run one first in this tab).
+// 4. History with the saved page open: run a text check in a fresh tab (it snapshots medium.com), then open it.
+await open('scenario=home');
+await page.getByRole('button', { name: /Check source/ }).first().click();
+await page.getByText(/Saved with page snapshot/).waitFor({ timeout: 20_000 });
 await page.getByRole('button', { name: 'History' }).click();
 await page.getByRole('heading', { name: 'History' }).waitFor();
-await page.locator("button.wys-card").first().click();
+await page.locator('button.wys-card').first().click();
 await page.getByRole('button', { name: /Saved page/ }).click();
-await page.waitForTimeout(600);
+await page.waitForTimeout(800);
 await shot('04-history');
 
 // 5. Providers / settings.
 await open('scenario=local');
 await page.getByRole('button', { name: 'Settings' }).click();
 await page.getByText('Local model (OpenAI-compatible)').waitFor();
+await page.getByText('Local model (OpenAI-compatible)').scrollIntoViewIfNeeded();
+await page.evaluate(() => document.querySelector('#root .overflow-y-auto')?.scrollBy(0, -12));
+await page.waitForTimeout(300);
 await shot('05-providers');
 
 // 6. Onboarding.

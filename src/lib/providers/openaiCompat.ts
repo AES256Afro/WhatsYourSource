@@ -132,7 +132,7 @@ export class OpenAICompatProvider implements LlmProvider {
     const seen = new Set<string>();
     // The model may only read pages it got from web_search or that the checked content itself linked.
     // Otherwise a prompt injection could make it carry the checked text to any URL it likes.
-    const readable = new Set((req.urls ?? []).map(normalizeUrl));
+    const readable = new Set([...(req.urls ?? []), ...(req.pageUrl ? [req.pageUrl] : [])].map(readKey));
     const queries: string[] = [];
     let inputTokens = 0;
     let outputTokens = 0;
@@ -181,7 +181,7 @@ export class OpenAICompatProvider implements LlmProvider {
             yield { type: 'status', message: `Searching: ${truncate(q, 60)}` };
             try {
               const hits = await search.search(q, signal);
-              for (const h of hits) readable.add(normalizeUrl(h.url));
+              for (const h of hits) readable.add(readKey(h.url));
               content = formatHits(hits);
               const fresh = hitsToSources(hits, seen);
               if (fresh.length) yield { type: 'sources', sources: fresh };
@@ -194,7 +194,7 @@ export class OpenAICompatProvider implements LlmProvider {
           const url = str(args.url).trim();
           if (!this.cfg.fetchPages) content = 'Page fetching is disabled by the user. Rely on search snippets.';
           else if (!/^https?:\/\//i.test(url)) content = 'Invalid URL.';
-          else if (!readable.has(normalizeUrl(url)))
+          else if (!readable.has(readKey(url)))
             content = 'Only pages returned by web_search, or linked from the checked content, can be read. Search for it first.';
           else {
             yield { type: 'status', message: `Reading ${domainOf(url)}` };
@@ -364,6 +364,11 @@ function parseArgs(s: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/** Scheme-insensitive identity for the readable set: a hit listed as http may be requested as https. */
+function readKey(u: string): string {
+  return normalizeUrl(u).replace(/^https?:\/\//, '');
 }
 
 function str(v: unknown): string {

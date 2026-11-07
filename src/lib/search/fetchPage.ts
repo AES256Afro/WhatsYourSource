@@ -43,14 +43,17 @@ export async function fetchPageText(url: string, signal?: AbortSignal, maxChars 
   assertFetchAllowed(url, policy);
   const timeout = AbortSignal.timeout(12_000);
   const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  // Redirects are not followed: an extension page cannot read the Location header to vet the target,
+  // and following blindly would send a request to wherever the page points (possibly inside the LAN).
   const res = await fetch(url, {
     signal: combined,
-    redirect: 'follow',
+    redirect: 'manual',
     credentials: 'omit',
     headers: { Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5' },
   });
+  if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400))
+    throw new Error('The page redirects elsewhere; search for its current address instead.');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  // A redirect may have landed somewhere we would not have fetched directly.
   if (res.url && res.url !== url) assertFetchAllowed(res.url, policy);
   const type = res.headers.get('content-type') ?? '';
   const raw = await readCapped(res, MAX_BODY_BYTES);

@@ -46,7 +46,7 @@ export function extractPost(target: Element | null, doc: Document = document): P
 
   const site = location.hostname.replace(/^www\./, '');
   const authorEl = container.querySelector(AUTHOR_SELECTOR);
-  const author = container.getAttribute('author') ?? (authorEl?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  const author = (container.getAttribute('author') ?? authorEl?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
 
   const timeEl = container.querySelector('time[datetime], time');
   const postedAt = (timeEl?.getAttribute('datetime') ?? timeEl?.textContent?.replace(/\s+/g, ' ').trim() ?? '').slice(0, LIMITS.short);

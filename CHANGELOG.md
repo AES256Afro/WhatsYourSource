@@ -36,7 +36,7 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 
 ### Security
 - Image metadata and every page-derived field (title, URL, author, time, links) are passed to the model as untrusted data; the untrusted delimiter can no longer be closed by content.
-- A local model may only read pages that its own search returned or that the checked content linked.
+- A local model may only read pages that its own search returned, that the checked content linked, or the page the selection came from; redirects are never followed.
 - Page snapshots are taken only of the page the check came from, never of whatever tab is active.
 - The floating chip responds only to selections made by real input, and never inside form fields or editors.
 - Plain-http endpoints off this machine show a warning before a key travels unencrypted.

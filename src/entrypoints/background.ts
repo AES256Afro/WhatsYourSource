@@ -2,7 +2,7 @@ import { defineBackground } from '#imports';
 import { browser, type Browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
 import { openPanelSync } from '@/lib/panel';
-import { MessageSchema, PostInputSchema, SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
+import { clampSelection, LIMITS, MessageSchema, PostInputSchema, SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
 import { DEFAULT_SETTINGS, loadPublicSettings, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/webmode';
 
@@ -179,7 +179,7 @@ export default defineBackground(() => {
 
   /** Ask the content script for the richer selection (context paragraph); fall back to the menu's text. */
   async function resolveSelection(tab: MaybeTab, fallbackText: string): Promise<SelectionInfo> {
-    const base: SelectionInfo = { text: fallbackText, pageUrl: tab?.url ?? '', pageTitle: tab?.title ?? '' };
+    const base: SelectionInfo = clampSelection({ text: fallbackText, pageUrl: tab?.url ?? '', pageTitle: tab?.title ?? '' });
     if (tab?.id == null) return base;
     try {
       const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:get-selection' });
@@ -190,14 +190,15 @@ export default defineBackground(() => {
       try {
         const [r] = await browser.scripting.executeScript({
           target: { tabId: tab.id },
-          func: () => {
+          func: (limits: { text: number; url: number; title: number }) => {
             const sel = window.getSelection();
             return {
-              text: sel ? sel.toString().trim() : '',
-              pageUrl: location.href,
-              pageTitle: document.title,
+              text: sel ? sel.toString().trim().slice(0, limits.text) : '',
+              pageUrl: location.href.slice(0, limits.url),
+              pageTitle: document.title.slice(0, limits.title),
             };
           },
+          args: [{ text: LIMITS.text, url: LIMITS.url, title: LIMITS.title }],
         });
         const parsed = SelectionInfoSchema.safeParse(r?.result);
         if (parsed.success && parsed.data.text.trim()) return parsed.data;

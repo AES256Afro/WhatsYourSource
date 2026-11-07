@@ -11,9 +11,9 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 
 | Category | Sweeps run | Consecutive clean | Retired |
 |---|---|---|---|
-| Code | 3 | 0 | no |
-| Bug | 3 | 0 | no |
-| Security | 3 | 0 | no |
+| Code | 4 | 0 | no |
+| Bug | 4 | 0 | no |
+| Security | 4 | 0 | no |
 
 ## Stage 2 status
 
@@ -67,7 +67,7 @@ Findings and fixes:
 
 Findings and fixes:
 - API keys were inside the `settings` object that the content script loads on every page. Keys now live under a separate `secrets` storage key; the content script and background read only the public half (`loadPublicSettings`); old installs are migrated on first load (`tests/unit/settings-storage.test.ts`).
-- `fetch_page` (the local-model tool) fetched any URL the model named from the extension origin, reachable by prompt injection from page content. New policy: public http(s) hosts only (no loopback, RFC1918, link-local, CGNAT, `.local`/`.internal`, bare names, numeric spellings, mapped IPv6), the user's own model and SearXNG hosts are blocked, redirects are re-checked against the policy after the fact, bodies are capped at 2 MB (`isPublicHttpUrl`, `assertFetchAllowed`, `tests/unit/security.test.ts`). Residual risk noted: a public host that redirects to a private one is only detected after the response arrives; the body is then discarded.
+- `fetch_page` (the local-model tool) fetched any URL the model named from the extension origin, reachable by prompt injection from page content. New policy: public http(s) hosts only (no loopback, RFC1918, link-local, CGNAT, `.local`/`.internal`, bare names, numeric spellings, mapped IPv6), the user's own model and SearXNG hosts are blocked, redirects are not followed (sweep 4), bodies are capped at 2 MB (`isPublicHttpUrl`, `assertFetchAllowed`, `tests/unit/security.test.ts`). Residual risk noted: a public host that redirects to a private one is only detected after the response arrives; the body is then discarded.
 - "Open snapshot in a tab" rendered stored HTML from a `blob:` URL carrying the extension origin → new `snapshot.html` page renders it in the same sandboxed, CSP'd frame as the panel.
 - Snapshot sanitizer allowed `data:` as a link target → DOMPurify hook drops `data:` hrefs at capture; `buildSnapshotSrcdoc` also strips any non-http(s) href as a second line (covers old snapshots). `ping` attribute and `<math>` forbidden too.
 - Gemini Search Suggestions frame had no CSP of its own → `default-src 'none'; img-src https: data:; style-src 'unsafe-inline'`.
@@ -147,3 +147,21 @@ Two fresh-context auditors (one bug lens, one security lens) read the whole tree
 - `repairJson` replaced smart quotes inside string values, making a near-valid block worse → tried last.
 
 `clean: no` (all three categories)
+
+### 2026-11-07 · Sweep 4 (code, bug, security) — fresh-context review of everything changed since `fe50500`
+
+A reviewer who had not seen the earlier sweeps read the full diff. Findings were all consequences of sweep-3 fixes, which is exactly what this pass is for.
+
+- **Regression (bug, confirmed)**: the per-window job filter dropped every job delivered to the fallback panel *window* (the normal chip path on Firefox; Chrome when the gesture expired), because that window has its own window id → a panel that is itself a tab (the fallback window) now accepts any job; side panels and sidebars still take only their window's.
+- **Regression (bug, confirmed)**: the new `LIMITS` were enforced by the schema but tab titles/URLs from the browser were never truncated (an X status title runs past 300 characters) → the job was silently rejected. `clampInput()` at `enqueueJob`, `clampSelection()` for selection replies and the injected reader; test added.
+- **Regression (bug, confirmed)**: the chip's trusted-input window hid it after a drag-select slower than 1.5 s (pointerup fires no `selectionchange`) → pointerup/keyup re-evaluate; pointerdown/keydown also count.
+- Incomplete fix (bug): `originalSource.title: null` still failed the whole parse → nullish like its siblings; test added.
+- Incomplete fix (security): `author` from a page's `author` attribute was unclamped → clamped; test added.
+- Too strict (bug): a local model could never `fetch_page` the page the selection came from, and an `http` hit requested as `https` was refused → the page URL is readable, keys are scheme-insensitive.
+- Security: `redirect: 'follow'` still *sent* a request to a redirect target before the policy check → `redirect: 'manual'`; a redirecting page is reported to the model as moved. Ledger wording corrected: redirects are not followed.
+- `minimum_chrome_version: 116` (sidePanel needs 114, `AbortSignal.any` 116) so Chrome 114–115 users get a clear install refusal rather than a misleading network error.
+- Comment accuracy: `storage.onChanged` still delivers the `secrets` change payload to the content script's isolated world; it is ignored, never kept, and the comment now says so.
+
+Verified sound by the reviewer (kept as regression intent): run tokens in `App.tsx`; lenient per-field settings merge and the secrets migration; serialized updates; no double-open between the chip's web-mode path and the panel; snapshot URL matching tolerates fragments, trailing slashes, `www.` and tracking params; `isPublicHttpUrl` on mapped/6to4/NAT64/odd spellings; `untrusted()` framing; schema preprocessing types; the text walker; `ownHosts`; e2e and preview fixtures still consistent.
+
+`clean: no` (bug, security); `clean: no` (code: one comment)

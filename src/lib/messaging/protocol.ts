@@ -63,6 +63,59 @@ export const PostInputSchema = z.object({
   links: z.array(httpUrl).max(12),
 });
 
+const cut = (s: string | undefined, n: number) => (s === undefined ? undefined : s.length > n ? s.slice(0, n) : s);
+const httpOnly = (xs: string[], n: number) => xs.filter((u) => /^https?:\/\//i.test(u) && u.length <= LIMITS.url).slice(0, n);
+
+/**
+ * Bring any input within LIMITS so it never fails the schema later. Producers read titles and URLs
+ * straight from the browser (tab titles on X run past 300 characters), so this is the one place that
+ * guarantees the bounds.
+ */
+export function clampInput(input: CheckInput): CheckInput {
+  switch (input.kind) {
+    case 'text':
+      return {
+        ...input,
+        text: input.text.slice(0, LIMITS.text),
+        pageUrl: input.pageUrl.slice(0, LIMITS.url),
+        pageTitle: input.pageTitle.slice(0, LIMITS.title),
+        surrounding: cut(input.surrounding, LIMITS.surrounding),
+      };
+    case 'image':
+      return {
+        ...input,
+        pageUrl: input.pageUrl.slice(0, LIMITS.url),
+        pageTitle: input.pageTitle.slice(0, LIMITS.title),
+        alt: cut(input.alt, LIMITS.alt),
+        nearbyText: cut(input.nearbyText, LIMITS.nearby),
+      };
+    case 'page':
+      return { ...input, url: input.url.slice(0, LIMITS.url), title: input.title.slice(0, LIMITS.title), excerpt: cut(input.excerpt, LIMITS.excerpt) };
+    case 'post':
+      return {
+        ...input,
+        pageUrl: input.pageUrl.slice(0, LIMITS.url),
+        pageTitle: input.pageTitle.slice(0, LIMITS.title),
+        site: input.site.slice(0, LIMITS.short),
+        permalink: input.permalink && /^https?:\/\//i.test(input.permalink) && input.permalink.length <= LIMITS.url ? input.permalink : undefined,
+        author: cut(input.author, LIMITS.short),
+        postedAt: cut(input.postedAt, LIMITS.short),
+        text: input.text.slice(0, LIMITS.text),
+        images: httpOnly(input.images, 6),
+        links: httpOnly(input.links, 12),
+      };
+  }
+}
+
+export function clampSelection(s: SelectionInfo): SelectionInfo {
+  return {
+    text: s.text.slice(0, LIMITS.text),
+    pageUrl: s.pageUrl.slice(0, LIMITS.url),
+    pageTitle: s.pageTitle.slice(0, LIMITS.title),
+    surrounding: cut(s.surrounding, LIMITS.surrounding),
+  };
+}
+
 export const CheckInputSchema = z.discriminatedUnion('kind', [TextInputSchema, ImageInputSchema, PageInputSchema, PostInputSchema]);
 export type CheckInput = z.infer<typeof CheckInputSchema>;
 export type TextInput = z.infer<typeof TextInputSchema>;

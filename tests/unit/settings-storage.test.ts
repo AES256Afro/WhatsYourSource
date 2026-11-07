@@ -94,3 +94,33 @@ describe('jobs are per window', () => {
     expect(s.privacy.chip).toBe(false);
   });
 });
+
+describe('clampInput', () => {
+  it('brings oversized producer values within the schema limits instead of letting the job be rejected', async () => {
+    const { clampInput, CheckInputSchema, LIMITS } = await import('@/lib/messaging/protocol');
+    const long = 'x'.repeat(5000);
+    const page = clampInput({ kind: 'page', url: `https://x.com/${long}`, title: long });
+    expect(CheckInputSchema.safeParse(page).success).toBe(true);
+    expect(page.kind === 'page' && page.title.length).toBe(LIMITS.title);
+    const post = clampInput({
+      kind: 'post',
+      pageUrl: 'https://x.com/a',
+      pageTitle: long,
+      site: long,
+      author: long,
+      postedAt: long,
+      permalink: 'javascript:alert(1)',
+      text: long,
+      images: ['data:image/png;base64,AAAA', 'https://i.example/a.jpg'],
+      links: Array<string>(20).fill('https://l.example/'),
+    });
+    const parsed = CheckInputSchema.safeParse(post);
+    expect(parsed.success).toBe(true);
+    if (post.kind === 'post') {
+      expect(post.permalink).toBeUndefined();
+      expect(post.images).toEqual(['https://i.example/a.jpg']);
+      expect(post.links).toHaveLength(12);
+      expect(post.author?.length).toBe(LIMITS.short);
+    }
+  });
+});

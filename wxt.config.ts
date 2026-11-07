@@ -17,6 +17,8 @@ export default defineConfig({
     short_name: 'WhatsYourSource',
     description: 'Check the source of highlighted text, images and posts with the AI of your choice: Google AI by default, your own key, or a local model.',
     permissions: ['contextMenus', 'storage', 'unlimitedStorage', 'activeTab', 'scripting'],
+    // sidePanel needs 114; AbortSignal.any (used by the page fetcher) needs 116.
+    ...(browser === 'firefox' ? {} : { minimum_chrome_version: '116' }),
     // Firefox's MV3 default is "script-src 'self'; upgrade-insecure-requests", which silently turns
     // http://localhost:11434 into https:// and breaks every local model. Say exactly what we want.
     content_security_policy: { extension_pages: "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none';" },
