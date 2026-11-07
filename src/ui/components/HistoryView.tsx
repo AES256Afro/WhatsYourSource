@@ -94,11 +94,11 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
             </span>
           )}
         </div>
-        <label htmlFor="wys-hsearch" className="sr-only">
+        <label htmlFor="wys-hsearch" className="wys-sr-only">
           Search history
         </label>
         <input id="wys-hsearch" type="search" className="wys-input" placeholder="Search checks…" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5" role="group" aria-label="Filter by kind">
           {(
             [
               ['all', 'All'],
@@ -110,14 +110,15 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
           ).map(([k, label]) => (
             <button
               key={k}
-              className={`h-7 rounded-full border px-2.5 text-[12px] font-medium ${kind === k ? 'border-accent bg-accent-soft text-accent' : 'border-line-2 bg-paper text-ink-2'}`}
+              aria-pressed={kind === k}
+              className={`h-7 shrink-0 rounded-full border px-2.5 text-[12px] font-medium ${kind === k ? 'border-accent bg-accent-soft text-accent' : 'border-line-strong bg-paper text-ink-2'}`}
               onClick={() => setKind(k)}
             >
               {label}
             </button>
           ))}
           <button
-            className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[12px] font-medium ${withSnapshot ? 'border-accent bg-accent-soft text-accent' : 'border-line-2 bg-paper text-ink-2'}`}
+            className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[12px] font-medium ${withSnapshot ? 'border-accent bg-accent-soft text-accent' : 'border-line-strong bg-paper text-ink-2'}`}
             onClick={() => setWithSnapshot((v) => !v)}
             aria-pressed={withSnapshot}
           >
@@ -128,7 +129,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
         {items === null ? (
           <div className="text-[13px] text-ink-2">Loading…</div>
         ) : items.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-line-2 p-4 text-center text-[13px] text-ink-2">
+          <div className="rounded-xl border border-dashed border-line-strong p-4 text-center text-[13px] text-ink-2">
             {debouncedQuery || kind !== 'all' || withSnapshot ? 'Nothing matches.' : 'No checks yet. Highlight some text and press Check source.'}
           </div>
         ) : (
@@ -148,10 +149,12 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2.5 border-t border-line bg-paper px-3.5 py-2.5 text-[11px] text-ink-2">
-        <span className={actionError ? 'text-bad' : ''}>{actionError ?? `Stored on this device${stats ? ` · ${fmtBytes(stats.snapshotBytes)}` : ''}`}</span>
+        <span role="status" className={`min-w-0 truncate ${actionError ? 'text-bad' : ''}`}>
+          {actionError ?? `On this device${stats ? ` · ${fmtBytes(stats.snapshotBytes)} of saved pages` : ''}`}
+        </span>
         <span className="grow" />
-        <button className="wys-btn h-8 px-3 text-[12px]" onClick={exportJson} disabled={!items?.length}>
-          Export
+        <button className="wys-btn h-8 px-3 text-[12px]" onClick={exportJson} disabled={!items?.length} aria-label="Export all checks as JSON">
+          Export all (JSON)
         </button>
         <button className="wys-btn h-8 px-3 text-[12px] text-bad" onClick={clearAll} disabled={!items?.length}>
           Clear all
@@ -165,22 +168,21 @@ export function HistoryRow({ check: c, onOpen, compact }: { check: StoredCheck; 
   const Icon = c.kind === 'text' ? Lines : c.kind === 'image' ? Image : c.kind === 'post' ? Post : Globe;
   const time = new Date(c.createdAt);
   return (
-    <button className={`wys-card flex items-start gap-2.5 px-2.5 py-[9px] text-left hover:bg-surface ${compact ? 'border-0 px-2' : ''}`} onClick={onOpen}>
+    <button className={`wys-card flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-surface ${compact ? 'border-0 px-2' : ''}`} onClick={onOpen}>
       {!compact && (
         <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-surface-2 text-ink-2">
           <Icon size={15} />
         </span>
       )}
       <span className="flex min-w-0 grow flex-col gap-[3px]">
-        <span className="truncate text-[13px] leading-[17px] font-medium">{c.kind === 'text' ? `“${c.title}”` : c.title}</span>
+        <span className="truncate text-[13px] leading-[18px] font-medium">{c.kind === 'text' ? `“${c.title}”` : c.title}</span>
+        {!compact && c.result.verdict.summary && <span className="line-clamp-1 text-[12px] leading-4 text-ink-2">{c.result.verdict.summary}</span>}
         <span className="flex items-center gap-1.5 text-[11px] text-ink-2">
           <Pill tone={toneForVerdict(c.verdictKind)} className="px-[7px] py-px">
             {c.verdictLabel}
           </Pill>
-          <span className="truncate">
-            {c.site} · {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-          {c.hasSnapshot && <Camera size={12} className="shrink-0" />}
+          <span className="truncate">{[c.site, time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })].filter(Boolean).join(' · ')}</span>
+          {c.hasSnapshot && <Camera size={12} className="shrink-0" aria-label="Has a saved page" />}
         </span>
       </span>
     </button>

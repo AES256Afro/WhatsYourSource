@@ -5,6 +5,10 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 ## [Unreleased]
 
 ### Added
+- "New check" on every result; a "Checking…" pill in the top bar leads back to a check in progress; Escape goes back.
+- Verify button for the Gemini key during first run; "Finish without a key" routes checks to Google AI Mode until a key is added.
+- Unverified sources show their address with a copy button; "Open all N" confirms above five tabs.
+- Screen-reader support: live progress and status announcements, real headings, labelled toggles and selects, keyboard-operable tabs; focus follows each step of a check.
 - `MILESTONES.md`: the plan from the current state to store release.
 - `docs/SWEEPS.md`: the audit ledger (Stage 1 code/bug/security sweeps, Stage 2 quality sweeps).
 - MIT `LICENSE`.
@@ -13,6 +17,11 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 - Shortcut labels follow the live key binding.
 
 ### Changed
+- Result layout answers the two questions in order: verdict first, likely original source second, then the assessment, claims and sources; "Compare in Google AI Mode" is a link, not the primary button.
+- One vocabulary for the four ways to check (Gemini (your key), Google AI Mode (web), Claude (your key), Local or OpenAI-style model) across onboarding, settings, home and errors; settings copy rewritten in plain language.
+- Verify/Test results appear under the button; error hints say what to do and open Settings at the failing provider.
+- Dark mode: verdict banner and confidence rings use theme tokens; control borders meet the 3:1 contrast line; Google suggestion chips follow the theme.
+- Narrower panels (320 px) keep every action reachable; onboarding fits without scrolling.
 - Opening an old image check from History no longer contacts the image's host until you ask it to.
 - History search is debounced and storage totals come from an index (no more loading every saved page to count bytes).
 - JSON export is streamed, so very large histories export too.

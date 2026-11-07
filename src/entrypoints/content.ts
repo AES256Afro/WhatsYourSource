@@ -250,7 +250,7 @@ function createChip(onClick: () => void) {
   style.textContent = `
     :host { all: initial; }
     .chip { position: fixed; display: none; align-items: center; gap: 8px; padding: 7px 11px 7px 9px;
-      background: #15181C; color: #fff; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.28);
+      background: #15181C; color: #fff; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.14);
       font: 600 13px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; cursor: pointer; pointer-events: auto;
       border: 0; white-space: nowrap; user-select: none; -webkit-user-select: none; }
     .chip.on { display: inline-flex; }

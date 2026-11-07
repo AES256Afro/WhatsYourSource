@@ -116,7 +116,7 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
     narrative: narrative || (model ? model.verdict.summary : text.trim()),
     verdict: model
       ? { ...model.verdict }
-      : { label: 'See assessment', kind: 'unverified', confidence: 'low', summary: 'The answer could not be structured; read the assessment above.' },
+      : { label: 'See assessment', kind: 'unverified', confidence: 'low', summary: 'The answer could not be structured; read the assessment below.' },
     originalSource: resolveOriginal(model, sources),
     claims: resolveClaims(model, sources),
     sources,

@@ -50,15 +50,15 @@ await page.getByText(/Saved with page snapshot/).waitFor({ timeout: 20_000 });
 await page.getByRole('button', { name: 'History' }).click();
 await page.getByRole('heading', { name: 'History' }).waitFor();
 await page.locator('button.wys-card').first().click();
-await page.getByRole('button', { name: /Saved page/ }).click();
+await page.getByRole('tab', { name: /Saved page/ }).click();
 await page.waitForTimeout(800);
 await shot('04-history');
 
 // 5. Providers / settings.
 await open('scenario=local');
 await page.getByRole('button', { name: 'Settings' }).click();
-await page.getByText('Local model (OpenAI-compatible)').waitFor();
-await page.getByText('Local model (OpenAI-compatible)').scrollIntoViewIfNeeded();
+await page.getByText('Local or OpenAI-style model').first().waitFor();
+await page.getByText('Local or OpenAI-style model').first().scrollIntoViewIfNeeded();
 await page.evaluate(() => document.querySelector('#root .overflow-y-auto')?.scrollBy(0, -12));
 await page.waitForTimeout(300);
 await shot('05-providers');

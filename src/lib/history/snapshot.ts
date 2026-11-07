@@ -110,7 +110,7 @@ export function buildSnapshotSrcdoc(snapshot: Pick<StoredSnapshot, 'html' | 'tit
   const imgSrc = opts.loadImages ? 'data: https: http:' : 'data:';
   const csp = `default-src 'none'; img-src ${imgSrc}; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`;
   const captured = new Date(snapshot.capturedAt).toLocaleString();
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><title>${escapeHtml(snapshot.title)}</title><style>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="${csp}"><title>${escapeHtml(snapshot.title)}</title><style>
 body{margin:0;padding:16px 18px 32px;font:14px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#15181C;background:#fff;word-wrap:break-word}
 img{max-width:100%;height:auto}
 ${opts.loadImages ? '' : 'img{display:inline-block;min-width:40px;min-height:24px;background:#F3F4F6;border:1px dashed #D6DAE0;color:#6B7280;font-size:11px}'}

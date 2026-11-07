@@ -12,7 +12,7 @@ import type { CheckInput } from '@/lib/messaging/protocol';
 import { runCheck } from '@/lib/pipeline/runCheck';
 import type { CheckResult } from '@/lib/pipeline/schema';
 import { createProvider, providerDisplayName } from '@/lib/providers/registry';
-import { providerOrder, providerReady, type Settings } from '@/lib/storage/settings';
+import { providerOrder, providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/webmode';
 import { CheckingView, type RunState } from './components/CheckingView';
 import { DetailView } from './components/DetailView';
@@ -24,7 +24,7 @@ import { Onboarding } from './components/Onboarding';
 import { External, Sliders } from './components/Icons';
 import { RecentList } from './components/RecentList';
 import { ResultView } from './components/ResultView';
-import { SettingsView } from './components/SettingsView';
+import { PROVIDER_CARD_ID, SettingsView } from './components/SettingsView';
 import { TopBar } from './components/TopBar';
 import { useSettings } from './hooks/useSettings';
 
@@ -43,6 +43,9 @@ export function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [error, setError] = useState<{ input: CheckInput; error: RunError } | null>(null);
   const [needsSetup, setNeedsSetup] = useState<CheckInput | null>(null);
+  const [focusProvider, setFocusProvider] = useState<ProviderId | undefined>(undefined);
+  /** A provider call is in flight (state, not the abort ref, so it can drive the top-bar indicator during render). */
+  const [busy, setBusy] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [historyTick, setHistoryTick] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -91,6 +94,10 @@ export function App() {
 
       const controller = new AbortController();
       abortRef.current = controller;
+      setBusy(true);
+      const finish = () => {
+        if (!stale()) setBusy(false);
+      };
       let lastError: RunError | null = null;
 
       // Images: get the bytes and the local provenance facts before any provider runs.
@@ -136,6 +143,7 @@ export function App() {
             },
           });
           setView('error');
+          finish();
           return;
         }
         if (stale()) return;
@@ -192,11 +200,13 @@ export function App() {
         if (controller.signal.aborted) {
           setError({ input, error: { code: 'cancelled', message: 'Cancelled.' } });
           setView('error');
+          finish();
           return;
         }
         if (finished) {
           setResult(finished);
           setView('result');
+          finish();
           try {
             const snap = await snapshotPromise;
             await saveCheck(finished, snap);
@@ -216,6 +226,7 @@ export function App() {
       }
       setError({ input, error: lastError ?? { code: 'unknown', message: 'Unknown error.' } });
       setView('error');
+      finish();
     },
     [openWebMode, update],
   );
@@ -238,6 +249,24 @@ export function App() {
     setDetailId(id);
     setView('detail');
   };
+  const openSettings = (provider?: string) => {
+    setFocusProvider(provider && provider in PROVIDER_CARD_ID ? (provider as ProviderId) : undefined);
+    setView('settings');
+  };
+  const running = busy && view !== 'checking';
+  /** Where "back" goes from a secondary view: the running check, else home. */
+  const primary: View = running ? 'checking' : 'home';
+
+  // Escape = back, everywhere a back makes sense.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (view === 'detail') setView('history');
+      else if (view === 'settings' || view === 'history') setView(primary);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [view, primary]);
 
   if (!settings) return <div className="p-4 text-[13px] text-ink-2">Loading…</div>;
 
@@ -246,7 +275,7 @@ export function App() {
   if (!settings.onboarded && view === 'home') {
     return (
       <div className="flex h-full flex-col bg-paper">
-        <Onboarding settings={settings} update={update} onDone={() => setView('home')} onOpenSettings={() => setView('settings')} />
+        <Onboarding settings={settings} update={update} onDone={() => setView('home')} onOpenSettings={(p) => openSettings(p)} />
       </div>
     );
   }
@@ -260,6 +289,7 @@ export function App() {
           <ResultView
             result={result}
             onRecheck={() => startCheck(result.input)}
+            onNewCheck={() => setView('home')}
             saved={!!savedId}
             saveError={saveError}
             snapshotNote={savedWithSnapshot ? 'Saved with page snapshot' : 'Saved to history'}
@@ -271,7 +301,7 @@ export function App() {
             input={error.input}
             error={error.error}
             onRetry={() => startCheck(error.input)}
-            onSettings={() => setView('settings')}
+            onSettings={openSettings}
             onAllowHost={
               error.error.code === 'image-permission' && error.input.kind === 'image'
                 ? async () => {
@@ -314,7 +344,7 @@ export function App() {
                 </div>
               </div>
             )}
-            <SettingsView settings={settings} update={update} />
+            <SettingsView settings={settings} update={update} focusProvider={focusProvider} />
           </>
         );
       case 'history':
@@ -336,7 +366,7 @@ export function App() {
             settings={settings}
             onCheck={(i) => void startCheck(i)}
             onWebMode={openWebMode}
-            onSettings={() => setView('settings')}
+            onSettings={() => openSettings()}
             recent={<RecentList onOpen={openDetail} onSeeAll={() => setView('history')} refreshKey={historyTick} />}
           />
         );
@@ -349,9 +379,10 @@ export function App() {
         view={view}
         title={view === 'detail' ? 'Saved check' : undefined}
         onBack={view === 'detail' ? () => setView('history') : undefined}
-        onHome={() => setView(result ? 'result' : 'home')}
-        onHistory={() => setView(view === 'history' ? (result ? 'result' : 'home') : 'history')}
-        onSettings={() => setView(view === 'settings' ? (result ? 'result' : 'home') : 'settings')}
+        onHome={() => setView(primary)}
+        onHistory={() => setView(view === 'history' ? primary : 'history')}
+        onSettings={() => (view === 'settings' ? setView(primary) : openSettings())}
+        checking={running}
       />
       <div className="min-h-0 grow overflow-y-auto">
         <ErrorBoundary onReset={() => setView('home')}>{body}</ErrorBoundary>

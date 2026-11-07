@@ -23,9 +23,11 @@ export interface OpenAICompatConfig {
 }
 
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
+/** What goes in the user turn: plain text, or text parts plus an inline image for vision models. */
+type UserContent = string | ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[];
 type Msg =
   | { role: 'system'; content: string }
-  | { role: 'user'; content: string | ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[] }
+  | { role: 'user'; content: UserContent }
   | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
   | { role: 'tool'; tool_call_id: string; content: string };
 
@@ -119,12 +121,7 @@ export class OpenAICompatProvider implements LlmProvider {
     }
   }
 
-  private async *toolLoop(
-    req: GenerateRequest,
-    userContent: Msg & { role: 'user' } extends infer U ? (U extends { content: infer C } ? C : never) : never,
-    search: SearchBackend,
-    signal: AbortSignal,
-  ): AsyncGenerator<GenEvent> {
+  private async *toolLoop(req: GenerateRequest, userContent: UserContent, search: SearchBackend, signal: AbortSignal): AsyncGenerator<GenEvent> {
     const messages: Msg[] = [
       { role: 'system', content: `${req.system}\n\n${TOOL_GUIDANCE}` },
       { role: 'user', content: userContent },
@@ -222,12 +219,7 @@ export class OpenAICompatProvider implements LlmProvider {
     }
   }
 
-  private async *presearch(
-    req: GenerateRequest,
-    userContent: Msg & { role: 'user' } extends infer U ? (U extends { content: infer C } ? C : never) : never,
-    search: SearchBackend,
-    signal: AbortSignal,
-  ): AsyncGenerator<GenEvent> {
+  private async *presearch(req: GenerateRequest, userContent: UserContent, search: SearchBackend, signal: AbortSignal): AsyncGenerator<GenEvent> {
     const q = (req.searchHint ?? '').trim();
     let block = 'Search was not possible.';
     if (q) {
@@ -352,7 +344,7 @@ export class OpenAICompatProvider implements LlmProvider {
 
 const TOOL_GUIDANCE = `You have two tools: web_search(query) and fetch_page(url). Start by putting the user's question to the search engine: the key phrase from the content plus whether it is true (for example the phrase with "fact check") and where its source is (the phrase with "original source"). Search at least once before answering, read the most promising result with fetch_page when a snippet is not enough, and cite only URLs you actually received from the tools.`;
 
-function toUserContent(req: GenerateRequest): string | ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[] {
+function toUserContent(req: GenerateRequest): UserContent {
   const hasImage = req.parts.some((p) => 'image' in p);
   if (!hasImage) return req.parts.map((p) => ('text' in p ? p.text : '')).join('\n\n');
   return req.parts.map((p) =>

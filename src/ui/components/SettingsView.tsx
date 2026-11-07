@@ -1,5 +1,6 @@
-import type { Settings } from '@/lib/storage/settings';
-import { Label } from './common';
+import { useEffect } from 'react';
+import type { ProviderId, Settings } from '@/lib/storage/settings';
+import { Label, PROVIDER_NAMES } from './common';
 import { Globe, Shield } from './Icons';
 import { AnthropicCard } from './settings/AnthropicCard';
 import { GeminiCard } from './settings/GeminiCard';
@@ -9,19 +10,33 @@ import { useShortcutLabel } from '../hooks/useShortcutLabel';
 
 type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
 
-export function SettingsView({ settings, update, wide }: { settings: Settings; update: Update; wide?: boolean }) {
+/** DOM ids of the provider cards, for scrolling to the one an error or onboarding points at. */
+export const PROVIDER_CARD_ID: Record<ProviderId, string> = {
+  gemini: 'wys-card-gemini',
+  webmode: 'wys-card-webmode',
+  anthropic: 'wys-card-anthropic',
+  'openai-compat': 'wys-card-local',
+};
+
+export function SettingsView({ settings, update, wide, focusProvider }: { settings: Settings; update: Update; wide?: boolean; focusProvider?: ProviderId }) {
   const shortcut = useShortcutLabel();
+  useEffect(() => {
+    if (!focusProvider) return;
+    const el = document.getElementById(PROVIDER_CARD_ID[focusProvider]);
+    el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    el?.focus({ preventScroll: true });
+  }, [focusProvider]);
   return (
     <div className={`flex flex-col gap-4 p-3.5 ${wide ? 'mx-auto max-w-[720px]' : ''}`}>
-      <p className="m-0 text-[12px] leading-[17px] text-ink-2">
-        Your selection is sent only when you press Check, to the provider marked as default (and, if you enable it below, to the fallback provider; a local
-        model’s search tool also receives the search queries). Keys stay on this device.
-      </p>
-
+      <div className="flex flex-col gap-1.5">
+        <Label>How checks are done</Label>
+        <p className="m-0 text-[12px] leading-4 text-ink-2">The provider marked Default does your checks. Add a key to the ones you want to use.</p>
+      </div>
       <GeminiCard settings={settings} update={update} />
       <ProviderCard
+        id={PROVIDER_CARD_ID.webmode}
         icon={<Globe size={16} />}
-        title="Google AI Mode (web)"
+        title={PROVIDER_NAMES.webmode}
         subtitle="No key · opens google.com in a tab · not saved to history"
         isDefault={settings.defaultProvider === 'webmode'}
         onMakeDefault={() => update((s) => ({ ...s, defaultProvider: 'webmode' }))}
@@ -32,18 +47,21 @@ export function SettingsView({ settings, update, wide }: { settings: Settings; u
       <div className="flex flex-col gap-1.5">
         <Label>Behaviour</Label>
         <div className="wys-card flex flex-col px-3">
-          <Row label="If the default provider fails or is over quota, try the next configured one">
-            <Toggle checked={settings.fallback} onChange={(v) => update((s) => ({ ...s, fallback: v }))} />
+          <Row label="If the default provider fails or is over quota, try the next one that has a key">
+            {(id) => <Toggle checked={settings.fallback} onChange={(v) => update((s) => ({ ...s, fallback: v }))} labelledBy={id} />}
           </Row>
           <Row label={`${shortcut ?? 'The keyboard shortcut (not set)'} and the floating chip`}>
-            <select
-              className="wys-input h-8 w-auto text-[12px]"
-              value={settings.shortcutAction}
-              onChange={(e) => update((s) => ({ ...s, shortcutAction: e.target.value as Settings['shortcutAction'] }))}
-            >
-              <option value="panel">Check in the side panel</option>
-              <option value="webmode">Open Google AI Mode</option>
-            </select>
+            {(id) => (
+              <select
+                aria-labelledby={id}
+                className="wys-input h-8 w-auto text-[12px]"
+                value={settings.shortcutAction}
+                onChange={(e) => update((s) => ({ ...s, shortcutAction: e.target.value as Settings['shortcutAction'] }))}
+              >
+                <option value="panel">Check in the side panel</option>
+                <option value="webmode">Open Google AI Mode</option>
+              </select>
+            )}
           </Row>
         </div>
       </div>
@@ -51,33 +69,42 @@ export function SettingsView({ settings, update, wide }: { settings: Settings; u
       <div className="flex flex-col gap-1.5">
         <Label>Privacy</Label>
         <div className="wys-card flex flex-col px-3">
-          <Row label="Send text or images only when I press Check" hint="Always on">
-            <Toggle checked disabled />
+          <Row label="Text or images are sent only when you press Check, only to the Default provider (and the fallback if you turned it on)" hint="Always on">
+            {(id) => <Toggle checked disabled labelledBy={id} />}
           </Row>
-          <Row label="Save a copy of the page with each check (local only)">
-            <Toggle checked={settings.privacy.snapshots} onChange={(v) => update((s) => ({ ...s, privacy: { ...s.privacy, snapshots: v } }))} />
-          </Row>
-          <Row label="Show the floating “Check source” chip on selection">
-            <Toggle checked={settings.privacy.chip} onChange={(v) => update((s) => ({ ...s, privacy: { ...s.privacy, chip: v } }))} />
-          </Row>
-          <Row label="Page snapshot storage limit" hint="Oldest snapshots are removed first; results are kept.">
-            <span className="inline-flex items-center gap-1 text-[12px] text-ink-2">
-              <CommitInput
-                id="wys-maxmb"
-                type="number"
-                className="h-8 w-20 text-[12px]"
-                value={String(settings.history.maxMb)}
-                onCommit={(raw) => {
-                  const v = Math.min(5000, Math.max(10, Math.round(Number(raw)) || 10));
-                  void update((s) => ({ ...s, history: { ...s.history, maxMb: v } }));
-                }}
+          <Row label="Save a copy of the page with each check" hint="Stays on this device.">
+            {(id) => (
+              <Toggle
+                checked={settings.privacy.snapshots}
+                onChange={(v) => update((s) => ({ ...s, privacy: { ...s.privacy, snapshots: v } }))}
+                labelledBy={id}
               />
-              MB
-            </span>
+            )}
+          </Row>
+          <Row label="Show the floating “Check source” chip when text is selected">
+            {(id) => <Toggle checked={settings.privacy.chip} onChange={(v) => update((s) => ({ ...s, privacy: { ...s.privacy, chip: v } }))} labelledBy={id} />}
+          </Row>
+          <Row label="Storage for saved pages" hint="Oldest saved pages are removed first; results are kept.">
+            {(id) => (
+              <span className="inline-flex items-center gap-1 text-[12px] text-ink-2">
+                <CommitInput
+                  id="wys-maxmb"
+                  labelledBy={id}
+                  type="number"
+                  className="h-8 w-20 text-[12px]"
+                  value={String(settings.history.maxMb)}
+                  onCommit={(raw) => {
+                    const v = Math.min(5000, Math.max(10, Math.round(Number(raw)) || 10));
+                    void update((s) => ({ ...s, history: { ...s.history, maxMb: v } }));
+                  }}
+                />
+                MB
+              </span>
+            )}
           </Row>
           <div className="flex flex-col gap-1 py-2.5">
             <label htmlFor="wys-disabled" className="text-[13px]">
-              Never show the chip on these sites <span className="text-ink-2">(one hostname per line)</span>
+              Never show the chip on these sites <span className="text-ink-2">(one per line)</span>
             </label>
             <DebouncedTextarea
               id="wys-disabled"
@@ -105,11 +132,11 @@ export function SettingsView({ settings, update, wide }: { settings: Settings; u
             />
           </div>
         </div>
+        <p className="m-0 flex items-start gap-1.5 text-[11px] leading-[15px] text-ink-2">
+          <Shield size={13} className="mt-px shrink-0" /> Keys stay on this device, are never synced, and go only to the provider they belong to. A local
+          model’s search tool receives the search queries.
+        </p>
       </div>
-
-      <p className="m-0 flex items-start gap-1.5 text-[11px] leading-[15px] text-ink-2">
-        <Shield size={13} className="mt-px shrink-0" /> Keys are stored in browser.storage.local — never synced, never sent anywhere but the provider you chose.
-      </p>
     </div>
   );
 }

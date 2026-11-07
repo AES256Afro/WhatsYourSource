@@ -30,7 +30,7 @@ export function ProvenancePanel({ provenance: p, srcUrl }: { provenance: LocalPr
       <div className="flex flex-col gap-1.5">
         <Label
           right={
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-ok">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-ink-2">
               <Shield size={12} /> checked on your device
             </span>
           }

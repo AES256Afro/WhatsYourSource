@@ -19,9 +19,9 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 
 | Category | Sweeps run | Consecutive clean | Retired |
 |---|---|---|---|
-| Readability | 0 | 0 | no |
-| Usability | 0 | 0 | no |
-| Visual | 0 | 0 | no |
+| Readability | 1 | 0 | no |
+| Usability | 1 | 0 | no |
+| Visual | 1 | 0 | no |
 | Quality of life | 0 | 0 | no |
 | Platform features | 0 | 0 | no |
 | Optimization | 0 | 0 | no |
@@ -225,3 +225,58 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - **Code**: no error boundary and stored rows dereferenced unguarded → `ErrorBoundary` with "Back to home" around the panel body; `normalizeStored()` fills fields older rows may lack.
 
 `clean: no` (all three), but Stage 1 closes here by decision (two sweeps past sweep 6, as instructed), with the later sweeps' finding rate well down and no security finding in two of the last three.
+
+---
+
+## Stage 2 log
+
+### 2026-11-07 · Readability sweep 1
+
+- `openaiCompat.ts`: the user-turn content type was an inline conditional type (`Msg & {role:'user'} extends infer U ? …`) in two signatures → named `UserContent`.
+- `background.ts`: five copies of the "web mode or panel + job" decision → one `route()`; context-menu handlers are now three lines each.
+- Settings copy rewritten in plain language (see usability); every error hint now says what to do, never repeating the message.
+
+`clean: no`
+
+### 2026-11-07 · Usability sweep 1 — independent audit (19 findings, 10 accessibility defects), all addressed
+
+- Home was unreachable after the first result (logo and History/Settings toggles routed back to the result) → logo goes home; the result has a primary **New check**; History/Settings toggle back to the running check if there is one, else home; a "Checking…" pill in the top bar leads back to a check in progress; Escape goes back.
+- The only primary button on a finished result was "Open in Google AI" → demoted to a "Compare in Google AI Mode ↗" text action beside Sources; one vocabulary everywhere: *Gemini (your key)*, *Google AI Mode (web)*, *Claude (your key)*, *Local or OpenAI-style model* (`PROVIDER_NAMES`).
+- First run could "finish" with no key and then show a ready-looking badge → the button reads "Finish without a key (use Google AI Mode)" and sets that; a Verify button checks the Gemini key on the spot; the home badge says "no key set" with a **Set up** link.
+- With Google AI Mode as default, "Check source" silently opened a tab → the button is labelled "Open in Google AI Mode ↗", the duplicate secondary is hidden, a note confirms the tab opened; the popup relabels likewise.
+- Long selections pushed the verdict below the fold → quiet, clamped input card with "Show all".
+- Keyboard focus fell to `<body>` on every transition → focus moves to the progress card, the verdict banner, the error banner, the detail title.
+- Error hints repeated the message and misdiagnosed a dead local server → hints never restate the message; local network/server errors say "Is Ollama or LM Studio running? Press Test"; the Settings button opens Settings scrolled to the failing provider's card.
+- Onboarding and Settings names differed; "frontier model" misled → same four names in both; the Anthropic option says where GPT users go.
+- Settings jargon → "Search Google for sources (recommended)", "Let Gemini read the pages it cites", "Search tool: how the local model finds sources", SearXNG hint points at the repo's docker folder; the legal paragraph became a one-line footnote under Privacy.
+- Verify/Test results appeared only in the card header, far from the button → a `role="status"` line directly under the button row (header too).
+- Degraded-result copy pointed "above" → "read the assessment below; claims and sources could not be extracted".
+- 320 px: action bars overflowed; key fields collapsed → labels drop to icons under 360 px (`.wys-btn-label`), key rows wrap.
+- Notes hidden under the Saved page tab; Sources tab duplicated the result; header + input card repeated the subject → Notes on the Result tab, Sources tab removed, input card hidden in the detail view.
+- "Open all" opened N tabs unannounced → "Open all N ↗", confirmation above 5.
+- "An image" looked clickable → plain help text.
+- History: "Export" → "Export all (JSON)"; " · 01:48 PM" leading dot gone; rows show the verdict summary as a second line.
+- Cost line → "≈ $0.03 if past the free search allowance".
+- Unverified sources → the address is shown as text with a copy button and a one-line explanation.
+- Accessibility: live regions on progress, status lines and the saved badge; `role="alert"` on errors; section labels and the verdict are real `<h2>`s; every toggle, select and the storage input is labelled; "Make default" buttons name their provider; detail tabs are a real `tablist` with arrow keys; filter chips have `aria-pressed`; cite links are "Source N"; the onboarding radios sit in a `fieldset`.
+
+`clean: no`
+
+### 2026-11-07 · Visual sweep 1 — independent audit (20 findings), all addressed
+
+- Verdict is now the first tinted block (input card demoted to a label plus quiet text; image preview capped at 120 px), original source second, assessment third.
+- Button hierarchy: primary only where it is the natural next step (home Check source, popup, onboarding Finish, result New check).
+- Hard-coded light colours in the verdict banner (ok border, confidence rings) → `--color-ok-line` token with a dark value; all rings use the tone's line token; muted verdicts get an Info glyph instead of Alert.
+- Non-text contrast: new `--color-line-strong` (3.0:1 light / 3.6:1 dark) for input borders, off toggles, chips and dashed cards; `line-2` stays for decorative card borders.
+- "cited by model" badge was 10 px `ink-3` on `surface-2` (4.39:1) → 12 px `ink-2` explanation line.
+- Green meant three things → provenance badge and the saved note are neutral; streaming source dots are accent; green is "supported" only.
+- Google suggestion chips frame: fixed 72 px that clipped or gapped, light-only in dark mode → 56 px single row inside a card, horizontal scroll, `color-scheme: light dark`.
+- Provider pill wrapped in the checking footer → truncated with a tooltip.
+- Onboarding fits in 820 px: 18 px title, one-line option rows, privacy defaults collapsed to one line with "Change".
+- Export file: every verdict was styled as a warning → tone classes (ok/warn/bad/muted), `color-scheme: light` declared; snapshot documents declare `color-scheme: light` too.
+- Chip gets a hairline light border so it separates from dark pages; popup root has `bg-paper`.
+- Icon stroke widths unified (2.2; 2.4 only for ≤12 px glyphs); radii reduced to 12 px cards / 8 px tiles; one row padding.
+- Narrative, summary and hints are capped at 64 characters per line at wide panel sizes.
+- Store scene: panel widened to 520 px so the verdict and source card dominate thumbnails.
+
+`clean: no`

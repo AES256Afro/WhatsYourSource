@@ -6,7 +6,9 @@ import { createSearchBackend } from '@/lib/search/backends';
 import type { SearchToolId, Settings } from '@/lib/storage/settings';
 import { hostOf } from '@/lib/util/url';
 import { Alert, Cpu } from '../Icons';
-import { CommitInput, ProviderCard, Row, SecretInput, type Status } from './primitives';
+import { PROVIDER_NAMES } from '../common';
+import { PROVIDER_CARD_ID } from '../SettingsView';
+import { CommitInput, ProviderCard, Row, SecretInput, StatusLine, type Status } from './primitives';
 
 type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
 type O = Settings['providers']['openaiCompat'];
@@ -56,10 +58,11 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
 
   const needsPermission = !isLocal && !isOpenAI && originOk === false;
   const cleartextKey = /^http:\/\//i.test(o.baseUrl) && !isLocal && o.apiKey.trim().length > 0;
-  const title = isOpenAI ? 'OpenAI' : isLocal ? 'Local model (OpenAI-compatible)' : 'OpenAI-compatible endpoint';
+  const title = PROVIDER_NAMES['openai-compat'];
 
   return (
     <ProviderCard
+      id={PROVIDER_CARD_ID['openai-compat']}
       icon={<Cpu size={16} />}
       title={title}
       subtitle={
@@ -71,27 +74,30 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
               ? 'Connecting…'
               : o.model
                 ? `${openaiCompatLabel(o.baseUrl)} · ${o.model}`
-                : 'Ollama, LM Studio, llama.cpp, OpenAI or any OpenAI-style API'
+                : 'Ollama or LM Studio on this device, or OpenAI and other OpenAI-style APIs'
       }
       subtitleTone={status.kind === 'ok' ? 'ok' : status.kind === 'bad' ? 'bad' : undefined}
       isDefault={settings.defaultProvider === 'openai-compat'}
       onMakeDefault={() => update((s) => ({ ...s, defaultProvider: 'openai-compat' }))}
     >
       <Row label="Server">
-        <select
-          className="wys-input h-8 w-auto max-w-[200px] text-[12px]"
-          value={preset}
-          onChange={(e) => {
-            const p = OPENAI_COMPAT_PRESETS.find((x) => x.id === e.target.value);
-            if (p?.baseUrl) void set({ baseUrl: p.baseUrl });
-          }}
-        >
-          {OPENAI_COMPAT_PRESETS.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+        {(id) => (
+          <select
+            aria-labelledby={id}
+            className="wys-input h-8 w-auto max-w-[200px] text-[12px]"
+            value={preset}
+            onChange={(e) => {
+              const p = OPENAI_COMPAT_PRESETS.find((x) => x.id === e.target.value);
+              if (p?.baseUrl) void set({ baseUrl: p.baseUrl });
+            }}
+          >
+            {OPENAI_COMPAT_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        )}
       </Row>
       <div className="flex items-center gap-2">
         <label htmlFor="wys-ocurl" className="w-[70px] shrink-0 text-[13px]">
@@ -139,10 +145,11 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
             <option key={m} value={m} />
           ))}
         </datalist>
-        <button className="wys-btn h-8 px-2.5 text-[12px]" onClick={test} disabled={status.kind === 'checking'}>
+        <button className="wys-btn h-8 px-2.5 text-[12px]" onClick={() => void test()} disabled={status.kind === 'checking'}>
           {status.kind === 'checking' ? '…' : 'Test'}
         </button>
       </div>
+      <StatusLine status={status} />
       {isLocal && (
         <span className="text-[11px] leading-[15px] text-ink-2">
           Download a model with{' '}
@@ -153,7 +160,7 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
           <a href="https://lmstudio.ai" target="_blank" rel="noopener noreferrer" className="font-semibold no-underline">
             LM Studio
           </a>
-          , start its server, then press Test. Ollama accepts extensions by default; LM Studio needs CORS enabled in its server settings.
+          , start its server, then press Test. Ollama works as is; in LM Studio turn on “Enable CORS” in the server settings.
         </span>
       )}
 
@@ -161,21 +168,24 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
         <Alert size={14} className="mt-0.5 shrink-0 text-warn" />
         <span className="text-[12px] leading-4 text-warn-ink">
           {o.searchTool === 'none'
-            ? 'This model can’t search the web by itself. Pair it with a search tool so it can find sources; without one it answers from memory and says so.'
-            : 'Search tool set — the model gets web_search and fetch_page tools and cites what they return.'}
+            ? 'This model can’t search the web by itself. Pick a search tool below so it can find sources; without one it answers from memory and says so.'
+            : 'With a search tool the model can search the web and read the pages it finds, and only those pages become links.'}
         </span>
       </div>
-      <Row label="Search tool">
-        <select
-          className="wys-input h-8 w-auto max-w-[200px] text-[12px]"
-          value={o.searchTool}
-          onChange={(e) => set({ searchTool: e.target.value as SearchToolId })}
-        >
-          <option value="none">None — answer from model only</option>
-          <option value="searxng">SearXNG (self-hosted)</option>
-          <option value="brave">Brave Search API</option>
-          <option value="tavily">Tavily</option>
-        </select>
+      <Row label="Search tool" hint="How the local model finds sources.">
+        {(id) => (
+          <select
+            aria-labelledby={id}
+            className="wys-input h-8 w-auto max-w-[200px] text-[12px]"
+            value={o.searchTool}
+            onChange={(e) => set({ searchTool: e.target.value as SearchToolId })}
+          >
+            <option value="none">None (answers from memory)</option>
+            <option value="searxng">SearXNG (your own search server)</option>
+            <option value="brave">Brave Search (API key)</option>
+            <option value="tavily">Tavily (API key)</option>
+          </select>
+        )}
       </Row>
       {o.searchTool === 'searxng' && (
         <>
@@ -194,7 +204,10 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
           {o.searxngUrl && searxngOk === false && (
             <PermissionNote text={`Allow the extension to reach ${hostOf(o.searxngUrl) || o.searxngUrl}`} onAllow={allowSearxng} />
           )}
-          <span className="text-[11px] text-ink-2">Your instance must have the JSON format enabled (`search.formats: [html, json]`).</span>
+          <span className="text-[11px] leading-[15px] text-ink-2">
+            Your SearXNG must allow JSON results (in its settings.yml: <code className="rounded bg-surface-2 px-1">search.formats: [html, json]</code>). The
+            repo’s docker folder has a ready-made one.
+          </span>
         </>
       )}
       {o.searchTool === 'brave' && (
@@ -218,14 +231,16 @@ export function LocalCard({ settings, update }: { settings: Settings; update: Up
         </div>
       )}
       {o.searchTool !== 'none' && (
-        <Row label="Let the model read pages it finds" hint={allUrls ? 'Allowed for all sites' : 'Needs permission to fetch pages on your behalf'}>
-          {allUrls ? (
-            <span className="text-[12px] font-semibold text-ok">On</span>
-          ) : (
-            <button className="wys-btn h-8 px-2.5 text-[12px]" onClick={allowAll}>
-              Allow
-            </button>
-          )}
+        <Row label="Let the model read the pages it finds" hint={allUrls ? 'Allowed for all sites.' : 'Needs permission to fetch pages on your behalf.'}>
+          {(id) =>
+            allUrls ? (
+              <span className="text-[12px] text-ink-2">Allowed</span>
+            ) : (
+              <button className="wys-btn h-8 px-2.5 text-[12px]" aria-describedby={id} onClick={() => void allowAll()}>
+                Allow
+              </button>
+            )
+          }
         </Row>
       )}
     </ProviderCard>

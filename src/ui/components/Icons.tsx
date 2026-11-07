@@ -57,7 +57,7 @@ export const External = (p: P) =>
       <path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" />
     </>,
   );
-export const Check = (p: P) => base({ strokeWidth: 2.6, ...p }, <path d="M5 12l4 4L19 7" />);
+export const Check = (p: P) => base({ strokeWidth: 2.2, ...p }, <path d="M5 12l4 4L19 7" />);
 export const Alert = (p: P) =>
   base(
     p,
@@ -102,7 +102,7 @@ export const Refresh = (p: P) =>
       <path d="M20 4v5h-5" />
     </>,
   );
-export const Close = (p: P) => base({ strokeWidth: 2.4, ...p }, <path d="M6 6l12 12M18 6L6 18" />);
+export const Close = (p: P) => base({ strokeWidth: 2.2, ...p }, <path d="M6 6l12 12M18 6L6 18" />);
 export const ChevronRight = (p: P) => base({ strokeWidth: 2.2, ...p }, <path d="M9 6l6 6-6 6" />);
 export const ArrowLeft = (p: P) => base({ strokeWidth: 2.2, ...p }, <path d="M19 12H5M11 6l-6 6 6 6" />);
 export const Shield = (p: P) =>
@@ -159,5 +159,13 @@ export const Download = (p: P) =>
     <>
       <path d="M12 3v12M7 10l5 5 5-5" />
       <path d="M4 17v3h16v-3" />
+    </>,
+  );
+export const Info = (p: P) =>
+  base(
+    { strokeWidth: 2.2, ...p },
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 8h.01" />
     </>,
   );

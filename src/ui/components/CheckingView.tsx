@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import type { RawSource } from '@/lib/providers/types';
 import { InputCard } from './InputCard';
@@ -20,12 +20,24 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
   const done = run.statuses;
   const current = done[done.length - 1] ?? 'Starting…';
   const earlier = done.slice(0, -1);
+  // Keyboard users arrive here from the button they just pressed, which is gone; land them on the progress.
+  const steps = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    steps.current?.focus();
+  }, []);
   return (
     <div className="flex h-full flex-col">
       <div className="flex grow flex-col gap-3.5 overflow-y-auto p-3.5">
         <InputCard input={run.input} clamp />
 
-        <div className="wys-card flex flex-col px-3 py-1">
+        <div
+          ref={steps}
+          tabIndex={-1}
+          role="status"
+          aria-live="polite"
+          aria-atomic="false"
+          className="wys-card flex flex-col px-3 py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent-line"
+        >
           {earlier.map((s, i) => (
             <StepRow key={i} done label={s} />
           ))}
@@ -43,7 +55,7 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
             <div className="flex flex-col gap-1 pb-2.5 pl-7 text-[12px] text-ink-2">
               {run.sources.slice(0, 8).map((s) => (
                 <span key={s.url} className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-ok" /> {s.domain}
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" /> {s.domain}
                 </span>
               ))}
               {run.sources.length > 8 && <span>+{run.sources.length - 8} more</span>}
@@ -55,7 +67,7 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
           <Label>Assessment · streaming</Label>
           <Narrative text={run.text.split('```')[0] ?? ''} streaming />
           {!run.text && (
-            <div className="mt-1 flex flex-col gap-2">
+            <div className="mt-1 flex flex-col gap-2" aria-hidden="true">
               <div className="h-3 w-[94%] rounded-md bg-surface-2" />
               <div className="h-3 w-[82%] rounded-md bg-surface-2" />
               <div className="h-3 w-[58%] rounded-md bg-surface-2" />
@@ -64,7 +76,9 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2 border-t border-line bg-paper px-3.5 py-2.5">
-        <ProviderBadge label={run.providerLabel} />
+        <span className="min-w-0 max-w-[60%]">
+          <ProviderBadge label={run.providerLabel} />
+        </span>
         <Elapsed since={run.startedAt} />
         <span className="grow" />
         <button className="wys-btn h-9" onClick={onCancel}>

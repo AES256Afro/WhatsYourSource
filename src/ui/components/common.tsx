@@ -47,10 +47,13 @@ export function Pill({ tone, children, className = '' }: { tone: Tone; children:
   return <span className={`wys-pill ${TONE_PILL[tone]} ${className}`}>{children}</span>;
 }
 
-export function Label({ children, right }: { children: ReactNode; right?: ReactNode }) {
+/** Section heading: a real heading so screen readers can jump between Verdict, Claims, Sources. */
+export function Label({ children, right, id }: { children: ReactNode; right?: ReactNode; id?: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="wys-label">{children}</span>
+      <h2 id={id} className="wys-label m-0">
+        {children}
+      </h2>
       {right !== undefined && (
         <>
           <span className="grow" />
@@ -67,18 +70,35 @@ export function Count({ n }: { n: number }) {
 
 export function ProviderBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
-      <Sparkle size={11} />
-      {label}
+    <span
+      className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent"
+      title={label}
+    >
+      <Sparkle size={11} className="shrink-0" />
+      <span className="truncate">{label}</span>
     </span>
   );
 }
 
 export function Cite({ id }: { id: number }) {
   return (
-    <a href={`#src-${id}`} className="wys-cite">
+    <a href={`#src-${id}`} className="wys-cite" aria-label={`Source ${id}`}>
       {id}
     </a>
+  );
+}
+
+/** A quiet text action at the right of a section label ("Open all", "See all", "Change"). */
+export function TextAction({ children, onClick, href }: { children: ReactNode; onClick?: () => void; href?: string }) {
+  const cls = 'border-0 bg-transparent p-0 text-[12px] font-medium text-accent no-underline hover:underline';
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+      {children}
+    </a>
+  ) : (
+    <button type="button" className={cls} onClick={onClick}>
+      {children}
+    </button>
   );
 }
 
@@ -100,3 +120,11 @@ export function formatUsd(v: number | undefined): string | null {
   if (v < 0.005) return '< $0.01';
   return `≈ $${v.toFixed(2)}`;
 }
+
+/** The names users see for each way of checking. One vocabulary everywhere: onboarding, settings, home, errors. */
+export const PROVIDER_NAMES = {
+  gemini: 'Gemini (your key)',
+  webmode: 'Google AI Mode (web)',
+  anthropic: 'Claude (your key)',
+  'openai-compat': 'Local or OpenAI-style model',
+} as const;

@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { GeminiProvider } from '@/lib/providers/gemini';
 import { GEMINI_FREE_SEARCHES_PER_MONTH } from '@/lib/providers/pricing';
 import { GEMINI_MODELS, type Settings } from '@/lib/storage/settings';
+import { PROVIDER_NAMES } from '../common';
 import { Sparkle } from '../Icons';
-import { ProviderCard, Row, SecretInput, Toggle, type Status } from './primitives';
+import { PROVIDER_CARD_ID } from '../SettingsView';
+import { ProviderCard, Row, SecretInput, StatusLine, Toggle, type Status } from './primitives';
 
 type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
 
@@ -14,7 +16,7 @@ export function GeminiCard({ settings, update }: { settings: Settings; update: U
   const [models, setModels] = useState<string[]>([]);
   // A verify result only applies to the key it was run for.
   const status: Status = verified.forKey === g.apiKey ? verified : { kind: 'idle' };
-  const idleText = g.apiKey ? `Key set · ends in …${g.apiKey.trim().slice(-3)}` : 'Your own free key from AI Studio · Google Search built in';
+  const idleText = g.apiKey ? `Key set · ends in …${g.apiKey.trim().slice(-3)}` : 'Free key from Google AI Studio · searches Google';
 
   const verify = async () => {
     const key = g.apiKey;
@@ -22,53 +24,58 @@ export function GeminiCard({ settings, update }: { settings: Settings; update: U
     const r = await new GeminiProvider(g).validate();
     if (r.ok) {
       setModels(r.models ?? []);
-      setVerified({ kind: 'ok', text: `Key verified · ends in …${key.trim().slice(-3)}`, forKey: key });
+      setVerified({ kind: 'ok', text: `Key works · ends in …${key.trim().slice(-3)}`, forKey: key });
     } else setVerified({ kind: 'bad', text: r.error, forKey: key });
   };
 
   const modelOptions = Array.from(new Set([...GEMINI_MODELS.map((m) => m.id), ...models, g.model]));
   return (
     <ProviderCard
+      id={PROVIDER_CARD_ID.gemini}
       icon={<Sparkle size={16} />}
-      title="Google AI (Gemini)"
+      title={PROVIDER_NAMES.gemini}
       subtitle={status.kind === 'ok' || status.kind === 'bad' ? status.text : status.kind === 'checking' ? 'Checking…' : idleText}
       subtitleTone={status.kind === 'ok' ? 'ok' : status.kind === 'bad' ? 'bad' : undefined}
       isDefault={settings.defaultProvider === 'gemini'}
       onMakeDefault={() => update((s) => ({ ...s, defaultProvider: 'gemini' }))}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <label htmlFor="wys-gkey" className="w-[70px] shrink-0 text-[13px]">
           API key
         </label>
-        <div className="min-w-0 grow">
+        <div className="min-w-[160px] grow basis-0">
           <SecretInput id="wys-gkey" value={g.apiKey} onCommit={(v) => set({ apiKey: v })} placeholder="AIza…" />
         </div>
-        <button className="wys-btn h-8 px-2.5 text-[12px]" onClick={verify} disabled={status.kind === 'checking' || !g.apiKey}>
+        <button className="wys-btn h-8 px-2.5 text-[12px]" onClick={() => void verify()} disabled={status.kind === 'checking' || !g.apiKey}>
           {status.kind === 'checking' ? '…' : 'Verify'}
         </button>
       </div>
+      <StatusLine status={status} />
       <span className="text-[11px] leading-[15px] text-ink-2">
         Free at{' '}
         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold no-underline">
           aistudio.google.com
         </a>
-        . Google’s free tier may use your prompts to improve its products; a paid key does not. Grounded searches beyond{' '}
-        {GEMINI_FREE_SEARCHES_PER_MONTH.toLocaleString()}/month are billed to your key.
+        . Google’s free tier may use your prompts to improve its products; a paid key does not. Searches beyond{' '}
+        {GEMINI_FREE_SEARCHES_PER_MONTH.toLocaleString()} a month are billed to your key.
       </span>
-      <Row label="Model">
-        <select className="wys-input h-8 w-auto max-w-[220px] text-[12px]" value={g.model} onChange={(e) => set({ model: e.target.value })}>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="wys-gmodel" className="text-[13px]">
+          Model
+        </label>
+        <select id="wys-gmodel" className="wys-input h-8 text-[12px]" value={g.model} onChange={(e) => set({ model: e.target.value })}>
           {modelOptions.map((id) => (
             <option key={id} value={id}>
               {GEMINI_MODELS.find((m) => m.id === id)?.label ?? id}
             </option>
           ))}
         </select>
+      </div>
+      <Row label="Search Google for sources" hint="Recommended: this is what makes citations possible.">
+        {(id) => <Toggle checked={g.grounding} onChange={(v) => set({ grounding: v })} labelledBy={id} />}
       </Row>
-      <Row label="Google Search grounding" hint="Finds sources. Needed for citations.">
-        <Toggle checked={g.grounding} onChange={(v) => set({ grounding: v })} />
-      </Row>
-      <Row label="Read linked pages (URL context)">
-        <Toggle checked={g.urlContext} onChange={(v) => set({ urlContext: v })} />
+      <Row label="Let Gemini read the pages it cites" hint="Better answers for links and posts.">
+        {(id) => <Toggle checked={g.urlContext} onChange={(v) => set({ urlContext: v })} labelledBy={id} />}
       </Row>
     </ProviderCard>
   );

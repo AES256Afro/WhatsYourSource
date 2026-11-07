@@ -48,6 +48,20 @@ export default defineBackground(() => {
   // Firefox does not always run the event page on startup; register on both.
   browser.runtime.onStartup.addListener(createMenus);
 
+  /**
+   * Where a context-menu check goes: the web tab when Google AI Mode is the default provider,
+   * otherwise the panel (opened synchronously here, while the gesture is fresh) plus a queued job.
+   * `resolve` may be slow (asking the page); the panel decision cannot wait for it.
+   */
+  function route(tab: MaybeTab, quick: CheckInput, resolve?: () => Promise<CheckInput>): void {
+    if (settings.defaultProvider === 'webmode') {
+      void (resolve ? resolve() : Promise.resolve(quick)).then((input) => browser.tabs.create({ url: googleAiModeUrl(input) }));
+      return;
+    }
+    openPanel(tab);
+    void (resolve ? resolve() : Promise.resolve(quick)).then((input) => enqueueJob(input, tab?.id, tab?.windowId));
+  }
+
   browser.contextMenus.onClicked.addListener((info, tab) => {
     const pageUrl = info.pageUrl ?? tab?.url ?? '';
     const pageTitle = tab?.title ?? '';
@@ -55,19 +69,11 @@ export default defineBackground(() => {
       case MENU.selection: {
         const text = (info.selectionText ?? '').trim();
         if (!text) return;
-        if (settings.defaultProvider === 'webmode') {
-          void browser.tabs.create({ url: googleAiModeUrl({ kind: 'text', text, pageUrl, pageTitle }) });
-          return;
-        }
-        openPanel(tab);
-        void (async () => {
+        const quick: CheckInput = { kind: 'text', text, pageUrl, pageTitle };
+        route(tab, quick, async () => {
           const sel = await resolveSelection(tab, text, info.frameId);
-          await enqueueJob(
-            { kind: 'text', text: sel.text, pageUrl: sel.pageUrl || pageUrl, pageTitle: sel.pageTitle || pageTitle, surrounding: sel.surrounding },
-            tab?.id,
-            tab?.windowId,
-          );
-        })();
+          return { kind: 'text', text: sel.text, pageUrl: sel.pageUrl || pageUrl, pageTitle: sel.pageTitle || pageTitle, surrounding: sel.surrounding };
+        });
         return;
       }
       case MENU.selectionWeb: {
@@ -78,40 +84,25 @@ export default defineBackground(() => {
       }
       case MENU.image: {
         if (!info.srcUrl) return;
-        if (settings.defaultProvider === 'webmode') {
-          void browser.tabs.create({ url: googleAiModeUrl({ kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle }) });
-          return;
-        }
-        openPanel(tab);
-        void enqueueJob({ kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle }, tab?.id, tab?.windowId);
+        route(tab, { kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle });
         return;
       }
       case MENU.post: {
-        if (settings.defaultProvider !== 'webmode') openPanel(tab);
-        void (async () => {
-          let input: CheckInput = { kind: 'page', url: pageUrl, title: pageTitle };
-          if (tab?.id != null) {
-            try {
-              const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:extract-post' });
-              const parsed = PostInputSchema.safeParse(reply);
-              if (parsed.success) input = parsed.data;
-            } catch {
-              /* no content script on this page */
-            }
+        const page: CheckInput = { kind: 'page', url: pageUrl, title: pageTitle };
+        route(tab, page, async () => {
+          if (tab?.id == null) return page;
+          try {
+            const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:extract-post' });
+            const parsed = PostInputSchema.safeParse(reply);
+            return parsed.success ? parsed.data : page;
+          } catch {
+            return page; // no content script on this page
           }
-          if (settings.defaultProvider === 'webmode') await browser.tabs.create({ url: googleAiModeUrl(input) });
-          else await enqueueJob(input, tab?.id, tab?.windowId);
-        })();
+        });
         return;
       }
       case MENU.page: {
-        const input: CheckInput = { kind: 'page', url: pageUrl, title: pageTitle };
-        if (settings.defaultProvider === 'webmode') {
-          void browser.tabs.create({ url: googleAiModeUrl(input) });
-          return;
-        }
-        openPanel(tab);
-        void enqueueJob(input, tab?.id, tab?.windowId);
+        route(tab, { kind: 'page', url: pageUrl, title: pageTitle });
         return;
       }
     }

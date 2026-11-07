@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { hostOf } from '@/lib/util/url';
 import { googleAiModeUrl } from '@/lib/webmode';
@@ -10,24 +11,36 @@ export interface RunError {
   details?: string;
   /** Provider id the error came from, for provider-specific hints. */
   provider?: string;
+  /** For local endpoints: the base URL, so the hint can say which server to start. */
+  endpoint?: string;
 }
 
+/** What to do next, per error code. Never repeats the message itself. */
 const HINT: Record<string, string> = {
-  'no-key': 'Add an API key in settings, or open the check in Google AI Mode instead — that needs no key.',
-  auth: 'The provider rejected the key. Check it in settings.',
-  quota: 'You hit a rate limit or quota. Wait a minute, pick the cheaper model, or try another provider.',
-  network: 'Couldn’t reach the provider. Check your connection, or for a local model, that the server is running.',
-  blocked: 'The provider declined this content. Try a shorter selection or a different provider.',
-  'bad-request': 'The provider didn’t accept the request — often an unknown model name. Check the model in settings.',
-  server: 'The provider had a server error. Try again in a moment.',
-  empty:
-    'The model sent back an empty answer. For a local model, give it a bigger context window or a shorter selection; otherwise try again or another provider.',
-  cancelled: 'Cancelled.',
-  'image-permission':
-    'The site doesn’t allow extensions to read its images directly. Allow access to that host once and try again, or make sure the image is visible on screen so a screenshot can be used.',
-  image: 'The image couldn’t be loaded. Try opening it in its own tab and checking it from there.',
-  'image-page-closed': 'Open the page the image was on, then re-check it from there (right-click the image → Check source of this image).',
+  'no-key': 'Add an API key in Settings, or open the check in Google AI Mode instead; that needs no key.',
+  auth: 'Check the key in Settings.',
+  quota: 'Wait a minute, pick the cheaper model, or try another provider.',
+  network: 'Check your connection.',
+  blocked: 'Try a shorter selection or a different provider.',
+  'bad-request': 'Often an unknown model name: check the model in Settings.',
+  server: 'Try again in a moment.',
+  empty: 'For a local model, give it a bigger context window or a shorter selection; otherwise try again or another provider.',
+  cancelled: '',
+  'image-permission': 'Allow access to that host once and try again, or make sure the image is visible on screen so a screenshot can be used.',
+  image: 'Try opening the image in its own tab and checking it from there.',
+  'image-page-closed': 'Open the page the image was on, then right-click the image → Check source of this image.',
 };
+
+function hintFor(error: RunError): string {
+  const base = HINT[error.code] ?? 'Something unexpected happened. Try again, or use Google AI Mode.';
+  const local = error.provider === 'openai-compat' && error.endpoint && /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(error.endpoint);
+  if (local && (error.code === 'network' || error.code === 'server')) {
+    return 'Is Ollama or LM Studio running, with a model loaded? Open Settings and press Test on the local model card.';
+  }
+  if (error.code === 'auth' && error.provider === 'gemini') return `${base} Keys from Google AI Studio start with "AIza".`;
+  if (error.code === 'auth' && error.provider === 'anthropic') return `${base} Anthropic keys start with "sk-ant-".`;
+  return base;
+}
 
 export function ErrorView({
   input,
@@ -39,26 +52,33 @@ export function ErrorView({
   input: CheckInput;
   error: RunError;
   onRetry: () => void;
-  onSettings: () => void;
+  /** Opens Settings, scrolled to the provider that failed when known. */
+  onSettings: (provider?: string) => void;
   onAllowHost?: () => void;
 }) {
   const host = input.kind === 'image' ? hostOf(input.srcUrl) : '';
+  const hint = hintFor(error);
+  const banner = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    banner.current?.focus();
+  }, []);
   return (
     <div className="flex flex-col gap-3.5 p-3.5">
       <InputCard input={input} clamp />
-      <div className="flex gap-2.5 rounded-xl border border-bad-line bg-bad-soft p-3">
+      <div
+        ref={banner}
+        tabIndex={-1}
+        role="alert"
+        className="flex gap-2.5 rounded-xl border border-bad-line bg-bad-soft p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent-line"
+      >
         <Alert size={20} className="mt-px shrink-0 text-bad" />
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-[15px] font-bold text-bad">{error.code === 'cancelled' ? 'Cancelled' : 'Couldn’t complete the check'}</span>
+          <h2 className="m-0 text-[16px] leading-[20px] font-semibold text-bad">{error.code === 'cancelled' ? 'Cancelled' : 'Couldn’t complete the check'}</h2>
           <span className="text-[13px] leading-[18px] text-bad-ink">{error.message}</span>
-          {error.details && <span className="text-[11px] leading-[15px] text-bad-ink/80 wrap-break-word">{error.details}</span>}
+          {error.details && <span className="text-[11px] leading-[15px] text-bad-ink wrap-break-word">{error.details}</span>}
         </div>
       </div>
-      <p className="m-0 text-[13px] leading-[19px] text-ink-2">
-        {HINT[error.code] ?? 'Something unexpected happened. Try again, or use Google AI Mode.'}
-        {error.code === 'auth' && error.provider === 'gemini' && ' Keys from Google AI Studio start with “AIza”.'}
-        {error.code === 'auth' && error.provider === 'anthropic' && ' Anthropic keys start with “sk-ant-”.'}
-      </p>
+      {hint && <p className="wys-measure m-0 text-[13px] leading-[18px] text-ink-2">{hint}</p>}
       {onAllowHost && host && (
         <button className="wys-btn wys-btn-primary" onClick={onAllowHost}>
           Allow access to {host} and retry
@@ -68,11 +88,11 @@ export function ErrorView({
         <button className="wys-btn grow" onClick={onRetry}>
           <Refresh size={15} /> Try again
         </button>
-        <button className="wys-btn grow" onClick={onSettings}>
+        <button className="wys-btn grow" onClick={() => onSettings(error.provider)}>
           <Sliders size={15} /> Settings
         </button>
       </div>
-      <a href={googleAiModeUrl(input)} target="_blank" rel="noopener noreferrer" className={`wys-btn no-underline ${onAllowHost ? '' : 'wys-btn-primary'}`}>
+      <a href={googleAiModeUrl(input)} target="_blank" rel="noopener noreferrer" className="wys-btn no-underline">
         Open in Google AI Mode instead <External size={14} />
       </a>
     </div>

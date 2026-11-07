@@ -25,6 +25,7 @@
 
   --color-ok: #166534;
   --color-ok-soft: #dcfce7;
+  --color-ok-line: #9bd6b0;
   --color-warn: #7a4e00;
   --color-warn-ink: #5c3d00;
   --color-warn-soft: #fef3c7;
@@ -34,6 +35,8 @@
   --color-bad-soft: #fee2e2;
   --color-bad-line: #f3b4b4;
   --color-muted-soft: #e5e7eb;
+  /* Borders of controls (inputs, off toggles, radios): ≥ 3:1 against paper, per WCAG 1.4.11. */
+  --color-line-strong: #8e95a0;
 }
 
 /* Dark theme follows the browser. Tokens only — components never hard-code colours. */
@@ -58,6 +61,7 @@
 
     --color-ok: #7ed29a;
     --color-ok-soft: #12301d;
+    --color-ok-line: #2f5a3d;
     --color-warn: #f1c35a;
     --color-warn-ink: #f6d98c;
     --color-warn-soft: #332a10;
@@ -67,6 +71,7 @@
     --color-bad-soft: #3a1818;
     --color-bad-line: #6e2a2a;
     --color-muted-soft: #2c3138;
+    --color-line-strong: #667080;
   }
 }
 
@@ -107,7 +112,7 @@ textarea {
 }
 .wys-card {
   border: 1px solid var(--color-line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--color-paper);
 }
 .wys-btn {
@@ -163,7 +168,7 @@ textarea {
   height: 38px;
   box-sizing: border-box;
   width: 100%;
-  border: 1px solid var(--color-line-2);
+  border: 1px solid var(--color-line-strong);
   border-radius: 10px;
   padding: 0 12px;
   background: var(--color-paper);
@@ -230,4 +235,27 @@ textarea {
 }
 .wys-prose p:last-child {
   margin-bottom: 0;
+}
+/* Long lines read badly in a wide panel. */
+.wys-prose,
+.wys-measure {
+  max-width: 64ch;
+}
+/* Action bars: under 360px the button labels go, the icons stay. */
+@media (max-width: 359px) {
+  .wys-btn-label {
+    display: none;
+  }
+  .wys-btn-narrow {
+    padding: 0 10px;
+  }
+}
+/* Everything the user cannot otherwise perceive from the side panel is announced through these. */
+.wys-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

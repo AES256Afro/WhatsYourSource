@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Check } from '../Icons';
 
 export function ProviderCard({
+  id,
   icon,
   title,
   subtitle,
@@ -11,6 +12,8 @@ export function ProviderCard({
   disabled,
   children,
 }: {
+  /** DOM id so the error view and onboarding can scroll to and focus this card. */
+  id?: string;
   icon: React.ReactNode;
   title: string;
   subtitle?: string;
@@ -21,17 +24,18 @@ export function ProviderCard({
   children?: React.ReactNode;
 }) {
   return (
-    <div
-      className={`flex flex-col gap-2.5 rounded-xl border p-3 ${isDefault ? 'border-accent bg-accent-wash' : 'border-line'} ${disabled ? 'opacity-70' : ''}`}
+    <section
+      id={id}
+      tabIndex={-1}
+      aria-label={title}
+      className={`flex flex-col gap-2.5 rounded-xl border p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent-line ${isDefault ? 'border-accent bg-accent-wash' : 'border-line'} ${disabled ? 'opacity-70' : ''}`}
     >
       <div className="flex items-center gap-2">
-        <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] ${isDefault ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}
-        >
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isDefault ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}>
           {icon}
         </span>
         <span className="flex min-w-0 grow flex-col">
-          <span className="text-[14px] font-semibold">{title}</span>
+          <h2 className="m-0 text-[14px] leading-[18px] font-semibold">{title}</h2>
           {subtitle && (
             <span
               className={`inline-flex items-center gap-1 text-[11px] ${subtitleTone === 'ok' ? 'font-semibold text-ok' : subtitleTone === 'bad' ? 'font-semibold text-bad' : 'text-ink-2'}`}
@@ -46,41 +50,72 @@ export function ProviderCard({
         ) : (
           onMakeDefault &&
           !disabled && (
-            <button className="wys-btn h-[30px] px-2.5 text-[12px]" onClick={onMakeDefault}>
+            <button className="wys-btn h-[30px] px-2.5 text-[12px]" onClick={onMakeDefault} aria-label={`Make ${title} the default`}>
               Make default
             </button>
           )
         )}
       </div>
       {children}
-    </div>
+    </section>
   );
 }
 
-export function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/** A settings row: the label names the control (toggle or select) through `aria-labelledby`. */
+export function Row({ label, hint, children }: { label: string; hint?: string; children: (labelId: string) => React.ReactNode }) {
+  const labelId = useId();
   return (
     <div className="flex min-h-[40px] items-center gap-3 border-b border-surface-2 py-1.5 text-[13px] last:border-b-0">
       <span className="flex grow flex-col">
-        <span>{label}</span>
+        <span id={labelId}>{label}</span>
         {hint && <span className="text-[11px] text-ink-2">{hint}</span>}
       </span>
-      {children}
+      {children(labelId)}
     </div>
   );
 }
 
-export function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange?: (v: boolean) => void; disabled?: boolean }) {
+export function Toggle({
+  checked,
+  onChange,
+  disabled,
+  labelledBy,
+  label,
+}: {
+  checked: boolean;
+  onChange?: (v: boolean) => void;
+  disabled?: boolean;
+  labelledBy?: string;
+  label?: string;
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-labelledby={labelledBy}
+      aria-label={label}
       disabled={disabled}
       onClick={() => onChange?.(!checked)}
-      className={`relative h-5 w-9 shrink-0 rounded-full border-0 p-0 transition-colors ${checked ? 'bg-accent-fill' : 'bg-line-2'} ${disabled ? 'opacity-50' : 'cursor-pointer'}`}
+      className={`relative h-5 w-9 shrink-0 rounded-full border-0 p-0 transition-colors ${checked ? 'bg-accent-fill' : 'bg-line-strong'} ${disabled ? 'opacity-50' : 'cursor-pointer'}`}
     >
       <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
     </button>
+  );
+}
+
+/** Verify/Test outcome, announced and shown right where the button is. */
+export function StatusLine({ status, idleText }: { status: Status; idleText?: string }) {
+  const text = status.kind === 'checking' ? 'Checking…' : status.kind === 'idle' ? idleText : status.text;
+  if (!text) return null;
+  return (
+    <p
+      role="status"
+      aria-live="polite"
+      className={`m-0 text-[12px] leading-4 ${status.kind === 'ok' ? 'font-semibold text-ok' : status.kind === 'bad' ? 'font-semibold text-bad' : 'text-ink-2'}`}
+    >
+      {text}
+    </p>
   );
 }
 
@@ -118,6 +153,7 @@ export function CommitInput({
   placeholder,
   className = '',
   list,
+  labelledBy,
 }: {
   id: string;
   value: string;
@@ -126,6 +162,7 @@ export function CommitInput({
   placeholder?: string;
   className?: string;
   list?: string;
+  labelledBy?: string;
 }) {
   const [v, setV] = useDraft(value);
   const commit = () => v !== value && onCommit(v.trim());
@@ -134,6 +171,7 @@ export function CommitInput({
       id={id}
       type={type}
       list={list}
+      aria-labelledby={labelledBy}
       className={`wys-input ${className}`}
       value={v}
       placeholder={placeholder}

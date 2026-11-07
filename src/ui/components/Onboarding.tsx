@@ -1,41 +1,44 @@
 import { useState } from 'react';
+import { GeminiProvider } from '@/lib/providers/gemini';
 import { providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
-import { Cpu, Globe, Link, Logo, Sparkle } from './Icons';
-import { CommitInput, SecretInput, Toggle } from './settings/primitives';
+import { PROVIDER_NAMES } from './common';
+import { Cpu, Globe, Link, Sparkle } from './Icons';
+import { CommitInput, SecretInput, StatusLine, Toggle, type Status } from './settings/primitives';
 
 type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
 
+/** Same names as the Settings cards, so what you pick here is what you find there. */
 const CHOICES: { id: ProviderId; title: string; tag: string; tagTone: 'accent' | 'muted' | 'ok'; blurb: string; icon: React.ReactNode }[] = [
   {
     id: 'gemini',
-    title: 'Google AI with your own free key',
+    title: PROVIDER_NAMES.gemini,
     tag: 'Recommended',
     tagTone: 'accent',
-    blurb: 'Gemini + Google Search. Answers and sources appear in the panel. Free key from AI Studio.',
+    blurb: 'Free key from Google AI Studio. Searches Google, answers in the panel.',
     icon: <Sparkle size={15} />,
   },
   {
     id: 'webmode',
-    title: 'Google AI Mode on the web',
+    title: PROVIDER_NAMES.webmode,
     tag: 'No setup',
     tagTone: 'muted',
-    blurb: 'No key. Opens google.com in a new tab with your text. Results aren’t saved to history.',
+    blurb: 'No key. Opens google.com in a new tab. Not saved to history.',
     icon: <Globe size={15} />,
   },
   {
     id: 'anthropic',
-    title: 'Your own frontier model',
+    title: PROVIDER_NAMES.anthropic,
     tag: 'Bring a key',
     tagTone: 'muted',
-    blurb: 'Claude, GPT or any API you already pay for. Paste a key; it stays on this device.',
+    blurb: 'Web search built in. GPT or another API: pick it in Settings afterwards.',
     icon: <Link size={15} />,
   },
   {
     id: 'openai-compat',
-    title: 'A local model on this device',
+    title: PROVIDER_NAMES['openai-compat'],
     tag: 'Private',
     tagTone: 'ok',
-    blurb: 'Download a model with Ollama or LM Studio (e.g. Qwen). Nothing leaves your machine; add a search tool so it can find sources.',
+    blurb: 'Ollama or LM Studio on this device; add a search tool so it can find sources.',
     icon: <Cpu size={15} />,
   },
 ];
@@ -49,7 +52,7 @@ export function Onboarding({
   settings: Settings;
   update: Update;
   onDone: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (provider?: ProviderId) => void;
 }) {
   const [choice, setChoiceState] = useState<ProviderId>('gemini');
   const [touched, setTouched] = useState(false);
@@ -59,73 +62,102 @@ export function Onboarding({
   };
   const [chip, setChip] = useState(settings.privacy.chip);
   const [snapshots, setSnapshots] = useState(settings.privacy.snapshots);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [verify, setVerify] = useState<Status>({ kind: 'idle' });
+
+  const geminiKey = settings.providers.gemini.apiKey.trim();
+  const anthropicKey = settings.providers.anthropic.apiKey.trim();
+  const keyMissing = (choice === 'gemini' && !geminiKey) || (choice === 'anthropic' && !anthropicKey);
+
+  const verifyGemini = async () => {
+    setVerify({ kind: 'checking' });
+    const r = await new GeminiProvider(settings.providers.gemini).validate();
+    setVerify(r.ok ? { kind: 'ok', text: 'Key works.' } : { kind: 'bad', text: r.error });
+  };
 
   const finish = async () => {
     // A provider configured in Settings before pressing Finish wins over the untouched radio default.
     const keepCurrent = !touched && providerReady(settings) && settings.defaultProvider !== choice;
-    await update((s) => ({ ...s, onboarded: true, defaultProvider: keepCurrent ? s.defaultProvider : choice, privacy: { ...s.privacy, chip, snapshots } }));
-    if (choice === 'anthropic' || choice === 'openai-compat') onOpenSettings();
+    // Finishing without a key means checks go to Google AI Mode until a key is added; say so on the button.
+    const provider: ProviderId = keepCurrent ? settings.defaultProvider : keyMissing ? 'webmode' : choice;
+    await update((s) => ({ ...s, onboarded: true, defaultProvider: provider, privacy: { ...s.privacy, chip, snapshots } }));
+    if (choice === 'openai-compat' || (choice === 'anthropic' && !keyMissing)) onOpenSettings(choice);
     else onDone();
   };
 
+  const buttonText = choice === 'openai-compat' ? 'Continue to settings' : keyMissing ? 'Finish without a key (use Google AI Mode)' : 'Finish setup';
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex grow flex-col gap-4 overflow-y-auto px-5 pt-6 pb-3">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-[15px] bg-accent-soft">
-            <Logo size={30} className="text-accent" />
-          </span>
-          <h1 className="m-0 text-[20px] font-bold tracking-tight">Check the source of anything you read</h1>
+      <div className="flex grow flex-col gap-3.5 overflow-y-auto px-4 pt-4 pb-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="m-0 text-[18px] leading-[22px] font-bold tracking-tight">Check the source of anything you read</h1>
           <p className="m-0 text-[13px] leading-[18px] text-ink-2">You decide which AI does the checking. Change it any time.</p>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Step n={1}>How do you want to check sources?</Step>
+        <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+          <legend className="mb-1.5 flex items-center gap-2 p-0">
+            <StepNo n={1} />
+            <span className="text-[13px] font-semibold">How do you want to check sources?</span>
+          </legend>
           {CHOICES.map((c) => (
             <label
               key={c.id}
               htmlFor={`wys-ob-${c.id}`}
-              className={`flex cursor-pointer items-start gap-2.5 rounded-[10px] border px-3 py-2.5 ${choice === c.id ? 'border-accent bg-accent-wash' : 'border-line bg-paper'}`}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 ${choice === c.id ? 'border-accent bg-accent-wash' : 'border-line bg-paper'}`}
             >
               <input
                 id={`wys-ob-${c.id}`}
                 type="radio"
                 name="wys-provider"
-                className="mt-[3px] accent-accent"
+                className="accent-accent"
                 checked={choice === c.id}
                 onChange={() => setChoice(c.id)}
               />
               <span
-                className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg ${choice === c.id ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${choice === c.id ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}
               >
                 {c.icon}
               </span>
-              <span className="flex min-w-0 grow flex-col gap-0.5">
+              <span className="flex min-w-0 grow flex-col">
                 <span className="flex items-center gap-1.5">
-                  <span className="text-[13px] font-semibold">{c.title}</span>
+                  <span className="truncate text-[13px] font-semibold">{c.title}</span>
                   <span
-                    className={`rounded-full px-1.5 py-px text-[10px] font-semibold ${c.tagTone === 'accent' ? 'bg-accent-fill text-white' : c.tagTone === 'ok' ? 'bg-ok-soft text-ok' : 'bg-muted-soft text-ink-2'}`}
+                    className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold ${c.tagTone === 'accent' ? 'bg-accent-fill text-white' : c.tagTone === 'ok' ? 'bg-ok-soft text-ok' : 'bg-muted-soft text-ink-2'}`}
                   >
                     {c.tag}
                   </span>
                 </span>
-                <span className="text-[12px] leading-4 text-ink-2">{c.blurb}</span>
+                <span className="truncate text-[12px] leading-4 text-ink-2" title={c.blurb}>
+                  {c.blurb}
+                </span>
               </span>
             </label>
           ))}
-        </div>
+        </fieldset>
 
         {choice === 'gemini' && (
-          <div className="flex flex-col gap-2">
-            <Step n={2}>
-              <label htmlFor="wys-ob-gkey">Your Gemini API key</label>
-            </Step>
-            <SecretInput
-              id="wys-ob-gkey"
-              value={settings.providers.gemini.apiKey}
-              onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, gemini: { ...s.providers.gemini, apiKey: v } } }))}
-              placeholder="Paste key…"
-            />
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <StepNo n={2} />
+              <label htmlFor="wys-ob-gkey" className="text-[13px] font-semibold">
+                Your Gemini API key
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <div className="min-w-0 grow">
+                <SecretInput
+                  id="wys-ob-gkey"
+                  value={settings.providers.gemini.apiKey}
+                  onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, gemini: { ...s.providers.gemini, apiKey: v } } }))}
+                  placeholder="Paste key…"
+                />
+              </div>
+              <button className="wys-btn px-2.5" type="button" onClick={() => void verifyGemini()} disabled={!geminiKey || verify.kind === 'checking'}>
+                Verify
+              </button>
+            </div>
+            <StatusLine status={verify} />
             <span className="text-[12px] leading-4 text-ink-2">
               Free at{' '}
               <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold no-underline">
@@ -136,10 +168,13 @@ export function Onboarding({
           </div>
         )}
         {choice === 'anthropic' && (
-          <div className="flex flex-col gap-2">
-            <Step n={2}>
-              <label htmlFor="wys-ob-akey">Your Anthropic API key</label>
-            </Step>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <StepNo n={2} />
+              <label htmlFor="wys-ob-akey" className="text-[13px] font-semibold">
+                Your Anthropic API key
+              </label>
+            </div>
             <SecretInput
               id="wys-ob-akey"
               value={settings.providers.anthropic.apiKey}
@@ -147,15 +182,18 @@ export function Onboarding({
               placeholder="sk-ant-…"
             />
             <span className="text-[12px] leading-4 text-ink-2">
-              Using OpenAI or another API instead? Pick it under Settings → OpenAI-compatible after this step.
+              Using OpenAI or another API instead? Finish, then pick it under Settings → Local or OpenAI-style model → Server.
             </span>
           </div>
         )}
         {choice === 'openai-compat' && (
-          <div className="flex flex-col gap-2">
-            <Step n={2}>
-              <label htmlFor="wys-ob-url">Where is the model running?</label>
-            </Step>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <StepNo n={2} />
+              <label htmlFor="wys-ob-url" className="text-[13px] font-semibold">
+                Where is the model running?
+              </label>
+            </div>
             <CommitInput
               id="wys-ob-url"
               value={settings.providers.openaiCompat.baseUrl}
@@ -167,52 +205,74 @@ export function Onboarding({
               <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer" className="font-semibold no-underline">
                 Ollama
               </a>{' '}
-              and run <code className="rounded bg-surface-2 px-1">ollama pull qwen3.5:9b</code> (or{' '}
-              <code className="rounded bg-surface-2 px-1">qwen3.5:4b</code> on a small GPU). You’ll pick the model and a search tool on the next screen.
+              and run <code className="rounded bg-surface-2 px-1">ollama pull qwen3.5:9b</code>. You’ll pick the model and a search tool on the next screen.
             </span>
           </div>
         )}
 
-        <div className="flex flex-col gap-2">
-          <Step n={3}>Privacy</Step>
-          <div className="wys-card flex flex-col px-3">
-            <PrivacyRow label="Send text or images only when I press Check" hint="Always">
-              <Toggle checked disabled />
-            </PrivacyRow>
-            <PrivacyRow label="Save a copy of the page with each check (local only)">
-              <Toggle checked={snapshots} onChange={setSnapshots} />
-            </PrivacyRow>
-            <PrivacyRow label="Show the floating “Check source” chip on selection">
-              <Toggle checked={chip} onChange={setChip} />
-            </PrivacyRow>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <StepNo n={3} />
+            <span className="text-[13px] font-semibold">Privacy</span>
+            <span className="grow" />
+            <button
+              type="button"
+              className="border-0 bg-transparent p-0 text-[12px] font-medium text-accent"
+              onClick={() => setPrivacyOpen((v) => !v)}
+              aria-expanded={privacyOpen}
+            >
+              {privacyOpen ? 'Hide' : 'Change'}
+            </button>
           </div>
+          {privacyOpen ? (
+            <div className="wys-card flex flex-col px-3">
+              <PrivacyRow label="Send text or images only when I press Check" hint="Always">
+                {(id) => <Toggle checked disabled labelledBy={id} />}
+              </PrivacyRow>
+              <PrivacyRow label="Save a copy of the page with each check (local only)">
+                {(id) => <Toggle checked={snapshots} onChange={setSnapshots} labelledBy={id} />}
+              </PrivacyRow>
+              <PrivacyRow label="Show the floating “Check source” chip on selection">
+                {(id) => <Toggle checked={chip} onChange={setChip} labelledBy={id} />}
+              </PrivacyRow>
+            </div>
+          ) : (
+            <p className="m-0 text-[12px] leading-4 text-ink-2">
+              Nothing is sent until you press Check. Page copies for history: {snapshots ? 'on' : 'off'}. Floating chip: {chip ? 'on' : 'off'}.
+            </p>
+          )}
         </div>
       </div>
-      <div className="flex shrink-0 flex-col gap-2 border-t border-line bg-paper px-5 pt-2.5 pb-4">
-        <button className="wys-btn wys-btn-primary h-11 text-[14px]" onClick={finish}>
-          {choice === 'anthropic' || choice === 'openai-compat' ? 'Continue to settings' : 'Finish setup'}
+      <div className="flex shrink-0 flex-col gap-2 border-t border-line bg-paper px-4 pt-2.5 pb-3.5">
+        <button className="wys-btn wys-btn-primary h-11 text-[14px]" onClick={() => void finish()}>
+          {buttonText}
         </button>
-        <span className="text-center text-[12px] text-ink-2">You can mix these later — e.g. Gemini by default, a local model as fallback — in Settings.</span>
+        <span className="text-center text-[12px] text-ink-2">You can mix these later in Settings, e.g. Gemini by default and a local model as fallback.</span>
       </div>
     </div>
   );
 }
 
-function Step({ n, children }: { n: number; children: React.ReactNode }) {
+function StepNo({ n }: { n: number }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-accent-fill text-[12px] font-bold text-white">{n}</span>
-      <span className="text-[13px] font-semibold">{children}</span>
-    </div>
+    <span
+      aria-hidden="true"
+      className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-accent-fill text-[12px] font-bold text-white"
+    >
+      {n}
+    </span>
   );
 }
 
-function PrivacyRow({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function PrivacyRow({ label, hint, children }: { label: string; hint?: string; children: (labelId: string) => React.ReactNode }) {
+  const id = `wys-pr-${label.replace(/\W+/g, '-').toLowerCase()}`;
   return (
     <div className="flex min-h-[40px] items-center gap-2.5 border-b border-surface-2 py-1.5 text-[13px] last:border-b-0">
-      <span className="grow leading-[17px]">{label}</span>
+      <span id={id} className="grow leading-[17px]">
+        {label}
+      </span>
       {hint && <span className="text-[11px] text-ink-2">{hint}</span>}
-      {children}
+      {children(id)}
     </div>
   );
 }

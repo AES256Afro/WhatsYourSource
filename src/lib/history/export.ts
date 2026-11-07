@@ -1,5 +1,14 @@
 import type { StoredCheck, StoredSnapshot } from './db';
+import type { VerdictKind } from '../pipeline/schema';
 import { buildSnapshotSrcdoc, escapeHtml } from './snapshot';
+
+/** Same mapping as the panel's VerdictBanner, kept here so the export has no UI dependency. */
+function toneForVerdict(kind: VerdictKind): 'ok' | 'warn' | 'bad' | 'muted' {
+  if (kind === 'supported' || kind === 'authentic') return 'ok';
+  if (kind === 'disputed' || kind === 'ai-generated') return 'bad';
+  if (kind === 'unverified') return 'muted';
+  return 'warn';
+}
 
 /** One check as a self-contained HTML file: the result card first, the saved page below it. */
 export function checkToStandaloneHtml(check: StoredCheck, snapshot?: StoredSnapshot | null): string {
@@ -30,14 +39,15 @@ export function checkToStandaloneHtml(check: StoredCheck, snapshot?: StoredSnaps
   const pageSection = snapshot
     ? `<h2>Saved page</h2><p><small>${e(snapshot.title)} · <a href="${e(snapshot.url)}">${e(snapshot.url)}</a> · captured ${e(new Date(snapshot.capturedAt).toLocaleString())}</small></p><iframe sandbox="allow-popups allow-popups-to-escape-sandbox" style="width:100%;height:80vh;border:1px solid #E3E6EA;border-radius:8px" srcdoc="${pageHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></iframe>`
     : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; frame-src data: about:; img-src data:"><title>${e(check.verdictLabel)} — ${e(check.title)}</title><style>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; frame-src data: about:; img-src data:"><title>${e(check.verdictLabel)} — ${e(check.title)}</title><style>
 body{max-width:820px;margin:32px auto;padding:0 20px;font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#15181C}
-.verdict{display:inline-block;padding:4px 12px;border-radius:999px;background:#FEF3C7;color:#7A4E00;font-weight:700}
+.verdict{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:700}
+.verdict.ok{background:#dcfce7;color:#166534}.verdict.warn{background:#fef3c7;color:#7a4e00}.verdict.bad{background:#fee2e2;color:#991b1b}.verdict.muted{background:#e5e7eb;color:#4b5563}
 blockquote{border-left:3px solid #BFD7F5;margin:0;padding:6px 14px;background:#F7F8FA;border-radius:6px}
 small{color:#4B5563}h3{margin-top:24px}
 </style></head><body>
 <p><small>WhatsYourSource · ${e(new Date(check.createdAt).toLocaleString())} · ${e(check.provider)} (${e(check.model)})</small></p>
-<h1><span class="verdict">${e(r.verdict.label)}</span> <small>${e(r.verdict.confidence)} confidence</small></h1>
+<h1><span class="verdict ${toneForVerdict(r.verdict.kind)}">${e(r.verdict.label)}</span> <small>${e(r.verdict.confidence)} confidence</small></h1>
 <p><strong>${e(r.verdict.summary)}</strong></p>
 ${subject}
 ${narrative}

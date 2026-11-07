@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CheckResult } from '@/lib/pipeline/schema';
 import { googleAiModeUrl } from '@/lib/webmode';
 import { ClaimList } from './ClaimList';
-import { Cite, Label, ProviderBadge, formatUsd, timeAgo } from './common';
-import { Check, Copy, External, Refresh } from './Icons';
+import { Cite, Label, ProviderBadge, TextAction, formatUsd, timeAgo } from './common';
+import { Check, Copy, External, Logo, Refresh } from './Icons';
 import { InputCard } from './InputCard';
 import { Narrative } from './Narrative';
 import { ProvenancePanel } from './ProvenancePanel';
@@ -11,9 +11,14 @@ import { SearchSuggestions } from './SearchSuggestions';
 import { SourceList } from './SourceList';
 import { VerdictBanner } from './VerdictBanner';
 
+/**
+ * Reading order answers the product's two questions in order: is it true (verdict), where is the
+ * source (original-source card), then the reasoning, the claims and the full source list.
+ */
 export function ResultView({
   result,
   onRecheck,
+  onNewCheck,
   saved,
   saveError,
   snapshotNote,
@@ -21,11 +26,12 @@ export function ResultView({
 }: {
   result: CheckResult;
   onRecheck: () => void;
+  onNewCheck?: () => void;
   saved?: boolean;
   /** Set when saving to history failed; shown where the "Saved" badge would be. */
   saveError?: string | null;
   snapshotNote?: string;
-  /** Inside the history detail view: no action bar, no own scroll container. */
+  /** Inside the history detail view: no action bar, no own scroll container, the header already names the subject. */
   embedded?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -35,47 +41,48 @@ export function ResultView({
     setTimeout(() => setCopied(false), 1500);
   };
   const usd = formatUsd(result.usage?.estUsd);
+  const verdictRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!embedded) verdictRef.current?.focus();
+  }, [embedded, result.id]);
+  const o = result.originalSource;
+  const compare = (
+    <TextAction href={googleAiModeUrl(result.input)}>
+      Compare in Google AI Mode <span aria-hidden="true">↗</span>
+    </TextAction>
+  );
+
   return (
     <div className={embedded ? 'flex flex-col' : 'flex h-full flex-col'}>
-      <div className={`flex grow flex-col gap-3 p-3.5 ${embedded ? '' : 'overflow-y-auto'}`}>
-        <InputCard input={result.input} when={timeAgo(result.createdAt)} deferImages={embedded} />
-        <VerdictBanner verdict={result.verdict} />
+      <div className={`flex grow flex-col gap-3.5 p-3.5 ${embedded ? '' : 'overflow-y-auto'}`}>
+        {!embedded && <InputCard input={result.input} when={timeAgo(result.createdAt)} clamp />}
+        <VerdictBanner ref={verdictRef} verdict={result.verdict} />
         {result.degraded && (
-          <div className="rounded-[10px] border border-warn-line bg-warn-soft px-3 py-2 text-[12px] leading-[17px] text-warn-ink">
-            The model answered in prose only, so the claims and verdict below are a best effort. Re-check to try again.
+          <div className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-[12px] leading-4 text-warn-ink">
+            The model answered in prose only, so read the assessment below; claims and sources could not be extracted. Re-check to try again.
           </div>
         )}
-        <Narrative text={result.narrative} />
 
-        {result.input.kind === 'image' && result.provenance && <ProvenancePanel provenance={result.provenance} srcUrl={result.input.srcUrl} />}
-
-        {result.originalSource && (
+        {o && (
           <div className="flex flex-col gap-1.5">
             <Label>{result.input.kind === 'image' ? 'Earliest match found' : 'Likely original source'}</Label>
             <div className="flex gap-2.5 rounded-xl border border-accent-line bg-accent-wash p-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-accent-fill text-[13px] font-bold text-white">
-                {initials(result.originalSource.publisher || result.originalSource.title)}
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-[13px] font-bold text-accent">
+                {initials(o.publisher || o.title)}
               </span>
               <div className="flex min-w-0 grow flex-col gap-1">
-                <span className="text-[14px] leading-[19px] font-semibold">{result.originalSource.title}</span>
-                {(result.originalSource.publisher || result.originalSource.date) && (
-                  <span className="text-[12px] text-ink-2">{[result.originalSource.publisher, result.originalSource.date].filter(Boolean).join(' · ')}</span>
-                )}
-                {result.originalSource.how && <span className="text-[12px] leading-[17px] text-ink-2">{result.originalSource.how}</span>}
+                <span className="text-[14px] leading-[18px] font-semibold">{o.title}</span>
+                {(o.publisher || o.date) && <span className="text-[12px] text-ink-2">{[o.publisher, o.date].filter(Boolean).join(' · ')}</span>}
+                {o.how && <span className="text-[12px] leading-4 text-ink-2">{o.how}</span>}
                 <div className="mt-1 flex items-center gap-3.5">
-                  {result.originalSource.url && (
-                    <a
-                      href={result.originalSource.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[12px] font-semibold no-underline"
-                    >
+                  {o.url && (
+                    <a href={o.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] font-semibold no-underline">
                       Open source <External size={12} />
                     </a>
                   )}
-                  {result.originalSource.sourceId && (
+                  {o.sourceId && (
                     <span className="text-[12px] text-ink-2">
-                      Source <Cite id={result.originalSource.sourceId} />
+                      Source <Cite id={o.sourceId} />
                     </span>
                   )}
                 </div>
@@ -84,48 +91,60 @@ export function ResultView({
           </div>
         )}
 
+        <div className="flex flex-col gap-1.5">
+          <Label>Assessment</Label>
+          <Narrative text={result.narrative} />
+        </div>
+
+        {result.input.kind === 'image' && result.provenance && <ProvenancePanel provenance={result.provenance} srcUrl={result.input.srcUrl} />}
+
         <ClaimList claims={result.claims} />
-        <SourceList sources={result.sources} />
-        {result.notes && <p className="m-0 text-[12px] leading-[17px] text-ink-2">{result.notes}</p>}
+        <SourceList sources={result.sources} right={compare} />
+        {result.sources.length === 0 && <div className="flex justify-end">{compare}</div>}
+        {result.notes && <p className="wys-measure m-0 text-[12px] leading-4 text-ink-2">{result.notes}</p>}
         {result.searchSuggestionsHtml && <SearchSuggestions html={result.searchSuggestionsHtml} />}
 
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-ink-2">
           <ProviderBadge label={result.provider.model || result.provider.label} />
-          <span title={usd && result.searchQueries.length ? 'Upper bound: searches are only billed past the provider’s free allowance.' : undefined}>
+          <span>
             {[
               result.searchQueries.length ? `${result.searchQueries.length} search${result.searchQueries.length === 1 ? '' : 'es'}` : null,
               result.usage?.inputTokens || result.usage?.outputTokens
                 ? `${fmtK((result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0))} tokens`
                 : null,
-              usd ? (result.searchQueries.length ? `up to ${usd}` : usd) : null,
+              usd ? (result.searchQueries.length ? `${usd} if past the free search allowance` : usd) : null,
             ]
               .filter(Boolean)
               .join(' · ')}
           </span>
           <span className="grow" />
-          {saved && (
-            <span className="inline-flex items-center gap-1 font-semibold text-ok">
-              <Check size={12} /> {snapshotNote ?? 'Saved to history'}
-            </span>
-          )}
-          {saveError && (
-            <span className="font-semibold text-bad" title={saveError}>
-              Couldn’t save to history
-            </span>
-          )}
+          <span role="status" aria-live="polite">
+            {saved && (
+              <span className="inline-flex items-center gap-1 font-medium">
+                <Check size={12} /> {snapshotNote ?? 'Saved to history'}
+              </span>
+            )}
+            {saveError && (
+              <span className="font-semibold text-bad" title={saveError}>
+                Couldn’t save to history
+              </span>
+            )}
+          </span>
         </div>
       </div>
       {!embedded && (
         <div className="flex shrink-0 gap-2 border-t border-line bg-paper px-3.5 py-2.5">
-          <button className="wys-btn grow" onClick={copy}>
-            {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied' : 'Copy'}
+          <button className="wys-btn wys-btn-narrow" onClick={() => void copy()} aria-label={copied ? 'Copied' : 'Copy as Markdown'}>
+            {copied ? <Check size={15} /> : <Copy size={15} />} <span className="wys-btn-label">{copied ? 'Copied' : 'Copy'}</span>
           </button>
-          <button className="wys-btn grow" onClick={onRecheck}>
-            <Refresh size={15} /> Re-check
+          <button className="wys-btn wys-btn-narrow" onClick={onRecheck} aria-label="Re-check">
+            <Refresh size={15} /> <span className="wys-btn-label">Re-check</span>
           </button>
-          <a href={googleAiModeUrl(result.input)} target="_blank" rel="noopener noreferrer" className="wys-btn wys-btn-primary grow-[1.4] no-underline">
-            Open in Google AI <External size={14} />
-          </a>
+          {onNewCheck && (
+            <button className="wys-btn wys-btn-primary grow" onClick={onNewCheck}>
+              <Logo size={15} /> New check
+            </button>
+          )}
         </div>
       )}
     </div>
