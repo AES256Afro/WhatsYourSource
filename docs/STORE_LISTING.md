@@ -104,3 +104,12 @@ Generated at 1280×800 (Chrome, Edge) and reused for AMO. Each shows a realistic
 7. `07-result-dark.png` — the result card in dark mode.
 
 Promo images (Chrome): small tile 440×280 (`promo-440x280.png`), marquee 1400×560 (`promo-1400x560.png`).
+
+## Submission checklist (1.0.0)
+
+Everything below is done in the store dashboards, signed in as the developer; the files are on the [v1.0.0 GitHub release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.0.0).
+
+1. **Chrome Web Store** (https://chrome.google.com/webstore/devconsole, one-time $5 registration): New item → upload `whatsyoursource-1.0.0-chrome.zip`. Store listing: name, the one-line description, the detailed description, category Productivity → Tools, `store/01`–`07` screenshots (1280×800), `promo-440x280.png` small tile, `promo-1400x560.png` marquee. Privacy practices: the single-purpose statement, the permission justifications above, data-use disclosures (collects website content only as described; not sold; not for unrelated purposes), privacy policy URL. Distribution: unlisted first if a beta is wanted, then public.
+2. **Firefox Add-ons** (https://addons.mozilla.org/developers/): Submit a New Add-on → "On this site" → upload `whatsyoursource-1.0.0-firefox.zip`; when asked for source code, upload `whatsyoursource-1.0.0-sources.zip` with the build instructions from the README (Node 22, `npm ci`, `npm run build:firefox`). Fill the AMO summary, description, categories Search Tools + Social & Communication, tags, license MIT, privacy policy and support URLs; the data-collection disclosure is already in the manifest. The reviewer notes above explain the nine linter warnings.
+3. **Edge Add-ons** (https://partner.microsoft.com/dashboard/microsoftedge): upload the same Chrome zip; copy the Chrome listing; category Productivity.
+4. After approval: add the store links to the README install section and tag the next version from `package.json`.
