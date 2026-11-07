@@ -54,7 +54,10 @@ describe('GeminiProvider + runCheck', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const provider = new GeminiProvider({ apiKey: 'k', model: 'gemini-3.8-flash', grounding: true, urlContext: true });
-    const { result, error, events } = await collectCheck({ kind: 'text', text: 'The definition of insanity…', pageUrl: 'https://medium.com/x', pageTitle: 'T' }, provider);
+    const { result, error, events } = await collectCheck(
+      { kind: 'text', text: 'The definition of insanity…', pageUrl: 'https://medium.com/x', pageTitle: 'T' },
+      provider,
+    );
     expect(error).toBeUndefined();
     expect(result).toBeDefined();
     expect(result!.verdict.kind).toBe('misattributed');
@@ -72,7 +75,10 @@ describe('GeminiProvider + runCheck', () => {
   });
 
   it('maps HTTP errors to provider error codes', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { message: 'API key not valid' } }), { status: 400 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: 'API key not valid' } }), { status: 400 })),
+    );
     const provider = new GeminiProvider({ apiKey: 'bad', model: 'gemini-3.8-flash', grounding: true, urlContext: true });
     const { error } = await collectCheck({ kind: 'page', url: 'https://example.com', title: 'x' }, provider);
     expect(error?.code).toBe('bad-request');
@@ -92,7 +98,13 @@ describe('GeminiProvider + runCheck', () => {
       vi.fn(async () => {
         calls++;
         if (calls === 1) return sse([{ candidates: [{ content: { parts: [{ text: 'Just prose, no block.' }] }, finishReason: 'STOP' }] }]);
-        return sse([{ candidates: [{ content: { parts: [{ text: '```json\n{"verdict":{"label":"Unverified","kind":"unverified","confidence":"low","summary":"s"}}\n```' }] } }] }]);
+        return sse([
+          {
+            candidates: [
+              { content: { parts: [{ text: '```json\n{"verdict":{"label":"Unverified","kind":"unverified","confidence":"low","summary":"s"}}\n```' }] } },
+            ],
+          },
+        ]);
       }),
     );
     const provider = new GeminiProvider({ apiKey: 'k', model: 'gemini-3.8-flash', grounding: true, urlContext: true });

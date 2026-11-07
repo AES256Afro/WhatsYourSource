@@ -62,5 +62,11 @@ export function downloadText(text: string, filename: string, type = 'text/html')
 }
 
 export function safeFilename(s: string): string {
-  return s.replace(/[^\p{L}\p{N}\-_ ]+/gu, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'check';
+  return (
+    s
+      .replace(/[^\p{L}\p{N}\-_ ]+/gu, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .slice(0, 60) || 'check'
+  );
 }

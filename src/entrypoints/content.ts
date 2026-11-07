@@ -4,7 +4,8 @@ import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
 import { MessageSchema, type SelectionInfo, type SnapshotPayload } from '@/lib/messaging/protocol';
 import { extractPost } from '@/lib/post/extract';
-import { DEFAULT_SETTINGS, mergeSettings, type Settings } from '@/lib/storage/settings';
+import { shortcutLabelForPlatform } from '@/lib/shortcut';
+import { DEFAULT_SETTINGS, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
 
 /**
  * Runs on every page, does three small things and nothing else:
@@ -17,21 +18,21 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
   main(ctx) {
+    // Only the public half of the settings (no API keys) is ever read on a web page.
     let settings: Settings = DEFAULT_SETTINGS;
-    void browser.storage.local.get('settings').then((r) => {
-      settings = mergeSettings(DEFAULT_SETTINGS, r.settings);
+    void browser.storage.local.get(SETTINGS_KEY).then((r) => {
+      settings = mergeSettings(DEFAULT_SETTINGS, r[SETTINGS_KEY]);
     });
     browser.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes.settings) settings = mergeSettings(DEFAULT_SETTINGS, changes.settings.newValue);
+      if (area === 'local' && changes[SETTINGS_KEY]) settings = mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue);
     });
 
     const chip = createChip(() => {
       const sel = currentSelection();
       chip.hide();
       if (!sel) return;
-      void browser.runtime
-        .sendMessage({ type: 'wys:check', input: { kind: 'text', ...sel } })
-        .catch((e: unknown) => console.warn('[wys] could not reach the extension', e));
+      const type = pageTriggerTarget(settings) === 'webmode' ? 'wys:open-webmode' : 'wys:check';
+      void browser.runtime.sendMessage({ type, input: { kind: 'text', ...sel } }).catch((e: unknown) => console.warn('[wys] could not reach the extension', e));
     });
 
     let timer: number | undefined;
@@ -53,7 +54,7 @@ export default defineContentScript({
     ctx.addEventListener(window, 'scroll', () => chip.hide(), { capture: true, passive: true });
     ctx.addEventListener(window, 'resize', () => chip.hide());
     ctx.addEventListener(document, 'keydown', (e) => {
-      if ((e as KeyboardEvent).key === 'Escape') chip.hide();
+      if (e.key === 'Escape') chip.hide();
     });
     ctx.addEventListener(document, 'pointerdown', (e) => {
       if (!chip.contains(e.target as Node | null)) chip.hide();
@@ -135,11 +136,38 @@ function captureSnapshot(): SnapshotPayload {
     article = null;
   }
   const rawHtml = article?.content ?? (document.querySelector('main, article') ?? document.body).innerHTML;
-  const html = DOMPurify.sanitize(rawHtml, {
-    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'video', 'audio', 'source', 'link', 'meta', 'svg', 'canvas'],
-    FORBID_ATTR: ['style', 'srcset', 'sizes', 'loading', 'onerror', 'onload', 'class', 'id'],
-    ALLOWED_URI_REGEXP: /^(?:https?|data):/i,
-  });
+  // `data:` is allowed so inline images survive, but never as a link target.
+  const dropDataLinks = (node: Element, data: { attrName: string; attrValue: string; keepAttr: boolean }) => {
+    if (data.attrName === 'href' && /^\s*data:/i.test(data.attrValue)) data.keepAttr = false;
+  };
+  DOMPurify.addHook('uponSanitizeAttribute', dropDataLinks);
+  let html: string;
+  try {
+    html = DOMPurify.sanitize(rawHtml, {
+      FORBID_TAGS: [
+        'script',
+        'style',
+        'iframe',
+        'object',
+        'embed',
+        'form',
+        'input',
+        'button',
+        'video',
+        'audio',
+        'source',
+        'link',
+        'meta',
+        'svg',
+        'canvas',
+        'math',
+      ],
+      FORBID_ATTR: ['style', 'srcset', 'sizes', 'loading', 'onerror', 'onload', 'class', 'id', 'ping'],
+      ALLOWED_URI_REGEXP: /^(?:https?|data):/i,
+    });
+  } finally {
+    DOMPurify.removeHook('uponSanitizeAttribute', dropDataLinks);
+  }
   return {
     url: location.href,
     title: article?.title || document.title,
@@ -205,7 +233,7 @@ function createChip(onClick: () => void) {
   btn.className = 'chip';
   btn.type = 'button';
   btn.setAttribute('aria-label', 'Check source of selected text');
-  btn.append(logoSvg(), textSpan('Check source'), textSpan(navigator.platform.startsWith('Mac') ? '⌘⇧S' : 'Ctrl+Shift+S', 'kbd'));
+  btn.append(logoSvg(), textSpan('Check source'), textSpan(shortcutLabelForPlatform(), 'kbd'));
   btn.addEventListener('pointerdown', (e) => e.preventDefault()); // keep the selection alive
   btn.addEventListener('click', (e) => {
     e.preventDefault();

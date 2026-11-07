@@ -147,7 +147,7 @@ export function parseModelResult(jsonText: string | null): { ok: true; value: Mo
   let lastError = '';
   for (const t of attempts) {
     try {
-      const obj = JSON.parse(t);
+      const obj: unknown = JSON.parse(t);
       const parsed = ModelResultSchema.safeParse(obj);
       if (parsed.success) return { ok: true, value: parsed.data };
       lastError = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');

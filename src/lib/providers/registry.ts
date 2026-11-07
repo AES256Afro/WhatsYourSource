@@ -33,6 +33,7 @@ export function createProvider(id: ProviderId, s: Settings): LlmProvider | null 
         model: o.model,
         search: createSearchBackend(o),
         fetchPages: true,
+        searchBaseUrl: o.searchTool === 'searxng' ? o.searxngUrl : undefined,
         label: openaiCompatLabel(o.baseUrl),
       });
     }

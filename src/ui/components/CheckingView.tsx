@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import type { RawSource } from '@/lib/providers/types';
 import { InputCard } from './InputCard';
@@ -91,9 +92,8 @@ function StepRow({ label, done, active }: { label: string; done?: boolean; activ
   );
 }
 
-import { useEffect, useState } from 'react';
 function Elapsed({ since }: { since: number }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);

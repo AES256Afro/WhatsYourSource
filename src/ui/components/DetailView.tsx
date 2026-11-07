@@ -38,8 +38,7 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
   if (check === null) return <div className="p-3.5 text-[13px] text-ink-2">This check was deleted.</div>;
 
   const openSnapshotTab = () => {
-    const url = URL.createObjectURL(new Blob([srcdoc], { type: 'text/html' }));
-    void browser.tabs.create({ url });
+    void browser.tabs.create({ url: `${browser.runtime.getURL('/snapshot.html')}?id=${encodeURIComponent(check.id)}` });
   };
   const exportHtml = () => downloadText(checkToStandaloneHtml(check, snapshot), `${safeFilename(check.verdictLabel + ' ' + check.title)}.html`);
   const remove = async () => {
@@ -62,7 +61,7 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
               ['result', 'Result', null],
               ['page', 'Saved page', <Camera key="c" size={13} />],
               ['sources', `Sources (${check.result.sources.length})`, null],
-            ] as Array<[Tab, string, React.ReactNode]>
+            ] as [Tab, string, React.ReactNode][]
           ).map(([t, label, icon]) => (
             <button
               key={t}
@@ -77,7 +76,15 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
       </div>
 
       <div className="min-h-0 grow overflow-y-auto">
-        {tab === 'result' && <ResultView result={check.result} onRecheck={() => onRecheck(check.result.input)} saved snapshotNote={check.hasSnapshot ? 'Saved with page snapshot' : 'Saved'} embedded />}
+        {tab === 'result' && (
+          <ResultView
+            result={check.result}
+            onRecheck={() => onRecheck(check.result.input)}
+            saved
+            snapshotNote={check.hasSnapshot ? 'Saved with page snapshot' : 'Saved'}
+            embedded
+          />
+        )}
         {tab === 'sources' && (
           <div className="p-3.5">
             <SourceList sources={check.result.sources} />
@@ -94,7 +101,12 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
                       Captured when you checked · {Math.round(snapshot.bytes / 1024)} KB{snapshot.highlight ? ' · your highlight is marked' : ''}
                     </span>
                     <div className="mt-[3px] flex gap-3.5">
-                      <a href={snapshot.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] font-semibold no-underline">
+                      <a
+                        href={snapshot.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[12px] font-semibold no-underline"
+                      >
                         Open live page <External size={12} />
                       </a>
                       <button className="border-0 bg-transparent p-0 text-[12px] font-semibold text-accent" onClick={openSnapshotTab}>
@@ -109,7 +121,12 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
                   <Toggle checked={loadImages} onChange={setLoadImages} />
                 </div>
                 {snapshot.screenshot && <Screenshot blob={snapshot.screenshot} />}
-                <iframe title="Saved page" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={srcdoc} className="h-[520px] w-full rounded-[10px] border border-line-2 bg-paper" />
+                <iframe
+                  title="Saved page"
+                  sandbox="allow-popups allow-popups-to-escape-sandbox"
+                  srcDoc={srcdoc}
+                  className="h-[520px] w-full rounded-[10px] border border-line-2 bg-paper"
+                />
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-line-2 p-4 text-center text-[13px] text-ink-2">
@@ -157,13 +174,8 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
 }
 
 function Screenshot({ blob }: { blob: Blob }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    const u = URL.createObjectURL(blob);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [blob]);
-  if (!url) return null;
+  const url = useMemo(() => URL.createObjectURL(blob), [blob]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
   return (
     <details className="wys-card overflow-hidden">
       <summary className="cursor-pointer px-3 py-2 text-[12px] font-medium text-ink-2">Screenshot of the visible area at check time</summary>

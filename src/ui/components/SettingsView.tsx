@@ -5,10 +5,12 @@ import { AnthropicCard } from './settings/AnthropicCard';
 import { GeminiCard } from './settings/GeminiCard';
 import { LocalCard } from './settings/LocalCard';
 import { DebouncedTextarea, ProviderCard, Row, Toggle } from './settings/primitives';
+import { useShortcutLabel } from '../hooks/useShortcutLabel';
 
 type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
 
 export function SettingsView({ settings, update, wide }: { settings: Settings; update: Update; wide?: boolean }) {
+  const shortcut = useShortcutLabel();
   return (
     <div className={`flex flex-col gap-4 p-3.5 ${wide ? 'mx-auto max-w-[720px]' : ''}`}>
       <p className="m-0 text-[12px] leading-[17px] text-ink-2">
@@ -32,7 +34,7 @@ export function SettingsView({ settings, update, wide }: { settings: Settings; u
           <Row label="If the default provider fails or is over quota, try the next configured one">
             <Toggle checked={settings.fallback} onChange={(v) => update((s) => ({ ...s, fallback: v }))} />
           </Row>
-          <Row label="Ctrl+Shift+S and the floating chip">
+          <Row label={`${shortcut} and the floating chip`}>
             <select
               className="wys-input h-8 w-auto text-[12px]"
               value={settings.shortcutAction}
@@ -49,7 +51,7 @@ export function SettingsView({ settings, update, wide }: { settings: Settings; u
         <Label>Privacy</Label>
         <div className="wys-card flex flex-col px-3">
           <Row label="Send text or images only when I press Check" hint="Always on">
-            <Toggle checked disabled onChange={() => {}} />
+            <Toggle checked disabled />
           </Row>
           <Row label="Save a copy of the page with each check (local only)">
             <Toggle checked={settings.privacy.snapshots} onChange={(v) => update((s) => ({ ...s, privacy: { ...s.privacy, snapshots: v } }))} />
@@ -90,7 +92,14 @@ export function SettingsView({ settings, update, wide }: { settings: Settings; u
                     ...s.privacy,
                     disabledSites: v
                       .split(/\n+/)
-                      .map((x) => x.trim().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] ?? '')
+                      .map(
+                        (x) =>
+                          x
+                            .trim()
+                            .replace(/^https?:\/\//, '')
+                            .replace(/^www\./, '')
+                            .split('/')[0] ?? '',
+                      )
                       .filter(Boolean),
                   },
                 }))

@@ -8,23 +8,26 @@ type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
 export function AnthropicCard({ settings, update }: { settings: Settings; update: Update }) {
   const a = settings.providers.anthropic;
   const set = (patch: Partial<typeof a>) => update((s) => ({ ...s, providers: { ...s.providers, anthropic: { ...s.providers.anthropic, ...patch } } }));
-  const [status, setStatus] = useState<Status>({ kind: a.apiKey ? 'ok' : 'idle', text: a.apiKey ? 'Key set' : undefined });
+  const [verified, setVerified] = useState<Status & { forKey: string }>({ kind: 'idle', forKey: a.apiKey });
   const [models, setModels] = useState<string[]>([]);
+  const status: Status = verified.forKey === a.apiKey ? verified : { kind: 'idle' };
+  const idleText = a.apiKey ? `Key set · ends in …${a.apiKey.trim().slice(-3)}` : 'Web search built in · bring your own key';
 
   const verify = async () => {
-    setStatus({ kind: 'checking' });
+    const key = a.apiKey;
+    setVerified({ kind: 'checking', forKey: key });
     const r = await new AnthropicProvider(a).validate();
     if (r.ok) {
       setModels(r.models ?? []);
-      setStatus({ kind: 'ok', text: `Key verified · ends in …${a.apiKey.trim().slice(-3)}` });
-    } else setStatus({ kind: 'bad', text: r.error });
+      setVerified({ kind: 'ok', text: `Key verified · ends in …${key.trim().slice(-3)}`, forKey: key });
+    } else setVerified({ kind: 'bad', text: r.error, forKey: key });
   };
 
   return (
     <ProviderCard
       icon={<span className="text-[13px] font-bold">A</span>}
       title="Anthropic (Claude)"
-      subtitle={status.kind === 'ok' ? status.text : status.kind === 'bad' ? status.text : 'Web search built in · bring your own key'}
+      subtitle={status.kind === 'ok' || status.kind === 'bad' ? status.text : status.kind === 'checking' ? 'Checking…' : idleText}
       subtitleTone={status.kind === 'ok' ? 'ok' : status.kind === 'bad' ? 'bad' : undefined}
       isDefault={settings.defaultProvider === 'anthropic'}
       onMakeDefault={() => update((s) => ({ ...s, defaultProvider: 'anthropic' }))}
@@ -44,7 +47,14 @@ export function AnthropicCard({ settings, update }: { settings: Settings; update
         <label htmlFor="wys-amodel" className="w-[70px] shrink-0 text-[13px]">
           Model
         </label>
-        <CommitInput id="wys-amodel" list="wys-amodels" value={a.model} onCommit={(v) => set({ model: v })} placeholder="claude-sonnet-5-5" className="h-8 min-w-0 grow text-[12px]" />
+        <CommitInput
+          id="wys-amodel"
+          list="wys-amodels"
+          value={a.model}
+          onCommit={(v) => set({ model: v })}
+          placeholder="claude-sonnet-5-5"
+          className="h-8 min-w-0 grow text-[12px]"
+        />
         <datalist id="wys-amodels">
           {models.map((m) => (
             <option key={m} value={m} />

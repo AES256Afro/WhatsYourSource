@@ -16,7 +16,7 @@ export async function getTargetTab(): Promise<Browser.tabs.Tab | undefined> {
   }
   if (!active || self?.id == null || active.id !== self.id) return active;
   const all = await browser.tabs.query({ currentWindow: true });
-  const others = all.filter((t) => t.id !== self!.id);
+  const others = all.filter((t) => t.id !== self.id);
   others.sort((a, b) => ((b as { lastAccessed?: number }).lastAccessed ?? 0) - ((a as { lastAccessed?: number }).lastAccessed ?? 0));
   return others[0] ?? active;
 }

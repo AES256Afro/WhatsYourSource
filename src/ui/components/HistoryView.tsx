@@ -60,9 +60,13 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
               ['image', 'Image'],
               ['post', 'Post'],
               ['page', 'Page'],
-            ] as Array<[KindFilter, string]>
+            ] as [KindFilter, string][]
           ).map(([k, label]) => (
-            <button key={k} className={`h-7 rounded-full border px-2.5 text-[12px] font-medium ${kind === k ? 'border-accent bg-accent-soft text-accent' : 'border-line-2 bg-paper text-ink-2'}`} onClick={() => setKind(k)}>
+            <button
+              key={k}
+              className={`h-7 rounded-full border px-2.5 text-[12px] font-medium ${kind === k ? 'border-accent bg-accent-soft text-accent' : 'border-line-2 bg-paper text-ink-2'}`}
+              onClick={() => setKind(k)}
+            >
               {label}
             </button>
           ))}
@@ -132,13 +136,18 @@ export function HistoryRow({ check: c, onOpen, compact }: { check: StoredCheck; 
   );
 }
 
-function groupByDay(items: StoredCheck[]): Array<{ label: string; items: StoredCheck[] }> {
+function groupByDay(items: StoredCheck[]): { label: string; items: StoredCheck[] }[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const yesterday = today.getTime() - 86_400_000;
   const groups = new Map<string, StoredCheck[]>();
   for (const c of items) {
-    const label = c.createdAt >= today.getTime() ? 'Today' : c.createdAt >= yesterday ? 'Yesterday' : new Date(c.createdAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+    const label =
+      c.createdAt >= today.getTime()
+        ? 'Today'
+        : c.createdAt >= yesterday
+          ? 'Yesterday'
+          : new Date(c.createdAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
     groups.set(label, [...(groups.get(label) ?? []), c]);
   }
   return Array.from(groups, ([label, items]) => ({ label, items }));

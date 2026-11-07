@@ -3,7 +3,7 @@ import { bytesToBase64, sniffMime } from '@/lib/image/bytes';
 import { hammingDistance, phashFromGray } from '@/lib/image/phash';
 import { aiHints, detectC2PA, pngChunks, pngTextChunks, provenanceSummary } from '@/lib/image/provenance';
 
-function pngWith(chunks: Array<[string, Uint8Array]>): Uint8Array {
+function pngWith(chunks: [string, Uint8Array][]): Uint8Array {
   const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
   const parts: number[] = [...sig];
   for (const [type, data] of chunks) {
@@ -80,7 +80,10 @@ describe('phash', () => {
     const checker = new Float64Array(N * N).map((_, i) => ((Math.floor(i / N) + (i % N)) % 2 ? 255 : 0));
     const a = phashFromGray(textured, N);
     // Brightness/contrast changes must not move the hash much.
-    const b = phashFromGray(textured.map((v) => v * 0.8 + 20), N);
+    const b = phashFromGray(
+      textured.map((v) => v * 0.8 + 20),
+      N,
+    );
     const c = phashFromGray(checker, N);
     expect(a).toHaveLength(16);
     expect(hammingDistance(a, b)).toBeLessThanOrEqual(4);

@@ -9,7 +9,13 @@ const text: CheckInput = {
   pageUrl: 'https://medium.com/x',
   pageTitle: 'T',
 };
-const image: CheckInput = { kind: 'image', srcUrl: 'https://img.example/a.jpg', pageUrl: 'https://news.example/p', pageTitle: 'News', alt: 'Shark on a highway' };
+const image: CheckInput = {
+  kind: 'image',
+  srcUrl: 'https://img.example/a.jpg',
+  pageUrl: 'https://news.example/p',
+  pageTitle: 'News',
+  alt: 'Shark on a highway',
+};
 const page: CheckInput = { kind: 'page', url: 'https://www.example.com/story', title: 'Big story', excerpt: 'Something happened.' };
 const post: CheckInput = {
   kind: 'post',
@@ -65,5 +71,14 @@ describe('the question put to the search engine', () => {
     }
     expect(decodeURIComponent(googleAiModeUrl(text))).toContain(`${QUESTION} "The definition of insanity`);
     expect(decodeURIComponent(googleAiModeUrl(post))).toContain('Is this x.com post true');
+  });
+});
+
+describe('pasted text', () => {
+  it('is not attributed to the current page', () => {
+    const t = userText({ kind: 'text', text: 'Some pasted claim.', pageUrl: '', pageTitle: '' });
+    expect(t).toContain('The user pasted this text');
+    expect(t).not.toContain('page=""');
+    expect(t).not.toMatch(/highlighted this text on/);
   });
 });

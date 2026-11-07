@@ -56,9 +56,7 @@ export function ResultView({
               <div className="flex min-w-0 grow flex-col gap-1">
                 <span className="text-[14px] leading-[19px] font-semibold">{result.originalSource.title}</span>
                 {(result.originalSource.publisher || result.originalSource.date) && (
-                  <span className="text-[12px] text-ink-2">
-                    {[result.originalSource.publisher, result.originalSource.date].filter(Boolean).join(' · ')}
-                  </span>
+                  <span className="text-[12px] text-ink-2">{[result.originalSource.publisher, result.originalSource.date].filter(Boolean).join(' · ')}</span>
                 )}
                 {result.originalSource.how && <span className="text-[12px] leading-[17px] text-ink-2">{result.originalSource.how}</span>}
                 <div className="mt-1 flex items-center gap-3.5">
@@ -127,7 +125,10 @@ export function ResultView({
 }
 
 function initials(s: string): string {
-  const words = s.replace(/[^\p{L}\p{N} ]/gu, '').split(/\s+/).filter(Boolean);
+  const words = s
+    .replace(/[^\p{L}\p{N} ]/gu, '')
+    .split(/\s+/)
+    .filter(Boolean);
   if (words.length === 0) return '?';
   if (words.length === 1) return (words[0] ?? '').slice(0, 2).toUpperCase();
   return ((words[0]?.[0] ?? '') + (words[1]?.[0] ?? '')).toUpperCase();

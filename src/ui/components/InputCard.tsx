@@ -29,7 +29,9 @@ export function InputCard({ input, when, clamp }: { input: CheckInput; when?: st
               {input.postedAt && <span>{formatWhen(input.postedAt)}</span>}
             </div>
           )}
-          <p className={`m-0 min-w-0 text-[13px] leading-[18px] whitespace-pre-line wrap-break-word ${clamp ? 'line-clamp-4' : 'line-clamp-[12]'}`}>{input.text}</p>
+          <p className={`m-0 min-w-0 text-[13px] leading-[18px] whitespace-pre-line wrap-break-word ${clamp ? 'line-clamp-4' : 'line-clamp-[12]'}`}>
+            {input.text}
+          </p>
           {(input.images.length > 0 || input.links.length > 0 || input.permalink) && (
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-2">
               {input.images.length > 0 && (
@@ -38,7 +40,13 @@ export function InputCard({ input, when, clamp }: { input: CheckInput; when?: st
                 </span>
               )}
               {input.links.slice(0, 2).map((l) => (
-                <a key={l} href={l} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-full border border-line bg-paper px-2 py-0.5 no-underline">
+                <a
+                  key={l}
+                  href={l}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-full border border-line bg-paper px-2 py-0.5 no-underline"
+                >
                   <LinkIcon size={11} /> {domainOf(l)}
                 </a>
               ))}

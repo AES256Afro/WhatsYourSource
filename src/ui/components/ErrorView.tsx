@@ -18,7 +18,8 @@ const HINT: Record<string, string> = {
   'bad-request': 'The provider didn’t accept the request — often an unknown model name. Check the model in settings.',
   server: 'The provider had a server error. Try again in a moment.',
   cancelled: 'Cancelled.',
-  'image-permission': 'The site doesn’t allow extensions to read its images directly. Allow access to that host once and try again, or make sure the image is visible on screen so a screenshot can be used.',
+  'image-permission':
+    'The site doesn’t allow extensions to read its images directly. Allow access to that host once and try again, or make sure the image is visible on screen so a screenshot can be used.',
   image: 'The image couldn’t be loaded. Try opening it in its own tab and checking it from there.',
 };
 

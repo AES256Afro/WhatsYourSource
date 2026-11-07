@@ -2,7 +2,7 @@ import { defineBackground } from '#imports';
 import { browser, type Browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
 import { MessageSchema, PostInputSchema, SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
-import { loadSettings } from '@/lib/storage/settings';
+import { DEFAULT_SETTINGS, loadPublicSettings, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/webmode';
 
 /**
@@ -26,17 +26,25 @@ interface PanelApis {
 }
 
 export default defineBackground(() => {
+  /**
+   * `sidePanel.open` must run synchronously inside the user-gesture handler, so the decision
+   * "panel or web tab?" cannot wait for storage. Keep a copy of the public settings in memory.
+   * Until the first load resolves we assume the panel, which is the common case.
+   */
+  let settings: Settings = DEFAULT_SETTINGS;
+  void loadPublicSettings().then((s) => (settings = s));
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[SETTINGS_KEY]) settings = mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue);
+  });
+
   function createMenus() {
     void browser.contextMenus.removeAll().then(() => {
       browser.contextMenus.create({ id: MENU.selection, title: 'Check source of selection', contexts: ['selection'] });
-      browser.contextMenus.create({
-        id: MENU.selectionWeb,
-        title: 'Open selection in Google AI Mode',
-        contexts: ['selection'],
-      });
+      browser.contextMenus.create({ id: MENU.selectionWeb, title: 'Open selection in Google AI Mode', contexts: ['selection'] });
       browser.contextMenus.create({ id: MENU.image, title: 'Check source of this image', contexts: ['image'] });
-      browser.contextMenus.create({ id: MENU.post, title: 'Check source of this post', contexts: ['page', 'link', 'image', 'selection'] });
-      browser.contextMenus.create({ id: MENU.page, title: 'Check source of this page', contexts: ['page'] });
+      // Post and page only when nothing more specific (a selection, an image) is under the cursor.
+      browser.contextMenus.create({ id: MENU.post, title: 'Check source of this post', contexts: ['page', 'link'] });
+      browser.contextMenus.create({ id: MENU.page, title: 'Check source of this page', contexts: ['page', 'link'] });
     });
   }
 
@@ -51,10 +59,17 @@ export default defineBackground(() => {
       case MENU.selection: {
         const text = (info.selectionText ?? '').trim();
         if (!text) return;
+        if (settings.defaultProvider === 'webmode') {
+          void browser.tabs.create({ url: googleAiModeUrl({ kind: 'text', text, pageUrl, pageTitle }) });
+          return;
+        }
         openPanel(tab);
         void (async () => {
           const sel = await resolveSelection(tab, text);
-          await enqueueJob({ kind: 'text', text: sel.text, pageUrl: sel.pageUrl || pageUrl, pageTitle: sel.pageTitle || pageTitle, surrounding: sel.surrounding }, tab?.id);
+          await enqueueJob(
+            { kind: 'text', text: sel.text, pageUrl: sel.pageUrl || pageUrl, pageTitle: sel.pageTitle || pageTitle, surrounding: sel.surrounding },
+            tab?.id,
+          );
         })();
         return;
       }
@@ -66,30 +81,40 @@ export default defineBackground(() => {
       }
       case MENU.image: {
         if (!info.srcUrl) return;
+        if (settings.defaultProvider === 'webmode') {
+          void browser.tabs.create({ url: googleAiModeUrl({ kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle }) });
+          return;
+        }
         openPanel(tab);
         void enqueueJob({ kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle }, tab?.id);
         return;
       }
       case MENU.post: {
-        openPanel(tab);
+        if (settings.defaultProvider !== 'webmode') openPanel(tab);
         void (async () => {
           let input: CheckInput = { kind: 'page', url: pageUrl, title: pageTitle };
           if (tab?.id != null) {
             try {
-              const reply = await browser.tabs.sendMessage(tab.id, { type: 'wys:extract-post' });
+              const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:extract-post' });
               const parsed = PostInputSchema.safeParse(reply);
               if (parsed.success) input = parsed.data;
             } catch {
               /* no content script on this page */
             }
           }
-          await enqueueJob(input, tab?.id);
+          if (settings.defaultProvider === 'webmode') await browser.tabs.create({ url: googleAiModeUrl(input) });
+          else await enqueueJob(input, tab?.id);
         })();
         return;
       }
       case MENU.page: {
+        const input: CheckInput = { kind: 'page', url: pageUrl, title: pageTitle };
+        if (settings.defaultProvider === 'webmode') {
+          void browser.tabs.create({ url: googleAiModeUrl(input) });
+          return;
+        }
         openPanel(tab);
-        void enqueueJob({ kind: 'page', url: pageUrl, title: pageTitle }, tab?.id);
+        void enqueueJob(input, tab?.id);
         return;
       }
     }
@@ -97,15 +122,17 @@ export default defineBackground(() => {
 
   browser.commands.onCommand.addListener((command, tab) => {
     if (command !== 'check-selection') return;
+    const target = pageTriggerTarget(settings);
+    // Synchronously, while the gesture is fresh. Firefox passes the tab; Chrome may not.
+    if (target === 'panel' && tab) openPanel(tab);
     void (async () => {
-      const settings = await loadSettings();
       const activeTab = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
-      if (settings.shortcutAction === 'panel') openPanel(activeTab);
+      if (target === 'panel' && !tab) openPanel(activeTab);
       const sel = await resolveSelection(activeTab, '');
       const input: CheckInput = sel.text
         ? { kind: 'text', text: sel.text, pageUrl: sel.pageUrl, pageTitle: sel.pageTitle, surrounding: sel.surrounding }
-        : { kind: 'page', url: activeTab?.url ?? '', title: activeTab?.title ?? '' };
-      if (settings.shortcutAction === 'webmode') {
+        : { kind: 'page', url: sel.pageUrl || activeTab?.url || '', title: sel.pageTitle || activeTab?.title || '' };
+      if (target === 'webmode') {
         await browser.tabs.create({ url: googleAiModeUrl(input) });
       } else {
         await enqueueJob(input, activeTab?.id);
@@ -121,6 +148,13 @@ export default defineBackground(() => {
       case 'wys:check': {
         openPanel(sender.tab);
         void enqueueJob(msg.input, sender.tab?.id).then(
+          () => sendResponse({ ok: true }),
+          (e: unknown) => sendResponse({ ok: false, error: String(e) }),
+        );
+        return true;
+      }
+      case 'wys:open-webmode': {
+        void browser.tabs.create({ url: googleAiModeUrl(msg.input) }).then(
           () => sendResponse({ ok: true }),
           (e: unknown) => sendResponse({ ok: false, error: String(e) }),
         );
@@ -142,8 +176,7 @@ export default defineBackground(() => {
    */
   function openPanel(tab: MaybeTab) {
     const apis = browser as unknown as PanelApis;
-    const fallback = () =>
-      browser.windows.create({ url: browser.runtime.getURL('/sidepanel.html'), type: 'popup', width: 420, height: 840 });
+    const fallback = () => browser.windows.create({ url: browser.runtime.getURL('/sidepanel.html'), type: 'popup', width: 420, height: 840 });
     try {
       if (apis.sidePanel?.open) {
         const opts = tab?.windowId != null ? { windowId: tab.windowId } : { tabId: tab?.id };
@@ -171,7 +204,7 @@ export default defineBackground(() => {
     const base: SelectionInfo = { text: fallbackText, pageUrl: tab?.url ?? '', pageTitle: tab?.title ?? '' };
     if (tab?.id == null) return base;
     try {
-      const reply = await browser.tabs.sendMessage(tab.id, { type: 'wys:get-selection' });
+      const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:get-selection' });
       const parsed = SelectionInfoSchema.safeParse(reply);
       if (parsed.success && parsed.data.text.trim()) return parsed.data;
     } catch {

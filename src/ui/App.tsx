@@ -44,7 +44,9 @@ export function App() {
   const abortRef = useRef<AbortController | null>(null);
   const seenJobs = useRef(new Set<string>());
   const settingsRef = useRef<Settings | null>(null);
-  settingsRef.current = settings;
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   const openWebMode = useCallback((input: CheckInput) => {
     void browser.tabs.create({ url: googleAiModeUrl(input) });
@@ -101,7 +103,12 @@ export function App() {
             input,
             error: {
               code: err?.kind === 'permission' ? 'image-permission' : 'image',
-              message: err?.kind === 'permission' ? 'The image host blocked a direct download.' : err?.kind === 'not-image' ? 'That link is not an image.' : 'Could not load the image.',
+              message:
+                err?.kind === 'permission'
+                  ? 'The image host blocked a direct download.'
+                  : err?.kind === 'not-image'
+                    ? 'That link is not an image.'
+                    : 'Could not load the image.',
               details: err?.message ?? String(e),
             },
           });
@@ -140,7 +147,7 @@ export function App() {
               state.queries = ev.queries;
               state.statuses = [
                 ...state.statuses.filter((x) => !x.startsWith('Searched')),
-                `Searched Google · ${ev.queries.length} ${ev.queries.length === 1 ? 'query' : 'queries'}`,
+                `Searched · ${ev.queries.length} ${ev.queries.length === 1 ? 'query' : 'queries'}`,
               ];
               break;
             case 'sources':
@@ -221,7 +228,12 @@ export function App() {
         return run ? <CheckingView run={run} onCancel={cancel} /> : null;
       case 'result':
         return result ? (
-          <ResultView result={result} onRecheck={() => startCheck(result.input)} saved={!!savedId} snapshotNote={savedWithSnapshot ? 'Saved with page snapshot' : 'Saved to history'} />
+          <ResultView
+            result={result}
+            onRecheck={() => startCheck(result.input)}
+            saved={!!savedId}
+            snapshotNote={savedWithSnapshot ? 'Saved with page snapshot' : 'Saved to history'}
+          />
         ) : null;
       case 'error':
         return error ? (

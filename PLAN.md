@@ -31,7 +31,7 @@ Not yet exercised against a live Gemini key — the pipeline is unit-tested agai
 ### What the user does
 | Priority | Trigger | Where | Result |
 |---|---|---|---|
-| **P0** | Highlight text → floating chip / right-click / `Ctrl+Shift+S` → **Check source** | any page | claim + source card in the side panel |
+| **P0** | Highlight text → floating chip / right-click / `Alt+Shift+S` → **Check source** | any page | claim + source card in the side panel |
 | **P0** | Toolbar icon | any page | popup: check the current selection in the side panel **or** open it in Google AI Mode (a google.com tab, no key needed) |
 | **P0** | History | side panel | every past check with its result and a saved copy of the page |
 | **P1** | Right-click an image → **Check source** | any page | a copy of the image is sent; provenance + earliest-match card |
@@ -136,7 +136,7 @@ whatsyoursource/
 | `unlimitedStorage` | history snapshots in IndexedDB |
 | `activeTab` + `scripting` | read selection / extract page / screenshot on user gesture only |
 | `sidePanel` (Chrome) / `sidebar_action` (Firefox) | result UI |
-| `commands` | `Ctrl+Shift+S` |
+| `commands` | `Alt+Shift+S` |
 | `host_permissions`: `https://generativelanguage.googleapis.com/*`, `http://localhost/*`, `http://127.0.0.1/*` | Gemini API; local model endpoints |
 | `optional_host_permissions`: `<all_urls>` | requested **per site, on demand** to fetch image bytes cross-origin or to let the search tool fetch pages for a local model; user can decline → screenshot fallback |
 | content script `matches` | `<all_urls>` at `document_idle` for the selection chip (toggleable); adapters only on their sites |
@@ -249,7 +249,7 @@ One developer, part-time (~10–15 h/week). Each milestone ends with a tagged bu
 - Exit: `npm run build` loads in Chrome & Firefox; key validates; spike answers "who said X?" with citations.
 
 ### M1 — Text source check (the product) (weeks 2–3)
-- Selection → floating chip + context menu + `Ctrl+Shift+S` → side panel; popup with "Check in side panel" / "Open in Google AI Mode".
+- Selection → floating chip + context menu + `Alt+Shift+S` → side panel; popup with "Check in side panel" / "Open in Google AI Mode".
 - `pipeline/text.ts` with prompt + `CheckResult` schema; streaming progress ("Searching Google · 2 queries", "Reading 3 sources"), structured card (verdict, original source, claims, sources, suggestions, cost meter).
 - Error states: no key, quota, network, safety block, schema failure, cancel.
 - Exit: 20 hand-picked quotes/claims (misattributed quotes, viral stats, news claims) produce a sensible card with ≥1 clickable source each; works on both browsers.

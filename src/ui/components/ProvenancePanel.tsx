@@ -4,13 +4,17 @@ import { External, Shield } from './Icons';
 
 /** Facts read from the image file itself, on the user's device — kept visually separate from the AI's opinion. */
 export function ProvenancePanel({ provenance: p, srcUrl }: { provenance: LocalProvenance; srcUrl: string }) {
-  const rows: Array<[string, string]> = [];
+  const rows: [string, string][] = [];
   rows.push(['Content Credentials (C2PA)', p.c2pa ? (p.c2pa.present ? p.c2pa.summary || 'Present' : 'None found') : 'Not checked']);
   const exifKeys = p.exif ? Object.keys(p.exif) : [];
   rows.push(['EXIF / XMP metadata', exifKeys.length ? exifKeys.map((k) => `${k}: ${p.exif![k]}`).join(' · ') : 'None (usually stripped by platforms)']);
   rows.push(['AI-generation hints', p.aiHints?.length ? p.aiHints.join(' · ') : 'None in metadata']);
   if (p.phash) rows.push(['Fingerprint (pHash)', p.phash]);
-  if (p.width && p.height) rows.push(['Dimensions', `${p.width} × ${p.height}${p.mime ? ` · ${p.mime.replace('image/', '').toUpperCase()}` : ''}${p.bytes ? ` · ${Math.round(p.bytes / 1024)} KB` : ''}`]);
+  if (p.width && p.height)
+    rows.push([
+      'Dimensions',
+      `${p.width} × ${p.height}${p.mime ? ` · ${p.mime.replace('image/', '').toUpperCase()}` : ''}${p.bytes ? ` · ${Math.round(p.bytes / 1024)} KB` : ''}`,
+    ]);
 
   const enc = encodeURIComponent(srcUrl);
   const reverse = [
@@ -40,7 +44,9 @@ export function ProvenancePanel({ provenance: p, srcUrl }: { provenance: LocalPr
             </div>
           ))}
         </div>
-        <span className="text-[11px] leading-[15px] text-ink-2">Missing credentials don’t mean the image is fake — most platforms strip metadata on upload.</span>
+        <span className="text-[11px] leading-[15px] text-ink-2">
+          Missing credentials don’t mean the image is fake — most platforms strip metadata on upload.
+        </span>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label>Reverse image search</Label>

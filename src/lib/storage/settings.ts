@@ -81,38 +81,139 @@ export const DEFAULT_SETTINGS: Settings = {
   history: { maxMb: 200 },
 };
 
-const STORAGE_KEY = 'settings';
+/**
+ * Storage layout. `settings` holds everything *except* API keys and is what the content script
+ * (which runs on every page) reads for the chip. `secrets` holds the keys and is only ever read by
+ * extension pages. Older installs kept the keys inside `settings`; `loadSettings` migrates them.
+ */
+export const SETTINGS_KEY = 'settings';
+export const SECRETS_KEY = 'secrets';
+
+const SECRET_PATHS: readonly (readonly string[])[] = [
+  ['providers', 'gemini', 'apiKey'],
+  ['providers', 'openaiCompat', 'apiKey'],
+  ['providers', 'openaiCompat', 'braveKey'],
+  ['providers', 'openaiCompat', 'tavilyKey'],
+  ['providers', 'anthropic', 'apiKey'],
+];
 
 type Plain = Record<string, unknown>;
 function isPlain(v: unknown): v is Plain {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
-/** Deep-merge stored values over defaults so new fields never break old installs. */
-export function mergeSettings(base: Settings, patch: unknown): Settings {
-  const merge = (b: Plain, p: Plain): Plain => {
-    const out: Plain = { ...b };
-    for (const [k, v] of Object.entries(p)) {
-      if (isPlain(v) && isPlain(b[k])) out[k] = merge(b[k] as Plain, v);
-      else if (v !== undefined) out[k] = v;
-    }
-    return out;
-  };
-  const merged = isPlain(patch) ? merge(base as unknown as Plain, patch) : base;
-  const parsed = SettingsSchema.safeParse(merged);
-  return parsed.success ? parsed.data : base;
+
+function getPath(obj: unknown, path: readonly (string | number)[]): unknown {
+  let cur: unknown = obj;
+  for (const k of path) {
+    if (!isPlain(cur) && !Array.isArray(cur)) return undefined;
+    cur = (cur as Record<string | number, unknown>)[k];
+  }
+  return cur;
 }
 
+function setPath(obj: Plain, path: readonly (string | number)[], value: unknown): void {
+  let cur: Record<string | number, unknown> = obj;
+  for (let i = 0; i < path.length - 1; i++) {
+    const k = path[i]!;
+    const next = cur[k];
+    if (!isPlain(next) && !Array.isArray(next)) {
+      cur[k] = {};
+    }
+    cur = cur[k] as Record<string | number, unknown>;
+  }
+  cur[path[path.length - 1]!] = value;
+}
+
+function deepMerge(b: Plain, p: Plain): Plain {
+  const out: Plain = { ...b };
+  for (const [k, v] of Object.entries(p)) {
+    if (isPlain(v) && isPlain(b[k])) out[k] = deepMerge(b[k], v);
+    else if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Deep-merge stored values over defaults so new fields never break old installs. Invalid fields are
+ * reset to their default one at a time (guided by the schema's issue paths), so one bad value never
+ * throws away the rest of the user's settings.
+ */
+export function mergeSettings(base: Settings, patch: unknown): Settings {
+  if (!isPlain(patch)) return base;
+  const merged = deepMerge(base, patch);
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const parsed = SettingsSchema.safeParse(merged);
+    if (parsed.success) return parsed.data;
+    let changed = false;
+    for (const issue of parsed.error.issues) {
+      const path = issue.path.filter((p): p is string | number => typeof p === 'string' || typeof p === 'number');
+      if (path.length === 0) return base;
+      const fallback = getPath(base, path);
+      if (fallback === undefined) {
+        // Unknown key or deeper than the defaults go: reset the nearest known ancestor.
+        const parent = path.slice(0, -1);
+        if (parent.length === 0) return base;
+        setPath(merged, parent, structuredClone(getPath(base, parent)));
+      } else {
+        setPath(merged, path, structuredClone(fallback));
+      }
+      changed = true;
+    }
+    if (!changed) return base;
+  }
+  return base;
+}
+
+/** The settings object with every secret blanked, which is what goes under `settings` in storage. */
+export function stripSecrets(s: Settings): Settings {
+  const copy = structuredClone(s) as unknown as Plain;
+  for (const p of SECRET_PATHS) setPath(copy, p, '');
+  return copy as unknown as Settings;
+}
+
+function collectSecrets(s: Settings): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const p of SECRET_PATHS) {
+    const v = getPath(s, p);
+    if (typeof v === 'string' && v) out[p.join('.')] = v;
+  }
+  return out;
+}
+
+function applySecrets(s: Settings, secrets: unknown): Settings {
+  if (!isPlain(secrets)) return s;
+  const copy = structuredClone(s) as unknown as Plain;
+  for (const p of SECRET_PATHS) {
+    const v = secrets[p.join('.')];
+    if (typeof v === 'string' && v) setPath(copy, p, v);
+  }
+  return copy as unknown as Settings;
+}
+
+/** Full settings, keys included. Extension pages only. */
 export async function loadSettings(): Promise<Settings> {
-  const stored = await browser.storage.local.get(STORAGE_KEY);
-  return mergeSettings(DEFAULT_SETTINGS, stored[STORAGE_KEY]);
+  const stored = await browser.storage.local.get([SETTINGS_KEY, SECRETS_KEY]);
+  const pub = mergeSettings(DEFAULT_SETTINGS, stored[SETTINGS_KEY]);
+  const withSecrets = applySecrets(pub, stored[SECRETS_KEY]);
+  // Pre-split installs kept keys inside `settings`; move them out once.
+  if (Object.keys(collectSecrets(pub)).length > 0) {
+    await saveSettings(withSecrets);
+  }
+  return withSecrets;
+}
+
+/** Settings without keys, for the content script. */
+export async function loadPublicSettings(): Promise<Settings> {
+  const stored = await browser.storage.local.get(SETTINGS_KEY);
+  return mergeSettings(DEFAULT_SETTINGS, stored[SETTINGS_KEY]);
 }
 
 export async function saveSettings(next: Settings): Promise<void> {
   const parsed = SettingsSchema.parse(next);
-  await browser.storage.local.set({ [STORAGE_KEY]: parsed });
+  await browser.storage.local.set({ [SETTINGS_KEY]: stripSecrets(parsed), [SECRETS_KEY]: collectSecrets(parsed) });
 }
 
-/** Shallow helper for `saveSettings({...settings, ...})` call sites that only know a path. */
+/** Read-modify-write helper for call sites that only know a path. */
 export async function updateSettings(mutate: (s: Settings) => Settings): Promise<Settings> {
   const current = await loadSettings();
   const next = mutate(structuredClone(current));
@@ -120,11 +221,12 @@ export async function updateSettings(mutate: (s: Settings) => Settings): Promise
   return next;
 }
 
+/** Fires with the full settings (keys included) whenever either storage key changes. Extension pages only. */
 export function onSettingsChanged(cb: (s: Settings) => void): () => void {
   const listener = (changes: Record<string, { newValue?: unknown }>, area: string) => {
     if (area !== 'local') return;
-    const change = changes[STORAGE_KEY];
-    if (change) cb(mergeSettings(DEFAULT_SETTINGS, change.newValue));
+    if (!(SETTINGS_KEY in changes) && !(SECRETS_KEY in changes)) return;
+    void loadSettings().then(cb);
   };
   browser.storage.onChanged.addListener(listener);
   return () => browser.storage.onChanged.removeListener(listener);
@@ -153,4 +255,12 @@ export function providerOrder(s: Settings): ProviderId[] {
     }
   }
   return order.filter((id) => id !== 'webmode');
+}
+
+/**
+ * Where a check should go when the user triggers it from the page (chip or shortcut) rather than
+ * from inside the panel: the web mode if either the trigger or the default provider says so.
+ */
+export function pageTriggerTarget(s: Settings): 'panel' | 'webmode' {
+  return s.shortcutAction === 'webmode' || s.defaultProvider === 'webmode' ? 'webmode' : 'panel';
 }

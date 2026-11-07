@@ -35,7 +35,9 @@ export function phashFromGray(gray: Float64Array, N: number): string {
   const median = ac[Math.floor(ac.length / 2)]!;
   let bits = '';
   for (let i = 0; i < 64; i++) bits += dct[i]! > median ? '1' : '0';
-  return BigInt('0b' + bits).toString(16).padStart(16, '0');
+  return BigInt('0b' + bits)
+    .toString(16)
+    .padStart(16, '0');
 }
 
 export function hammingDistance(a: string, b: string): number {

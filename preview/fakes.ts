@@ -47,10 +47,21 @@ export async function installFakes(scenario: string) {
   };
   b.tabs.sendMessage = async (_id: number, msg: { type: string }) => {
     if (msg.type === 'wys:get-selection') return scenario === 'nosel' ? { text: '', pageUrl: SELECTION.pageUrl, pageTitle: SELECTION.pageTitle } : SELECTION;
-    if (msg.type === 'wys:capture-snapshot') return { url: SELECTION.pageUrl, title: SELECTION.pageTitle, html: PAGE_HTML, textLength: 500, capturedAt: Date.now() };
+    if (msg.type === 'wys:capture-snapshot')
+      return { url: SELECTION.pageUrl, title: SELECTION.pageTitle, html: PAGE_HTML, textLength: 500, capturedAt: Date.now() };
     return null;
   };
-  const TAB = { id: 1, windowId: 1, index: 0, active: true, highlighted: true, pinned: false, incognito: false, url: SELECTION.pageUrl, title: SELECTION.pageTitle };
+  const TAB = {
+    id: 1,
+    windowId: 1,
+    index: 0,
+    active: true,
+    highlighted: true,
+    pinned: false,
+    incognito: false,
+    url: SELECTION.pageUrl,
+    title: SELECTION.pageTitle,
+  };
   b.tabs.query = async () => [TAB];
   b.tabs.get = async () => TAB;
   b.tabs.create = async ({ url }: { url: string }) => {
@@ -92,7 +103,12 @@ export async function installFakes(scenario: string) {
     ctx.fillText('[photo in the post]', 120, 210);
     const srcUrl = canvas.toDataURL('image/png');
     await fakeBrowser.storage.session.set({
-      pendingJob: { id: 'preview-image', createdAt: Date.now(), tabId: 1, input: { kind: 'image', srcUrl, pageUrl: 'https://x.com/someone/status/1', pageTitle: 'Post by @someone', alt: 'Photo attached to the post' } },
+      pendingJob: {
+        id: 'preview-image',
+        createdAt: Date.now(),
+        tabId: 1,
+        input: { kind: 'image', srcUrl, pageUrl: 'https://x.com/someone/status/1', pageTitle: 'Post by @someone', alt: 'Photo attached to the post' },
+      },
     });
   }
 
@@ -104,7 +120,9 @@ export async function installFakes(scenario: string) {
       return new Response(geminiStream(), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
     }
     if (url.includes('generativelanguage.googleapis.com') && url.includes('/models')) {
-      return new Response(JSON.stringify({ models: [{ name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] }] }), { headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ models: [{ name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] }] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
     if (url.includes('localhost:11434')) {
       return new Response(JSON.stringify({ error: { message: 'preview: no local server' } }), { status: 503 });
@@ -121,7 +139,16 @@ function geminiStream(): ReadableStream<Uint8Array> {
     async start(controller) {
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
       await sleep(700);
-      controller.enqueue(chunk({ candidates: [{ content: { parts: [] }, groundingMetadata: { webSearchQueries: ['einstein insanity quote origin', 'definition of insanity earliest appearance'] } }] }));
+      controller.enqueue(
+        chunk({
+          candidates: [
+            {
+              content: { parts: [] },
+              groundingMetadata: { webSearchQueries: ['einstein insanity quote origin', 'definition of insanity earliest appearance'] },
+            },
+          ],
+        }),
+      );
       await sleep(900);
       controller.enqueue(
         chunk({
@@ -146,7 +173,9 @@ function geminiStream(): ReadableStream<Uint8Array> {
         await sleep(40);
         controller.enqueue(chunk({ candidates: [{ content: { parts: [{ text: words.slice(i, i + 3).join('') }] } }] }));
       }
-      controller.enqueue(chunk({ candidates: [{ content: { parts: [] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1480, candidatesTokenCount: 420 } }));
+      controller.enqueue(
+        chunk({ candidates: [{ content: { parts: [] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1480, candidatesTokenCount: 420 } }),
+      );
       controller.close();
     },
   });

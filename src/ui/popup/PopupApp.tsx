@@ -6,6 +6,7 @@ import { getTargetTab } from '@/lib/tabs';
 import { googleAiModeUrl } from '@/lib/webmode';
 import { domainOf } from '@/lib/util/url';
 import { useSettings } from '../hooks/useSettings';
+import { useShortcutLabel } from '../hooks/useShortcutLabel';
 import { External, Logo, Sliders, Sparkle } from '../components/Icons';
 import { Label } from '../components/common';
 
@@ -18,6 +19,7 @@ export function PopupApp() {
   const { settings, update } = useSettings();
   const [tab, setTab] = useState<{ id?: number; windowId?: number; url: string; title: string } | null>(null);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const shortcut = useShortcutLabel();
 
   useEffect(() => {
     void (async () => {
@@ -27,7 +29,7 @@ export function PopupApp() {
       if (t.id == null) return;
       try {
         // The content script reports the page URL/title too; we don't hold the `tabs` permission.
-        const reply = await browser.tabs.sendMessage(t.id, { type: 'wys:get-selection' });
+        const reply: unknown = await browser.tabs.sendMessage(t.id, { type: 'wys:get-selection' });
         const parsed = SelectionInfoSchema.safeParse(reply);
         if (parsed.success) {
           setTab({ id: t.id, windowId: t.windowId, url: parsed.data.pageUrl || t.url || '', title: parsed.data.pageTitle || t.title || '' });
@@ -96,13 +98,15 @@ export function PopupApp() {
           <button className="wys-btn h-11 text-[14px]" disabled={!input} onClick={openWeb}>
             Open in Google AI Mode <External size={15} />
           </button>
-          <span className="px-1 text-[11px] leading-[15px] text-ink-2">Opens google.com in a new tab with your text · no API key needed · not saved to history</span>
+          <span className="px-1 text-[11px] leading-[15px] text-ink-2">
+            Opens google.com in a new tab with your text · no API key needed · not saved to history
+          </span>
         </div>
 
         <div className="h-px bg-line" />
         <div className="flex items-center gap-2">
           <label htmlFor="wys-default-action" className="text-[13px]">
-            Default when I press Ctrl+Shift+S
+            Default when I press {shortcut}
           </label>
           <span className="grow" />
           <select

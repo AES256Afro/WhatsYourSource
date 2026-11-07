@@ -13,7 +13,7 @@ export function createSearxng(baseUrl: string): SearchBackend {
       const u = `${base}/search?q=${encodeURIComponent(query)}&format=json&language=en`;
       const res = await fetch(u, { signal, headers: { Accept: 'application/json' } });
       if (!res.ok) throw new SearchError('SearXNG returned an error.', await readError(res));
-      const j = (await res.json()) as { results?: Array<{ title?: string; url?: string; content?: string; publishedDate?: string | null }> };
+      const j = (await res.json()) as { results?: { title?: string; url?: string; content?: string; publishedDate?: string | null }[] };
       return (j.results ?? [])
         .filter((r) => r.url)
         .slice(0, MAX)
@@ -31,7 +31,7 @@ export function createBrave(apiKey: string): SearchBackend {
       const u = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${MAX}`;
       const res = await fetch(u, { signal, headers: { Accept: 'application/json', 'X-Subscription-Token': apiKey } });
       if (!res.ok) throw new SearchError('Brave Search returned an error.', await readError(res));
-      const j = (await res.json()) as { web?: { results?: Array<{ title?: string; url?: string; description?: string; age?: string }> } };
+      const j = (await res.json()) as { web?: { results?: { title?: string; url?: string; description?: string; age?: string }[] } };
       return (j.web?.results ?? [])
         .filter((r) => r.url)
         .slice(0, MAX)
@@ -53,7 +53,7 @@ export function createTavily(apiKey: string): SearchBackend {
         body: JSON.stringify({ query, max_results: MAX, include_answer: false, search_depth: 'basic' }),
       });
       if (!res.ok) throw new SearchError('Tavily returned an error.', await readError(res));
-      const j = (await res.json()) as { results?: Array<{ title?: string; url?: string; content?: string; published_date?: string }> };
+      const j = (await res.json()) as { results?: { title?: string; url?: string; content?: string; published_date?: string }[] };
       return (j.results ?? [])
         .filter((r) => r.url)
         .slice(0, MAX)

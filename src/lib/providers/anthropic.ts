@@ -106,7 +106,10 @@ export class AnthropicProvider implements LlmProvider {
             block.json += delta.partial_json ?? '';
           } else if (delta.type === 'citations_delta' && delta.citation?.url && !seen.has(delta.citation.url)) {
             seen.add(delta.citation.url);
-            yield { type: 'sources', sources: [{ url: delta.citation.url, title: delta.citation.title, domain: domainOf(delta.citation.url), verified: true }] };
+            yield {
+              type: 'sources',
+              sources: [{ url: delta.citation.url, title: delta.citation.title, domain: domainOf(delta.citation.url), verified: true }],
+            };
           }
           break;
         }
@@ -148,7 +151,7 @@ export class AnthropicProvider implements LlmProvider {
         const err = errorFromResponse(res.status, await res.text().catch(() => ''));
         return { ok: false, error: err.details ? `${err.message} ${err.details}` : err.message };
       }
-      const j = (await res.json()) as { data?: Array<{ id?: string }> };
+      const j = (await res.json()) as { data?: { id?: string }[] };
       return { ok: true, models: (j.data ?? []).map((m) => m.id ?? '').filter(Boolean) };
     } catch (e) {
       return { ok: false, error: toProviderError(e).message };
@@ -160,7 +163,7 @@ interface AnthropicEvent {
   type: string;
   index?: number;
   message?: { usage?: { input_tokens?: number } };
-  content_block?: { type: string; content?: Array<{ type: string; url?: string; title?: string; page_age?: string }> };
+  content_block?: { type: string; content?: { type: string; url?: string; title?: string; page_age?: string }[] };
   delta?: {
     type?: string;
     text?: string;

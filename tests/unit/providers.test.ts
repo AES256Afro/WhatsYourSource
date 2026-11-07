@@ -39,7 +39,17 @@ describe('OpenAICompatProvider', () => {
       const body = JSON.parse(String(init.body));
       if (call === 1) {
         expect(body.tools).toHaveLength(2);
-        return json({ choices: [{ message: { content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'web_search', arguments: '{"query":"einstein insanity quote origin"}' } }] } }], usage: { prompt_tokens: 100, completion_tokens: 20 } });
+        return json({
+          choices: [
+            {
+              message: {
+                content: null,
+                tool_calls: [{ id: 'c1', type: 'function', function: { name: 'web_search', arguments: '{"query":"einstein insanity quote origin"}' } }],
+              },
+            },
+          ],
+          usage: { prompt_tokens: 100, completion_tokens: 20 },
+        });
       }
       // The tool result went back to the model.
       expect(body.messages.some((m: { role: string }) => m.role === 'tool')).toBe(true);
@@ -78,17 +88,31 @@ describe('OpenAICompatProvider', () => {
   });
 
   it('streams a plain answer when no search tool is configured', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => sse([JSON.stringify({ choices: [{ delta: { content: 'Half ' } }] }), JSON.stringify({ choices: [{ delta: { content: 'answer.' } }], usage: { prompt_tokens: 10, completion_tokens: 2 } }), '[DONE]'])));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        sse([
+          JSON.stringify({ choices: [{ delta: { content: 'Half ' } }] }),
+          JSON.stringify({ choices: [{ delta: { content: 'answer.' } }], usage: { prompt_tokens: 10, completion_tokens: 2 } }),
+          '[DONE]',
+        ]),
+      ),
+    );
     const p = new OpenAICompatProvider({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk', model: 'gpt', search: null, fetchPages: false });
     const { result, events } = await collectCheck(INPUT, p);
     expect(events.filter((e) => e.type === 'delta')).toHaveLength(2);
     expect(result!.narrative).toBe('Half answer.');
     expect(result!.degraded).toBe(true);
-    expect(events.some((e) => e.type === 'status' && /No search tool/.test(e.message))).toBe(true);
+    expect(events.some((e) => e.type === 'status' && e.message.includes('No search tool'))).toBe(true);
   });
 
   it('explains unreachable servers', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
     const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'm', search: null, fetchPages: false });
     const { error } = await collectCheck(INPUT, p);
     expect(error?.code).toBe('network');
@@ -106,7 +130,14 @@ describe('AnthropicProvider', () => {
       { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"query":"einstein ins' } },
       { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: 'anity quote"}' } },
       { type: 'content_block_stop', index: 0 },
-      { type: 'content_block_start', index: 1, content_block: { type: 'web_search_tool_result', content: [{ type: 'web_search_result', url: 'https://quoteinvestigator.com/2017/03/23/same/', title: 'QI article', page_age: '2017' }] } },
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: {
+          type: 'web_search_tool_result',
+          content: [{ type: 'web_search_result', url: 'https://quoteinvestigator.com/2017/03/23/same/', title: 'QI article', page_age: '2017' }],
+        },
+      },
       { type: 'content_block_stop', index: 1 },
       { type: 'content_block_start', index: 2, content_block: { type: 'text', text: '' } },
       { type: 'content_block_delta', index: 2, delta: { type: 'text_delta', text: ANSWER.slice(0, 30) } },
@@ -135,7 +166,10 @@ describe('AnthropicProvider', () => {
   });
 
   it('maps a 401 to an auth error', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => json({ error: { type: 'authentication_error', message: 'invalid x-api-key' } }, 401)));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ error: { type: 'authentication_error', message: 'invalid x-api-key' } }, 401)),
+    );
     const { error } = await collectCheck(INPUT, new AnthropicProvider({ apiKey: 'bad', model: 'm' }));
     expect(error?.code).toBe('auth');
   });
@@ -145,26 +179,35 @@ describe('search backends', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('SearXNG', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      expect(url).toMatch(/^http:\/\/localhost:8888\/search\?q=hello%20world&format=json/);
-      return json({ results: [{ title: 'A', url: 'https://a.example', content: 'snippet', publishedDate: '2024-01-01' }] });
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        expect(url).toMatch(/^http:\/\/localhost:8888\/search\?q=hello%20world&format=json/);
+        return json({ results: [{ title: 'A', url: 'https://a.example', content: 'snippet', publishedDate: '2024-01-01' }] });
+      }),
+    );
     const hits = await createSearxng('http://localhost:8888/').search('hello world');
     expect(hits).toEqual([{ title: 'A', url: 'https://a.example', snippet: 'snippet', date: '2024-01-01' }]);
   });
   it('Brave', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
-      expect((init.headers as Record<string, string>)['X-Subscription-Token']).toBe('BSA1');
-      return json({ web: { results: [{ title: 'B', url: 'https://b.example', description: '<strong>bold</strong> text', age: '2 days ago' }] } });
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        expect((init.headers as Record<string, string>)['X-Subscription-Token']).toBe('BSA1');
+        return json({ web: { results: [{ title: 'B', url: 'https://b.example', description: '<strong>bold</strong> text', age: '2 days ago' }] } });
+      }),
+    );
     const hits = await createBrave('BSA1').search('q');
     expect(hits[0]).toEqual({ title: 'B', url: 'https://b.example', snippet: 'bold text', date: '2 days ago' });
   });
   it('Tavily', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
-      expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tvly-1');
-      return json({ results: [{ title: 'C', url: 'https://c.example', content: 'c', published_date: '2025' }] });
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tvly-1');
+        return json({ results: [{ title: 'C', url: 'https://c.example', content: 'c', published_date: '2025' }] });
+      }),
+    );
     const hits = await createTavily('tvly-1').search('q');
     expect(hits[0]?.url).toBe('https://c.example');
   });

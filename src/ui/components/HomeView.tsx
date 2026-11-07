@@ -4,6 +4,7 @@ import type { CheckInput, SelectionInfo } from '@/lib/messaging/protocol';
 import { SelectionInfoSchema } from '@/lib/messaging/protocol';
 import { PROVIDER_LABELS, openaiCompatLabel } from '@/lib/providers/registry';
 import type { Settings } from '@/lib/storage/settings';
+import { useShortcutLabel } from '../hooks/useShortcutLabel';
 import { getTargetTab } from '@/lib/tabs';
 import { domainOf, truncate } from '@/lib/util/url';
 import { Label, ProviderBadge } from './common';
@@ -25,6 +26,7 @@ export function HomeView({
   const [tab, setTab] = useState<{ id?: number; url: string; title: string } | null>(null);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [pasted, setPasted] = useState('');
+  const shortcut = useShortcutLabel();
 
   useEffect(() => {
     let alive = true;
@@ -35,7 +37,7 @@ export function HomeView({
       if (t?.id == null) return setSelection(null);
       try {
         // The content script reports the page URL/title too; we don't hold the `tabs` permission.
-        const reply = await browser.tabs.sendMessage(t.id, { type: 'wys:get-selection' });
+        const reply: unknown = await browser.tabs.sendMessage(t.id, { type: 'wys:get-selection' });
         const parsed = SelectionInfoSchema.safeParse(reply);
         if (!alive) return;
         if (parsed.success) {
@@ -72,7 +74,7 @@ export function HomeView({
     const t = pasted.trim();
     if (!t) return;
     if (/^https?:\/\/\S+$/i.test(t)) onCheck({ kind: 'page', url: t, title: '' });
-    else onCheck({ kind: 'text', text: t, pageUrl: tab?.url ?? '', pageTitle: tab?.title ?? '' });
+    else onCheck({ kind: 'text', text: t, pageUrl: '', pageTitle: '' });
   };
 
   return (
@@ -103,7 +105,7 @@ export function HomeView({
       ) : (
         <div className="rounded-xl border border-dashed border-line-2 p-3 text-[12px] leading-[17px] text-ink-2">
           Highlight text on the page and a <strong className="text-ink">Check source</strong> chip appears — or press{' '}
-          <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">Ctrl+Shift+S</kbd>. Right-click an image to check it.
+          <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">{shortcut}</kbd>. Right-click an image to check it.
         </div>
       )}
 
@@ -142,13 +144,7 @@ export function HomeView({
           <label htmlFor="wys-paste" className="sr-only">
             Paste text or a link
           </label>
-          <input
-            id="wys-paste"
-            className="wys-input"
-            placeholder="Paste text or a link…"
-            value={pasted}
-            onChange={(e) => setPasted(e.target.value)}
-          />
+          <input id="wys-paste" className="wys-input" placeholder="Paste text or a link…" value={pasted} onChange={(e) => setPasted(e.target.value)} />
           <button type="submit" className="wys-btn" disabled={!pasted.trim()}>
             Check
           </button>

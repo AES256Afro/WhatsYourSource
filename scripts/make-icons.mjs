@@ -13,7 +13,10 @@ const svg = (size) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" h
 
 await mkdir('public/icon', { recursive: true });
 for (const size of [16, 32, 48, 96, 128]) {
-  const png = await sharp(Buffer.from(svg(size))).resize(size, size).png().toBuffer();
+  const png = await sharp(Buffer.from(svg(size)))
+    .resize(size, size)
+    .png()
+    .toBuffer();
   await writeFile(`public/icon/${size}.png`, png);
   console.log(`public/icon/${size}.png`);
 }

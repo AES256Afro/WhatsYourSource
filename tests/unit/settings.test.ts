@@ -36,3 +36,13 @@ describe('webmode + url helpers', () => {
     expect(normalizeUrl('https://www.example.com/p/?utm_source=x#frag')).toBe(normalizeUrl('https://example.com/p'));
   });
 });
+
+describe('shortcut labels', () => {
+  it('spells the binding for the platform', async () => {
+    const { shortcutLabelForPlatform, DEFAULT_SHORTCUT } = await import('@/lib/shortcut');
+    expect(DEFAULT_SHORTCUT).toBe('Alt+Shift+S');
+    const label = shortcutLabelForPlatform('Alt+Shift+S');
+    expect(['Alt+Shift+S', '⌥⇧S']).toContain(label);
+    expect(shortcutLabelForPlatform('Ctrl+Shift+S')).toMatch(/Ctrl\+Shift\+S|⌘⇧S/);
+  });
+});

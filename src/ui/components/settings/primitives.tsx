@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check } from '../Icons';
 
 export function ProviderCard({
@@ -21,13 +21,21 @@ export function ProviderCard({
   children?: React.ReactNode;
 }) {
   return (
-    <div className={`flex flex-col gap-2.5 rounded-xl border p-3 ${isDefault ? 'border-accent bg-accent-wash' : 'border-line'} ${disabled ? 'opacity-70' : ''}`}>
+    <div
+      className={`flex flex-col gap-2.5 rounded-xl border p-3 ${isDefault ? 'border-accent bg-accent-wash' : 'border-line'} ${disabled ? 'opacity-70' : ''}`}
+    >
       <div className="flex items-center gap-2">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] ${isDefault ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}>{icon}</span>
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] ${isDefault ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}
+        >
+          {icon}
+        </span>
         <span className="flex min-w-0 grow flex-col">
           <span className="text-[14px] font-semibold">{title}</span>
           {subtitle && (
-            <span className={`inline-flex items-center gap-1 text-[11px] ${subtitleTone === 'ok' ? 'font-semibold text-ok' : subtitleTone === 'bad' ? 'font-semibold text-bad' : 'text-ink-2'}`}>
+            <span
+              className={`inline-flex items-center gap-1 text-[11px] ${subtitleTone === 'ok' ? 'font-semibold text-ok' : subtitleTone === 'bad' ? 'font-semibold text-bad' : 'text-ink-2'}`}
+            >
               {subtitleTone === 'ok' && <Check size={11} />}
               <span className="truncate">{subtitle}</span>
             </span>
@@ -61,14 +69,14 @@ export function Row({ label, hint, children }: { label: string; hint?: string; c
   );
 }
 
-export function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+export function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange?: (v: boolean) => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       disabled={disabled}
-      onClick={() => onChange(!checked)}
+      onClick={() => onChange?.(!checked)}
       className={`relative h-5 w-9 shrink-0 rounded-full border-0 p-0 transition-colors ${checked ? 'bg-accent-fill' : 'bg-line-2'} ${disabled ? 'opacity-50' : 'cursor-pointer'}`}
     >
       <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
@@ -76,9 +84,19 @@ export function Toggle({ checked, onChange, disabled }: { checked: boolean; onCh
   );
 }
 
-export function DebouncedTextarea({ id, value, onCommit, placeholder }: { id: string; value: string; onCommit: (v: string) => void; placeholder?: string }) {
+/** Local draft that follows the committed value when it changes from outside (the React "derived state" pattern). */
+function useDraft(value: string): [string, (v: string) => void] {
   const [v, setV] = useState(value);
-  useEffect(() => setV(value), [value]);
+  const [prev, setPrev] = useState(value);
+  if (prev !== value) {
+    setPrev(value);
+    setV(value);
+  }
+  return [v, setV];
+}
+
+export function DebouncedTextarea({ id, value, onCommit, placeholder }: { id: string; value: string; onCommit: (v: string) => void; placeholder?: string }) {
+  const [v, setV] = useDraft(value);
   return (
     <textarea
       id={id}
@@ -109,8 +127,7 @@ export function CommitInput({
   className?: string;
   list?: string;
 }) {
-  const [v, setV] = useState(value);
-  useEffect(() => setV(value), [value]);
+  const [v, setV] = useDraft(value);
   const commit = () => v !== value && onCommit(v.trim());
   return (
     <input

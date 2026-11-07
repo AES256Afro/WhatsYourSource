@@ -26,7 +26,7 @@ export async function captureFromTab(tabId: number | undefined, highlight?: stri
 
   let payload;
   try {
-    const reply = await browser.tabs.sendMessage(id, { type: 'wys:capture-snapshot', highlight });
+    const reply: unknown = await browser.tabs.sendMessage(id, { type: 'wys:capture-snapshot', highlight });
     const parsed = SnapshotPayloadSchema.safeParse(reply);
     if (!parsed.success) return null;
     payload = parsed.data;
@@ -88,6 +88,11 @@ export interface SrcdocOptions {
 export function buildSnapshotSrcdoc(snapshot: Pick<StoredSnapshot, 'html' | 'title' | 'url' | 'capturedAt' | 'highlight'>, opts: SrcdocOptions = {}): string {
   const doc = new DOMParser().parseFromString(`<!doctype html><html><body>${snapshot.html}</body></html>`, 'text/html');
   for (const a of Array.from(doc.querySelectorAll('a[href]'))) {
+    // The content script already sanitized; this is the second line in case an old snapshot predates it.
+    if (!/^\s*https?:/i.test(a.getAttribute('href') ?? '')) {
+      a.removeAttribute('href');
+      continue;
+    }
     a.setAttribute('target', '_blank');
     a.setAttribute('rel', 'noopener noreferrer');
   }

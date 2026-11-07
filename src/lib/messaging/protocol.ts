@@ -44,12 +44,7 @@ export const PostInputSchema = z.object({
   links: z.array(z.string()).max(12),
 });
 
-export const CheckInputSchema = z.discriminatedUnion('kind', [
-  TextInputSchema,
-  ImageInputSchema,
-  PageInputSchema,
-  PostInputSchema,
-]);
+export const CheckInputSchema = z.discriminatedUnion('kind', [TextInputSchema, ImageInputSchema, PageInputSchema, PostInputSchema]);
 export type CheckInput = z.infer<typeof CheckInputSchema>;
 export type TextInput = z.infer<typeof TextInputSchema>;
 export type ImageInput = z.infer<typeof ImageInputSchema>;
@@ -85,6 +80,8 @@ export type SnapshotPayload = z.infer<typeof SnapshotPayloadSchema>;
 export const MessageSchema = z.discriminatedUnion('type', [
   /** content → background: the user clicked the floating chip. */
   z.object({ type: z.literal('wys:check'), input: CheckInputSchema }),
+  /** content → background: the user's settings send page triggers to Google AI Mode; open it in a tab. */
+  z.object({ type: z.literal('wys:open-webmode'), input: CheckInputSchema }),
   /** background/popup → content: give me the current selection. */
   z.object({ type: z.literal('wys:get-selection') }),
   /** popup → background: open the side panel for this window/tab. */
@@ -98,10 +95,11 @@ export const MessageSchema = z.discriminatedUnion('type', [
 ]);
 export type Message = z.infer<typeof MessageSchema>;
 
-export type MessageResponse =
-  | { ok: true }
-  | { ok: false; error: string }
-  | SelectionInfo
-  | SnapshotPayload
-  | { rect: { x: number; y: number; width: number; height: number }; dpr: number }
-  | null;
+/** content → side panel: where an image sits on screen, for the screenshot fallback. */
+export const LocateImageReplySchema = z.object({
+  rect: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }),
+  dpr: z.number().positive(),
+});
+export type LocateImageReply = z.infer<typeof LocateImageReplySchema>;
+
+export type MessageResponse = { ok: true } | { ok: false; error: string } | SelectionInfo | SnapshotPayload | LocateImageReply | null;

@@ -1,15 +1,7 @@
 import { parseSse } from '../util/sse';
 import { domainOf } from '../util/url';
 import { estimateUsd } from './pricing';
-import {
-  ProviderError,
-  errorFromResponse,
-  toProviderError,
-  type GenEvent,
-  type GenerateRequest,
-  type LlmProvider,
-  type RawSource,
-} from './types';
+import { ProviderError, errorFromResponse, toProviderError, type GenEvent, type GenerateRequest, type LlmProvider, type RawSource } from './types';
 
 export interface GeminiConfig {
   apiKey: string;
@@ -29,18 +21,18 @@ interface GeminiChunk {
     toolUsePromptTokenCount?: number;
     thoughtsTokenCount?: number;
   };
-  candidates?: Array<{
+  candidates?: {
     finishReason?: string;
-    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+    content?: { parts?: { text?: string; thought?: boolean }[] };
     groundingMetadata?: {
       webSearchQueries?: string[];
       searchEntryPoint?: { renderedContent?: string };
-      groundingChunks?: Array<{ web?: { uri?: string; title?: string; domain?: string } }>;
+      groundingChunks?: { web?: { uri?: string; title?: string; domain?: string } }[];
     };
     urlContextMetadata?: {
-      urlMetadata?: Array<{ retrievedUrl?: string; urlRetrievalStatus?: string }>;
+      urlMetadata?: { retrievedUrl?: string; urlRetrievalStatus?: string }[];
     };
-  }>;
+  }[];
 }
 
 export class GeminiProvider implements LlmProvider {
@@ -57,7 +49,7 @@ export class GeminiProvider implements LlmProvider {
   async *generate(req: GenerateRequest, signal: AbortSignal): AsyncIterable<GenEvent> {
     if (!this.cfg.apiKey.trim()) throw new ProviderError('no-key', 'Add your Gemini API key in settings.');
 
-    const tools: Array<Record<string, unknown>> = [];
+    const tools: Record<string, unknown>[] = [];
     if (!req.plain) {
       if (req.wantSearch && this.cfg.grounding) tools.push({ googleSearch: {} });
       if (req.urls?.length && this.cfg.urlContext) tools.push({ urlContext: {} });
@@ -68,9 +60,7 @@ export class GeminiProvider implements LlmProvider {
       contents: [
         {
           role: 'user',
-          parts: req.parts.map((p) =>
-            'text' in p ? { text: p.text } : { inlineData: { mimeType: p.image.mime, data: p.image.dataBase64 } },
-          ),
+          parts: req.parts.map((p) => ('text' in p ? { text: p.text } : { inlineData: { mimeType: p.image.mime, data: p.image.dataBase64 } })),
         },
       ],
       ...(tools.length ? { tools } : {}),
@@ -161,8 +151,7 @@ export class GeminiProvider implements LlmProvider {
       }
       if (chunk.usageMetadata) {
         promptTokens = chunk.usageMetadata.promptTokenCount ?? promptTokens;
-        outputTokens =
-          (chunk.usageMetadata.candidatesTokenCount ?? 0) + (chunk.usageMetadata.thoughtsTokenCount ?? 0) || outputTokens;
+        outputTokens = (chunk.usageMetadata.candidatesTokenCount ?? 0) + (chunk.usageMetadata.thoughtsTokenCount ?? 0) || outputTokens;
       }
       if (cand?.finishReason && !['STOP', 'MAX_TOKENS'].includes(cand.finishReason)) {
         if (!sawText) throw new ProviderError('blocked', `Google AI stopped early (${cand.finishReason}).`);
@@ -191,11 +180,11 @@ export class GeminiProvider implements LlmProvider {
         const err = errorFromResponse(res.status, await res.text().catch(() => ''));
         return { ok: false, error: err.details ? `${err.message} ${err.details}` : err.message };
       }
-      const j = (await res.json()) as { models?: Array<{ name?: string; supportedGenerationMethods?: string[] }> };
+      const j = (await res.json()) as { models?: { name?: string; supportedGenerationMethods?: string[] }[] };
       const models = (j.models ?? [])
         .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
         .map((m) => (m.name ?? '').replace(/^models\//, ''))
-        .filter((n) => /^gemini-/.test(n));
+        .filter((n) => n.startsWith('gemini-'));
       return { ok: true, models };
     } catch (e) {
       const err = toProviderError(e);

@@ -68,8 +68,10 @@ export function buildRequest(input: CheckInput, extra?: { imageBase64?: string; 
   switch (input.kind) {
     case 'text': {
       const lines = [
-        `The user highlighted this text on ${input.pageUrl || 'a web page'}${input.pageTitle ? ` ("${truncate(input.pageTitle, 120)}")` : ''}:`,
-        untrusted('selection', { page: input.pageUrl }, truncate(input.text, 4000)),
+        input.pageUrl
+          ? `The user highlighted this text on ${input.pageUrl}${input.pageTitle ? ` ("${truncate(input.pageTitle, 120)}")` : ''}:`
+          : 'The user pasted this text (its origin is unknown):',
+        untrusted('selection', { page: input.pageUrl || undefined }, truncate(input.text, 4000)),
       ];
       if (input.surrounding && input.surrounding.trim() !== input.text.trim()) {
         lines.push('Context around the selection on the same page (for disambiguation only):');
@@ -82,9 +84,7 @@ export function buildRequest(input: CheckInput, extra?: { imageBase64?: string; 
       break;
     }
     case 'image': {
-      const lines = [
-        `The user asked about an image on ${input.pageUrl || 'a web page'}${input.pageTitle ? ` ("${truncate(input.pageTitle, 120)}")` : ''}.`,
-      ];
+      const lines = [`The user asked about an image on ${input.pageUrl || 'a web page'}${input.pageTitle ? ` ("${truncate(input.pageTitle, 120)}")` : ''}.`];
       if (input.alt) lines.push(`Alt text on the page: ${untrusted('alt', {}, truncate(input.alt, 300))}`);
       if (input.nearbyText) lines.push(`Text near the image: ${untrusted('caption', {}, truncate(input.nearbyText, 800))}`);
       if (extra?.provenanceSummary) lines.push(`Facts checked locally from the file itself (trustworthy): ${extra.provenanceSummary}`);
@@ -97,19 +97,26 @@ export function buildRequest(input: CheckInput, extra?: { imageBase64?: string; 
     }
     case 'page': {
       urls.push(input.url);
-      const lines = [
-        `The user asked about this page: ${input.url}${input.title ? ` ("${truncate(input.title, 120)}")` : ''}.`,
-      ];
+      const lines = [`The user asked about this page: ${input.url}${input.title ? ` ("${truncate(input.title, 120)}")` : ''}.`];
       if (input.excerpt) lines.push(untrusted('excerpt', { page: input.url }, truncate(input.excerpt, 3000)));
-      lines.push('Is what this page says true, and where can I find the source of this topic? Who publishes it, is it an original source or a repost, and do its main claims hold up?');
+      lines.push(
+        'Is what this page says true, and where can I find the source of this topic? Who publishes it, is it an original source or a repost, and do its main claims hold up?',
+      );
       parts.push({ text: lines.join('\n\n') });
       break;
     }
     case 'post': {
-      const meta = [input.author ? `author: ${input.author}` : null, input.postedAt ? `posted: ${input.postedAt}` : null, input.permalink ? `permalink: ${input.permalink}` : null]
+      const meta = [
+        input.author ? `author: ${input.author}` : null,
+        input.postedAt ? `posted: ${input.postedAt}` : null,
+        input.permalink ? `permalink: ${input.permalink}` : null,
+      ]
         .filter(Boolean)
         .join(' · ');
-      const lines = [`The user asked about a post on ${input.site}${meta ? ` (${meta})` : ''}:`, untrusted('post', { site: input.site }, truncate(input.text, 5000))];
+      const lines = [
+        `The user asked about a post on ${input.site}${meta ? ` (${meta})` : ''}:`,
+        untrusted('post', { site: input.site }, truncate(input.text, 5000)),
+      ];
       if (input.images.length) lines.push(`Images attached to the post:\n${input.images.slice(0, 4).join('\n')}`);
       if (input.links.length) {
         lines.push(`Links in the post:\n${input.links.slice(0, 8).join('\n')}`);

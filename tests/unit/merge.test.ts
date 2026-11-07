@@ -4,7 +4,12 @@ import type { ModelResult } from '@/lib/pipeline/schema';
 import type { RawSource } from '@/lib/providers/types';
 
 const raw: RawSource[] = [
-  { url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc', title: 'quoteinvestigator.com', domain: 'quoteinvestigator.com', verified: true },
+  {
+    url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc',
+    title: 'quoteinvestigator.com',
+    domain: 'quoteinvestigator.com',
+    verified: true,
+  },
   { url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/def', title: 'en.wikiquote.org', domain: 'en.wikiquote.org', verified: true },
 ];
 
@@ -38,7 +43,16 @@ describe('buildSources', () => {
     expect(buildSources(null, raw)).toHaveLength(2);
   });
   it('dedupes the same URL in different spellings', () => {
-    const s = buildSources({ ...model, sources: [{ title: 'a', url: 'https://www.example.com/p/?utm_source=x', date: null }, { title: 'b', url: 'https://example.com/p', date: null }] }, []);
+    const s = buildSources(
+      {
+        ...model,
+        sources: [
+          { title: 'a', url: 'https://www.example.com/p/?utm_source=x', date: null },
+          { title: 'b', url: 'https://example.com/p', date: null },
+        ],
+      },
+      [],
+    );
     expect(s).toHaveLength(1);
   });
 });

@@ -9,7 +9,7 @@ import { chromium, expect, test as base, type BrowserContext, type Worker } from
 const EXT_PATH = path.resolve('.output/chrome-mv3');
 
 // Code inside sw.evaluate() runs in the extension's service worker, where `chrome` exists.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 declare const chrome: any;
 
 const ANSWER = `Quote Investigator traced it to 1981.
@@ -73,7 +73,19 @@ test.beforeEach(async ({ context, sw }) => {
       status: 200,
       contentType: 'text/event-stream',
       body: sse([
-        { candidates: [{ content: { parts: [{ text: ANSWER }] }, groundingMetadata: { webSearchQueries: ['einstein insanity quote origin'], groundingChunks: [{ web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/1', title: 'quoteinvestigator.com' } }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 20 } },
+        {
+          candidates: [
+            {
+              content: { parts: [{ text: ANSWER }] },
+              groundingMetadata: {
+                webSearchQueries: ['einstein insanity quote origin'],
+                groundingChunks: [{ web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/1', title: 'quoteinvestigator.com' } }],
+              },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 20 },
+        },
       ]),
     }),
   );
@@ -126,7 +138,12 @@ test('a queued job runs in the side panel and lands in history', async ({ contex
           id: 'e2e-1',
           createdAt: Date.now(),
           tabId,
-          input: { kind: 'text', text: 'the definition of insanity is doing the same thing over and over again', pageUrl: 'http://example.test/article', pageTitle: 'Why we keep repeating ourselves' },
+          input: {
+            kind: 'text',
+            text: 'the definition of insanity is doing the same thing over and over again',
+            pageUrl: 'http://example.test/article',
+            pageTitle: 'Why we keep repeating ourselves',
+          },
         },
       });
     },

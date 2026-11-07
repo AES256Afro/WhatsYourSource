@@ -12,7 +12,8 @@ export async function readProvenance(bytes: Uint8Array, mime: string): Promise<L
 
   const fields: Record<string, string> = {};
   try {
-    const parsed = (await exifr.parse(bytes, { tiff: true, exif: true, gps: true, xmp: true, iptc: true, icc: false, interop: false, ihdr: true })) as Record<string, unknown> | undefined;
+    const parsed = (await exifr.parse(bytes, { tiff: true, exif: true, gps: true, xmp: true, iptc: true, icc: false, interop: false, ihdr: true })) as
+      Record<string, unknown> | undefined;
     if (parsed) {
       pick(fields, parsed, 'Make', 'Camera make');
       pick(fields, parsed, 'Model', 'Camera model');
@@ -29,7 +30,7 @@ export async function readProvenance(bytes: Uint8Array, mime: string): Promise<L
       pick(fields, parsed, 'ImageDescription', 'Description');
       pick(fields, parsed, 'DigitalSourceType', 'Digital source type');
       pick(fields, parsed, 'digitalSourceType', 'Digital source type');
-      if (parsed.latitude != null && parsed.longitude != null) fields['GPS'] = `${Number(parsed.latitude).toFixed(4)}, ${Number(parsed.longitude).toFixed(4)}`;
+      if (parsed.latitude != null && parsed.longitude != null) fields.GPS = `${Number(parsed.latitude).toFixed(4)}, ${Number(parsed.longitude).toFixed(4)}`;
       if (typeof parsed.ImageWidth === 'number' && typeof parsed.ImageHeight === 'number') {
         out.width = parsed.ImageWidth;
         out.height = parsed.ImageHeight;
@@ -52,7 +53,13 @@ export function provenanceSummary(p: LocalProvenance): string {
   const bits: string[] = [];
   if (p.width && p.height) bits.push(`${p.width}x${p.height} ${p.mime ?? ''}`.trim());
   bits.push(p.c2pa?.present ? 'C2PA Content Credentials present (unverified)' : 'no C2PA Content Credentials');
-  if (p.exif && Object.keys(p.exif).length) bits.push('metadata: ' + Object.entries(p.exif).map(([k, v]) => `${k}=${v}`).join('; '));
+  if (p.exif && Object.keys(p.exif).length)
+    bits.push(
+      'metadata: ' +
+        Object.entries(p.exif)
+          .map(([k, v]) => `${k}=${v}`)
+          .join('; '),
+    );
   else bits.push('no EXIF/XMP metadata (typical after social-media upload)');
   if (p.aiHints?.length) bits.push('AI-generation hints in metadata: ' + p.aiHints.join('; '));
   return bits.join('. ');
@@ -66,10 +73,11 @@ function pick(out: Record<string, string>, src: Record<string, unknown>, key: st
   else if (typeof v === 'object') {
     const s = JSON.stringify(v);
     if (s.length < 120) out[label] = s;
-  } else out[label] = String(v).trim().slice(0, 200);
+  } else if (typeof v === 'string') out[label] = v.trim().slice(0, 200);
+  else if (typeof v === 'number' || typeof v === 'boolean' || typeof v === 'bigint') out[label] = String(v);
 }
 
-const AI_PATTERNS: Array<[RegExp, string]> = [
+const AI_PATTERNS: [RegExp, string][] = [
   [/trainedAlgorithmicMedia/i, 'IPTC digital source type = trained algorithmic media'],
   [/firefly/i, 'Adobe Firefly'],
   [/dall[- ]?e/i, 'DALL·E'],
@@ -120,8 +128,8 @@ export function detectC2PA(b: Uint8Array, mime: string): boolean {
   return indexOfAscii(b, 'c2pa.manifest') !== -1 || (indexOfAscii(b, 'jumb') !== -1 && indexOfAscii(b, 'c2pa') !== -1);
 }
 
-export function pngChunks(b: Uint8Array): Array<{ type: string; data: Uint8Array }> {
-  const out: Array<{ type: string; data: Uint8Array }> = [];
+export function pngChunks(b: Uint8Array): { type: string; data: Uint8Array }[] {
+  const out: { type: string; data: Uint8Array }[] = [];
   if (b.length < 8) return out;
   let i = 8;
   while (i + 8 <= b.length) {
@@ -136,8 +144,8 @@ export function pngChunks(b: Uint8Array): Array<{ type: string; data: Uint8Array
 }
 
 /** tEXt / iTXt chunks (uncompressed) as [keyword, text]. This is where Stable Diffusion writes its "parameters". */
-export function pngTextChunks(b: Uint8Array): Array<[string, string]> {
-  const out: Array<[string, string]> = [];
+export function pngTextChunks(b: Uint8Array): [string, string][] {
+  const out: [string, string][] = [];
   const dec = new TextDecoder('latin1');
   const utf8 = new TextDecoder('utf-8');
   for (const c of pngChunks(b)) {

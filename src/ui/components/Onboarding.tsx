@@ -5,7 +5,7 @@ import { CommitInput, SecretInput, Toggle } from './settings/primitives';
 
 type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
 
-const CHOICES: Array<{ id: ProviderId; title: string; tag: string; tagTone: 'accent' | 'muted' | 'ok'; blurb: string; icon: React.ReactNode }> = [
+const CHOICES: { id: ProviderId; title: string; tag: string; tagTone: 'accent' | 'muted' | 'ok'; blurb: string; icon: React.ReactNode }[] = [
   {
     id: 'gemini',
     title: 'Google AI with your own free key',
@@ -40,7 +40,17 @@ const CHOICES: Array<{ id: ProviderId; title: string; tag: string; tagTone: 'acc
   },
 ];
 
-export function Onboarding({ settings, update, onDone, onOpenSettings }: { settings: Settings; update: Update; onDone: () => void; onOpenSettings: () => void }) {
+export function Onboarding({
+  settings,
+  update,
+  onDone,
+  onOpenSettings,
+}: {
+  settings: Settings;
+  update: Update;
+  onDone: () => void;
+  onOpenSettings: () => void;
+}) {
   const [choice, setChoice] = useState<ProviderId>('gemini');
   const [chip, setChip] = useState(settings.privacy.chip);
   const [snapshots, setSnapshots] = useState(settings.privacy.snapshots);
@@ -65,13 +75,32 @@ export function Onboarding({ settings, update, onDone, onOpenSettings }: { setti
         <div className="flex flex-col gap-2">
           <Step n={1}>How do you want to check sources?</Step>
           {CHOICES.map((c) => (
-            <label key={c.id} htmlFor={`wys-ob-${c.id}`} className={`flex cursor-pointer items-start gap-2.5 rounded-[10px] border px-3 py-2.5 ${choice === c.id ? 'border-accent bg-accent-wash' : 'border-line bg-paper'}`}>
-              <input id={`wys-ob-${c.id}`} type="radio" name="wys-provider" className="mt-[3px] accent-accent" checked={choice === c.id} onChange={() => setChoice(c.id)} />
-              <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg ${choice === c.id ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}>{c.icon}</span>
+            <label
+              key={c.id}
+              htmlFor={`wys-ob-${c.id}`}
+              className={`flex cursor-pointer items-start gap-2.5 rounded-[10px] border px-3 py-2.5 ${choice === c.id ? 'border-accent bg-accent-wash' : 'border-line bg-paper'}`}
+            >
+              <input
+                id={`wys-ob-${c.id}`}
+                type="radio"
+                name="wys-provider"
+                className="mt-[3px] accent-accent"
+                checked={choice === c.id}
+                onChange={() => setChoice(c.id)}
+              />
+              <span
+                className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg ${choice === c.id ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}
+              >
+                {c.icon}
+              </span>
               <span className="flex min-w-0 grow flex-col gap-0.5">
                 <span className="flex items-center gap-1.5">
                   <span className="text-[13px] font-semibold">{c.title}</span>
-                  <span className={`rounded-full px-1.5 py-px text-[10px] font-semibold ${c.tagTone === 'accent' ? 'bg-accent-fill text-white' : c.tagTone === 'ok' ? 'bg-ok-soft text-ok' : 'bg-muted-soft text-ink-2'}`}>{c.tag}</span>
+                  <span
+                    className={`rounded-full px-1.5 py-px text-[10px] font-semibold ${c.tagTone === 'accent' ? 'bg-accent-fill text-white' : c.tagTone === 'ok' ? 'bg-ok-soft text-ok' : 'bg-muted-soft text-ink-2'}`}
+                  >
+                    {c.tag}
+                  </span>
                 </span>
                 <span className="text-[12px] leading-4 text-ink-2">{c.blurb}</span>
               </span>
@@ -84,7 +113,12 @@ export function Onboarding({ settings, update, onDone, onOpenSettings }: { setti
             <Step n={2}>
               <label htmlFor="wys-ob-gkey">Your Gemini API key</label>
             </Step>
-            <SecretInput id="wys-ob-gkey" value={settings.providers.gemini.apiKey} onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, gemini: { ...s.providers.gemini, apiKey: v } } }))} placeholder="Paste key…" />
+            <SecretInput
+              id="wys-ob-gkey"
+              value={settings.providers.gemini.apiKey}
+              onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, gemini: { ...s.providers.gemini, apiKey: v } } }))}
+              placeholder="Paste key…"
+            />
             <span className="text-[12px] leading-4 text-ink-2">
               Free at{' '}
               <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold no-underline">
@@ -99,8 +133,15 @@ export function Onboarding({ settings, update, onDone, onOpenSettings }: { setti
             <Step n={2}>
               <label htmlFor="wys-ob-akey">Your Anthropic API key</label>
             </Step>
-            <SecretInput id="wys-ob-akey" value={settings.providers.anthropic.apiKey} onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, anthropic: { ...s.providers.anthropic, apiKey: v } } }))} placeholder="sk-ant-…" />
-            <span className="text-[12px] leading-4 text-ink-2">Using OpenAI or another API instead? Pick it under Settings → OpenAI-compatible after this step.</span>
+            <SecretInput
+              id="wys-ob-akey"
+              value={settings.providers.anthropic.apiKey}
+              onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, anthropic: { ...s.providers.anthropic, apiKey: v } } }))}
+              placeholder="sk-ant-…"
+            />
+            <span className="text-[12px] leading-4 text-ink-2">
+              Using OpenAI or another API instead? Pick it under Settings → OpenAI-compatible after this step.
+            </span>
           </div>
         )}
         {choice === 'openai-compat' && (
@@ -108,13 +149,19 @@ export function Onboarding({ settings, update, onDone, onOpenSettings }: { setti
             <Step n={2}>
               <label htmlFor="wys-ob-url">Where is the model running?</label>
             </Step>
-            <CommitInput id="wys-ob-url" value={settings.providers.openaiCompat.baseUrl} onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, openaiCompat: { ...s.providers.openaiCompat, baseUrl: v } } }))} placeholder="http://localhost:11434/v1" />
+            <CommitInput
+              id="wys-ob-url"
+              value={settings.providers.openaiCompat.baseUrl}
+              onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, openaiCompat: { ...s.providers.openaiCompat, baseUrl: v } } }))}
+              placeholder="http://localhost:11434/v1"
+            />
             <span className="text-[12px] leading-4 text-ink-2">
               Don’t have one yet? Install{' '}
               <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer" className="font-semibold no-underline">
                 Ollama
               </a>{' '}
-              and run <code className="rounded bg-surface-2 px-1">ollama pull qwen3.5:9b</code> (or <code className="rounded bg-surface-2 px-1">qwen3.5:4b</code> on a small GPU). You’ll pick the model and a search tool on the next screen.
+              and run <code className="rounded bg-surface-2 px-1">ollama pull qwen3.5:9b</code> (or{' '}
+              <code className="rounded bg-surface-2 px-1">qwen3.5:4b</code> on a small GPU). You’ll pick the model and a search tool on the next screen.
             </span>
           </div>
         )}
@@ -123,7 +170,7 @@ export function Onboarding({ settings, update, onDone, onOpenSettings }: { setti
           <Step n={3}>Privacy</Step>
           <div className="wys-card flex flex-col px-3">
             <PrivacyRow label="Send text or images only when I press Check" hint="Always">
-              <Toggle checked disabled onChange={() => {}} />
+              <Toggle checked disabled />
             </PrivacyRow>
             <PrivacyRow label="Save a copy of the page with each check (local only)">
               <Toggle checked={snapshots} onChange={setSnapshots} />

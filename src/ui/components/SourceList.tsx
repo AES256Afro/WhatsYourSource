@@ -30,9 +30,7 @@ export function SourceList({ sources }: { sources: Source[] }) {
 export function SourceRow({ source: s }: { source: Source }) {
   const inner = (
     <>
-      <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-accent-soft text-[11px] font-bold text-accent">
-        {s.id}
-      </span>
+      <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-accent-soft text-[11px] font-bold text-accent">{s.id}</span>
       <span className="flex min-w-0 grow flex-col gap-px">
         <span className="truncate text-[13px] leading-[17px] font-medium text-ink">{s.title || s.domain}</span>
         <span className="text-[12px] text-ink-2">

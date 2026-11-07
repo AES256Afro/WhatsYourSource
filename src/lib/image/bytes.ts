@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser';
+import { LocateImageReplySchema } from '../messaging/protocol';
 
 /**
  * Getting the pixels of "that image the user right-clicked" is the fiddly part of image checks:
@@ -45,11 +46,12 @@ export async function fetchImageBytes(srcUrl: string, signal?: AbortSignal): Pro
 /** Screenshot the visible tab and crop to the image's on-screen box. Needs activeTab for that tab. */
 export async function screenshotImage(tabId: number, srcUrl: string): Promise<ImageBytes> {
   const tab = await browser.tabs.get(tabId);
-  const reply = (await browser.tabs.sendMessage(tabId, { type: 'wys:locate-image', srcUrl })) as { rect: { x: number; y: number; width: number; height: number }; dpr: number } | null;
-  if (!reply) throw new ImageFetchError('unknown', 'Could not find the image on the page.');
+  const raw: unknown = await browser.tabs.sendMessage(tabId, { type: 'wys:locate-image', srcUrl });
+  const reply = LocateImageReplySchema.safeParse(raw);
+  if (!reply.success) throw new ImageFetchError('unknown', 'Could not find the image on the page.');
   const dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
   const full = await createImageBitmap(await (await fetch(dataUrl)).blob());
-  const { rect, dpr } = reply;
+  const { rect, dpr } = reply.data;
   const sx = Math.max(0, Math.round(rect.x * dpr));
   const sy = Math.max(0, Math.round(rect.y * dpr));
   const sw = Math.min(full.width - sx, Math.round(rect.width * dpr));
@@ -96,7 +98,8 @@ export function sniffMime(b: Uint8Array): string | null {
   if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
   if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
   if (b.length < 12) return null;
-  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50)
+    return 'image/webp';
   if (b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) {
     const brand = String.fromCharCode(b[8]!, b[9]!, b[10]!, b[11]!);
     if (/avif|avis/.test(brand)) return 'image/avif';

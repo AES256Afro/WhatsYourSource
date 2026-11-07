@@ -15,8 +15,7 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'WhatsYourSource',
     short_name: 'WhatsYourSource',
-    description:
-      'Check the source of highlighted text, images and posts with the AI of your choice: Google AI by default, your own key, or a local model.',
+    description: 'Check the source of highlighted text, images and posts with the AI of your choice: Google AI by default, your own key, or a local model.',
     permissions: ['contextMenus', 'storage', 'unlimitedStorage', 'activeTab', 'scripting'],
     host_permissions: [
       'https://generativelanguage.googleapis.com/*',
@@ -28,12 +27,11 @@ export default defineConfig({
       'http://127.0.0.1/*',
     ],
     // Requested per site, on demand (image bytes, page fetches for local models).
-    ...(browser === 'firefox'
-      ? { optional_permissions: ['<all_urls>'] }
-      : { optional_host_permissions: ['<all_urls>'] }),
+    ...(browser === 'firefox' ? { optional_permissions: ['<all_urls>'] } : { optional_host_permissions: ['<all_urls>'] }),
     commands: {
       'check-selection': {
-        suggested_key: { default: 'Ctrl+Shift+S', mac: 'Command+Shift+S' },
+        // Not Ctrl+Shift+S: Firefox binds that to Take Screenshot, and Cmd+Shift+S is taken on macOS.
+        suggested_key: { default: 'Alt+Shift+S', mac: 'Alt+Shift+S' },
         description: 'Check the source of the selected text',
       },
     },

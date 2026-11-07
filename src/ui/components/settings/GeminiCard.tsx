@@ -10,16 +10,20 @@ type Update = (mutate: (s: Settings) => Settings) => Promise<Settings>;
 export function GeminiCard({ settings, update }: { settings: Settings; update: Update }) {
   const g = settings.providers.gemini;
   const set = (patch: Partial<typeof g>) => update((s) => ({ ...s, providers: { ...s.providers, gemini: { ...s.providers.gemini, ...patch } } }));
-  const [status, setStatus] = useState<Status>({ kind: g.apiKey ? 'ok' : 'idle', text: g.apiKey ? `Key set · ends in …${g.apiKey.slice(-3)}` : undefined });
+  const [verified, setVerified] = useState<Status & { forKey: string }>({ kind: 'idle', forKey: g.apiKey });
   const [models, setModels] = useState<string[]>([]);
+  // A verify result only applies to the key it was run for.
+  const status: Status = verified.forKey === g.apiKey ? verified : { kind: 'idle' };
+  const idleText = g.apiKey ? `Key set · ends in …${g.apiKey.trim().slice(-3)}` : 'Your own free key from AI Studio · Google Search built in';
 
   const verify = async () => {
-    setStatus({ kind: 'checking' });
+    const key = g.apiKey;
+    setVerified({ kind: 'checking', forKey: key });
     const r = await new GeminiProvider(g).validate();
     if (r.ok) {
       setModels(r.models ?? []);
-      setStatus({ kind: 'ok', text: `Key verified · ends in …${g.apiKey.trim().slice(-3)}` });
-    } else setStatus({ kind: 'bad', text: r.error });
+      setVerified({ kind: 'ok', text: `Key verified · ends in …${key.trim().slice(-3)}`, forKey: key });
+    } else setVerified({ kind: 'bad', text: r.error, forKey: key });
   };
 
   const modelOptions = Array.from(new Set([...GEMINI_MODELS.map((m) => m.id), ...models, g.model]));
@@ -27,7 +31,7 @@ export function GeminiCard({ settings, update }: { settings: Settings; update: U
     <ProviderCard
       icon={<Sparkle size={16} />}
       title="Google AI (Gemini)"
-      subtitle={status.kind === 'ok' ? status.text : status.kind === 'bad' ? status.text : status.kind === 'checking' ? 'Checking…' : 'Your own free key from AI Studio · Google Search built in'}
+      subtitle={status.kind === 'ok' || status.kind === 'bad' ? status.text : status.kind === 'checking' ? 'Checking…' : idleText}
       subtitleTone={status.kind === 'ok' ? 'ok' : status.kind === 'bad' ? 'bad' : undefined}
       isDefault={settings.defaultProvider === 'gemini'}
       onMakeDefault={() => update((s) => ({ ...s, defaultProvider: 'gemini' }))}
@@ -48,8 +52,8 @@ export function GeminiCard({ settings, update }: { settings: Settings; update: U
         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="font-semibold no-underline">
           aistudio.google.com
         </a>
-        . Google’s free tier may use your prompts to improve its products; a paid key does not. Grounded searches beyond {GEMINI_FREE_SEARCHES_PER_MONTH.toLocaleString()}/month are
-        billed to your key.
+        . Google’s free tier may use your prompts to improve its products; a paid key does not. Grounded searches beyond{' '}
+        {GEMINI_FREE_SEARCHES_PER_MONTH.toLocaleString()}/month are billed to your key.
       </span>
       <Row label="Model">
         <select className="wys-input h-8 w-auto max-w-[220px] text-[12px]" value={g.model} onChange={(e) => set({ model: e.target.value })}>

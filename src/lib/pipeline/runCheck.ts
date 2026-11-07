@@ -20,12 +20,7 @@ export interface RunOptions {
   image?: { base64: string; mime: string; provenance?: LocalProvenance; provenanceSummary?: string };
 }
 
-export async function* runCheck(
-  input: CheckInput,
-  provider: LlmProvider,
-  signal: AbortSignal,
-  opts: RunOptions = {},
-): AsyncGenerator<CheckEvent> {
+export async function* runCheck(input: CheckInput, provider: LlmProvider, signal: AbortSignal, opts: RunOptions = {}): AsyncGenerator<CheckEvent> {
   const req = buildRequest(input, {
     imageBase64: opts.image?.base64,
     imageMime: opts.image?.mime,
@@ -79,8 +74,9 @@ export async function* runCheck(
     return;
   }
 
-  let { narrative, jsonText } = extractJsonBlock(text);
-  let parsed = parseModelResult(jsonText);
+  const extracted = extractJsonBlock(text);
+  let narrative = extracted.narrative;
+  let parsed = parseModelResult(extracted.jsonText);
 
   if (!parsed.ok && opts.repair !== false && text.trim().length > 0) {
     yield { type: 'status', message: 'Tidying up the answer…' };

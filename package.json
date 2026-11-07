@@ -19,7 +19,11 @@
     "lint:firefox": "web-ext lint --source-dir .output/firefox-mv3",
     "icons": "node scripts/make-icons.mjs",
     "preview": "vite -c vite.preview.config.ts",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"preview/**/*.{ts,tsx}\" \"scripts/**/*.mjs\" \"*.{ts,js,json,md}\" \"docs/*.md\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"preview/**/*.{ts,tsx}\""
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
@@ -31,16 +35,23 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.64.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@wxt-dev/module-react": "^1.2.2",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "fake-indexeddb": "^6.2.5",
+    "globals": "^17.14.0",
     "jsdom": "^27.0.0",
+    "prettier": "^3.9.10",
     "sharp": "^0.34.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.0",
+    "typescript-eslint": "^8.72.1",
     "vite": "^8.0.0",
     "vitest": "^5.0.4",
     "web-ext": "^10.7.0",

@@ -208,7 +208,7 @@ export async function enforceSnapshotCap(maxBytes: number): Promise<number> {
   return removed;
 }
 
-export async function exportAll(): Promise<{ version: 1; exportedAt: string; checks: Array<StoredCheck & { snapshot?: Omit<StoredSnapshot, 'screenshot'> }> }> {
+export async function exportAll(): Promise<{ version: 1; exportedAt: string; checks: (StoredCheck & { snapshot?: Omit<StoredSnapshot, 'screenshot'> })[] }> {
   const db = await getDb();
   const checks = await listChecks({ limit: 100000 });
   const out = [];

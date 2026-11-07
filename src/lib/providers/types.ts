@@ -44,17 +44,7 @@ export type GenEvent =
   | { type: 'usage'; usage: Usage }
   | { type: 'done' };
 
-export type ProviderErrorCode =
-  | 'no-key'
-  | 'auth'
-  | 'quota'
-  | 'network'
-  | 'blocked'
-  | 'bad-request'
-  | 'server'
-  | 'cancelled'
-  | 'unsupported'
-  | 'unknown';
+export type ProviderErrorCode = 'no-key' | 'auth' | 'quota' | 'network' | 'blocked' | 'bad-request' | 'server' | 'cancelled' | 'unsupported' | 'unknown';
 
 export class ProviderError extends Error {
   constructor(
@@ -86,19 +76,14 @@ export function errorFromResponse(status: number, bodyText: string): ProviderErr
   let message = bodyText;
   try {
     const j = JSON.parse(bodyText) as { error?: { message?: string } | string; message?: string };
-    message =
-      (typeof j.error === 'object' && j.error?.message) ||
-      (typeof j.error === 'string' && j.error) ||
-      j.message ||
-      bodyText;
+    message = (typeof j.error === 'object' && j.error?.message) || (typeof j.error === 'string' && j.error) || j.message || bodyText;
   } catch {
     /* plain text */
   }
   message = message.slice(0, 400);
   if (status === 401 || status === 403) return new ProviderError('auth', 'The API key was rejected.', message);
   if (status === 429) return new ProviderError('quota', 'Rate limit or quota exceeded.', message);
-  if (status === 400 || status === 404 || status === 422)
-    return new ProviderError('bad-request', 'The provider rejected the request.', message);
+  if (status === 400 || status === 404 || status === 422) return new ProviderError('bad-request', 'The provider rejected the request.', message);
   if (status >= 500) return new ProviderError('server', 'The provider had a server error.', message);
   return new ProviderError('unknown', `Unexpected response (${status}).`, message);
 }

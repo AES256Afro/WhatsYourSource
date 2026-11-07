@@ -46,10 +46,7 @@ export function extractPost(target: Element | null, doc: Document = document): P
 
   const site = location.hostname.replace(/^www\./, '');
   const authorEl = container.querySelector(AUTHOR_SELECTOR);
-  const author =
-    (container as HTMLElement).getAttribute('author') ??
-    (authorEl?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) ??
-    undefined;
+  const author = container.getAttribute('author') ?? (authorEl?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
 
   const timeEl = container.querySelector('time[datetime], time');
   const postedAt = timeEl?.getAttribute('datetime') ?? timeEl?.textContent?.trim() ?? undefined;
@@ -57,7 +54,11 @@ export function extractPost(target: Element | null, doc: Document = document): P
   const permalink =
     absolute((container as HTMLElement).getAttribute('permalink')) ??
     absolute(timeEl?.closest('a')?.getAttribute('href')) ??
-    absolute(container.querySelector('a[href*="/status/"], a[href*="/comments/"], a[href*="/posts/"], a[href*="/p/"], a[href*="/post/"], a.permalink, a[rel="bookmark"]')?.getAttribute('href')) ??
+    absolute(
+      container
+        .querySelector('a[href*="/status/"], a[href*="/comments/"], a[href*="/posts/"], a[href*="/p/"], a[href*="/post/"], a.permalink, a[rel="bookmark"]')
+        ?.getAttribute('href'),
+    ) ??
     undefined;
 
   const images: string[] = [];
@@ -124,7 +125,8 @@ function findContainer(target: Element | null, doc: Document): Element | null {
 
 function visibleText(el: Element): string {
   const clone = el.cloneNode(true) as Element;
-  for (const junk of Array.from(clone.querySelectorAll('script, style, noscript, svg, button, [aria-hidden="true"], [role="button"], nav, form'))) junk.remove();
+  for (const junk of Array.from(clone.querySelectorAll('script, style, noscript, svg, button, [aria-hidden="true"], [role="button"], nav, form')))
+    junk.remove();
   const raw = (clone as HTMLElement).innerText ?? clone.textContent ?? '';
   return raw
     .split('\n')

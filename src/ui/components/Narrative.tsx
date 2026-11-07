@@ -21,7 +21,7 @@ export function Narrative({ text, streaming }: { text: string; streaming?: boole
 
 /** Minimal inline markdown: **bold** and `code`. Everything else is literal text. */
 function renderInline(s: string) {
-  const out: Array<string | React.ReactElement> = [];
+  const out: (string | React.ReactElement)[] = [];
   const re = /\*\*(.+?)\*\*|`([^`]+)`/g;
   let last = 0;
   let m: RegExpExecArray | null;
