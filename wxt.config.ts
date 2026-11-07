@@ -1,5 +1,6 @@
 import { defineConfig } from 'wxt';
 import tailwindcss from '@tailwindcss/vite';
+import { EXTENSION_DESCRIPTION, EXTENSION_NAME } from './src/lib/meta';
 
 // One codebase, two targets: `wxt build` (Chrome MV3) and `wxt build -b firefox` (Firefox MV3).
 // WXT generates the right background shape (service worker vs event page) and the right
@@ -13,9 +14,9 @@ export default defineConfig({
     plugins: [tailwindcss()],
   }),
   manifest: ({ browser }) => ({
-    name: 'WhatsYourSource',
-    short_name: 'WhatsYourSource',
-    description: 'Check the source of highlighted text, images and posts with the AI of your choice: Google AI by default, your own key, or a local model.',
+    name: EXTENSION_NAME,
+    short_name: EXTENSION_NAME,
+    description: EXTENSION_DESCRIPTION,
     permissions: ['contextMenus', 'storage', 'unlimitedStorage', 'activeTab', 'scripting'],
     // sidePanel needs 114; AbortSignal.any (used by the page fetcher) needs 116.
     ...(browser === 'firefox' ? {} : { minimum_chrome_version: '116' }),

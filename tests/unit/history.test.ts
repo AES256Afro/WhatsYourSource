@@ -136,3 +136,44 @@ describe('history paging', () => {
     expect(next.map((c) => c.createdAt)).toEqual([1002, 1001]);
   });
 });
+
+describe('export and stats', () => {
+  it('exports a valid JSON blob and sums snapshot bytes from the index', async () => {
+    indexedDB = new IDBFactory();
+    resetDbForTests();
+    await saveCheck(fakeResult({ createdAt: 1 }), { url: 'u', title: 't', html: '<p>x</p>', capturedAt: 1 });
+    await saveCheck(fakeResult({ createdAt: 2 }));
+    const { exportAll, storageStats, normalizeStored } = await import('@/lib/history/db');
+    const blob = await exportAll();
+    const text = await new Promise<string>((resolve, reject) => {
+      const fr = new FileReader(); // jsdom's Blob has no .text()
+      fr.onload = () => resolve(String(fr.result));
+      fr.onerror = () => reject(new Error('read failed'));
+      fr.readAsText(blob);
+    });
+    const parsed = JSON.parse(text) as { version: number; checks: { snapshot?: { html: string } }[] };
+    expect(parsed.version).toBe(1);
+    expect(parsed.checks).toHaveLength(2);
+    expect(parsed.checks.some((c) => c.snapshot?.html === '<p>x</p>')).toBe(true);
+    const stats = await storageStats();
+    expect(stats.snapshots).toBe(1);
+    expect(stats.snapshotBytes).toBe('<p>x</p>'.length * 2);
+    // Old rows without newer fields render without throwing.
+    const old = normalizeStored({
+      id: 'o',
+      createdAt: 1,
+      kind: 'post',
+      title: 'x',
+      site: 's',
+      verdictLabel: 'v',
+      verdictKind: 'supported',
+      provider: 'p',
+      model: 'm',
+      hasSnapshot: false,
+      note: undefined as unknown as string,
+      result: { ...fakeResult(), input: { kind: 'post', pageUrl: 'https://x', pageTitle: '', site: 'x', text: 't' } as never },
+    });
+    expect(old.note).toBe('');
+    expect((old.result.input as { images: string[] }).images).toEqual([]);
+  });
+});

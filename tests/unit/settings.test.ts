@@ -55,3 +55,10 @@ describe('pricing', () => {
     expect(estimateUsd('unknown-model', 10, 10)).toBeUndefined();
   });
 });
+
+describe('manifest description', () => {
+  it('fits the Chrome Web Store limit', async () => {
+    const { EXTENSION_DESCRIPTION, MANIFEST_DESCRIPTION_MAX } = await import('@/lib/meta');
+    expect(EXTENSION_DESCRIPTION.length).toBeLessThanOrEqual(MANIFEST_DESCRIPTION_MAX);
+  });
+});

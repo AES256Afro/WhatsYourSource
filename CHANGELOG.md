@@ -13,11 +13,17 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 - Shortcut labels follow the live key binding.
 
 ### Changed
+- Opening an old image check from History no longer contacts the image's host until you ask it to.
+- History search is debounced and storage totals come from an index (no more loading every saved page to count bytes).
+- JSON export is streamed, so very large histories export too.
 - Default shortcut is `Alt+Shift+S` (Firefox owns `Ctrl+Shift+S`; `Cmd+Shift+S` is taken on macOS).
 - "Check source of this post / page" menu items appear only when no selection or image is under the cursor.
 - The floating chip and the shortcut open Google AI Mode directly when that is the chosen trigger or default, without opening the side panel.
 
 ### Fixed
+- Manifest description fits the Chrome Web Store limit.
+- Right-clicking a selection inside a frame checks that frame's selection, not an older one elsewhere.
+- A failed save or export now says so instead of failing silently; a crashing view shows a recovery button instead of a blank panel.
 - Selecting text inside an embedded frame (comment widgets, editors) is checked as a selection, not as the whole page.
 - RSS, XML and SVG documents no longer break the extension's page script.
 - The page-snapshot storage limit is now actually enforced (the eviction routine failed silently in real browsers).

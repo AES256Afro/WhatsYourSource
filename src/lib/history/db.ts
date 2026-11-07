@@ -42,17 +42,23 @@ export type SnapshotInput = Omit<StoredSnapshot, 'checkId' | 'bytes'>;
 
 interface WysDB extends DBSchema {
   checks: { key: string; value: StoredCheck; indexes: { 'by-created': number } };
-  snapshots: { key: string; value: StoredSnapshot };
+  snapshots: { key: string; value: StoredSnapshot; indexes: { 'by-bytes': number } };
 }
 
 let dbPromise: Promise<IDBPDatabase<WysDB>> | null = null;
 
 export function getDb(): Promise<IDBPDatabase<WysDB>> {
-  dbPromise ??= openDB<WysDB>('whatsyoursource', 1, {
-    upgrade(db) {
-      const checks = db.createObjectStore('checks', { keyPath: 'id' });
-      checks.createIndex('by-created', 'createdAt');
-      db.createObjectStore('snapshots', { keyPath: 'checkId' });
+  dbPromise ??= openDB<WysDB>('whatsyoursource', 2, {
+    upgrade(db, oldVersion, _newVersion, tx) {
+      if (oldVersion < 1) {
+        const checks = db.createObjectStore('checks', { keyPath: 'id' });
+        checks.createIndex('by-created', 'createdAt');
+        db.createObjectStore('snapshots', { keyPath: 'checkId' });
+      }
+      if (oldVersion < 2) {
+        // Byte totals come from this index's keys, so the stats never deserialise a snapshot.
+        tx.objectStore('snapshots').createIndex('by-bytes', 'bytes');
+      }
     },
   });
   return dbPromise;
@@ -120,7 +126,7 @@ export async function listChecks(opts: ListOptions = {}): Promise<StoredCheck[]>
   const range = opts.before != null ? IDBKeyRange.upperBound(opts.before, true) : null;
   let cursor = await db.transaction('checks').store.index('by-created').openCursor(range, 'prev');
   while (cursor && out.length < limit) {
-    const c = cursor.value;
+    const c = normalizeStored(cursor.value);
     const kindOk = !opts.kind || opts.kind === 'all' || c.kind === opts.kind;
     const snapOk = !opts.withSnapshot || c.hasSnapshot;
     const textOk =
@@ -137,7 +143,33 @@ export async function listChecks(opts: ListOptions = {}): Promise<StoredCheck[]>
 }
 
 export async function getCheck(id: string): Promise<StoredCheck | undefined> {
-  return (await getDb()).get('checks', id);
+  const c = await (await getDb()).get('checks', id);
+  return c ? normalizeStored(c) : undefined;
+}
+
+/** Rows written by older builds may lack fields added since; fill them so views never dereference undefined. */
+export function normalizeStored(c: StoredCheck): StoredCheck {
+  const r = c.result;
+  const input = r.input as CheckInput & { images?: string[]; links?: string[] };
+  return {
+    ...c,
+    note: c.note ?? '',
+    title: c.title ?? '',
+    site: c.site ?? '',
+    verdictLabel: c.verdictLabel ?? r.verdict?.label ?? '',
+    verdictKind: c.verdictKind ?? r.verdict?.kind ?? 'unverified',
+    result: {
+      ...r,
+      narrative: r.narrative ?? '',
+      rawText: r.rawText ?? '',
+      claims: r.claims ?? [],
+      sources: r.sources ?? [],
+      searchQueries: r.searchQueries ?? [],
+      verdict: r.verdict ?? { label: 'Assessment', kind: 'unverified', confidence: 'low', summary: '' },
+      provider: r.provider ?? { id: c.provider ?? '', label: c.provider ?? '', model: c.model ?? '' },
+      input: input.kind === 'post' ? { ...input, images: input.images ?? [], links: input.links ?? [] } : input,
+    },
+  };
 }
 
 export async function getSnapshot(checkId: string): Promise<StoredSnapshot | undefined> {
@@ -172,15 +204,15 @@ export async function storageStats(): Promise<{ checks: number; snapshots: numbe
   const checks = await db.count('checks');
   let snapshotBytes = 0;
   let snapshots = 0;
-  let cursor = await db.transaction('snapshots').store.openCursor();
+  // Key cursor over the bytes index: sums sizes without loading a single HTML string or screenshot.
+  let cursor = await db.transaction('snapshots').store.index('by-bytes').openKeyCursor();
   while (cursor) {
     snapshots++;
-    snapshotBytes += cursor.value.bytes;
+    snapshotBytes += cursor.key;
     cursor = await cursor.continue();
   }
   return { checks, snapshots, snapshotBytes };
 }
-
 /**
  * Drop the oldest snapshots (never the results) until snapshot storage fits under the cap.
  * IndexedDB auto-commits a transaction the moment control leaves it, so the cursor pass below only
@@ -224,16 +256,25 @@ export async function enforceSnapshotCap(maxBytes: number): Promise<number> {
   return removed;
 }
 
-export async function exportAll(): Promise<{ version: 1; exportedAt: string; checks: (StoredCheck & { snapshot?: Omit<StoredSnapshot, 'screenshot'> })[] }> {
+/**
+ * Everything as one JSON file, built as Blob parts one check at a time so a large history never has to
+ * exist as a single JavaScript string (engines cap strings at ~1 GB; a 5 GB snapshot cap can exceed it).
+ */
+export async function exportAll(): Promise<Blob> {
   const db = await getDb();
-  const checks = await listChecks({ limit: 100000 });
-  const out = [];
+  const checks = await listChecks({ limit: 1_000_000 });
+  const parts: string[] = [`{"version":1,"exportedAt":${JSON.stringify(new Date().toISOString())},"checks":[`];
+  let first = true;
   for (const c of checks) {
     const s = await db.get('snapshots', c.id);
+    let row: unknown = c;
     if (s) {
       const { screenshot: _drop, ...rest } = s;
-      out.push({ ...c, snapshot: rest });
-    } else out.push(c);
+      row = { ...c, snapshot: rest };
+    }
+    parts.push((first ? '' : ',') + JSON.stringify(row));
+    first = false;
   }
-  return { version: 1, exportedAt: new Date().toISOString(), checks: out };
+  parts.push(']}');
+  return new Blob(parts, { type: 'application/json' });
 }

@@ -101,7 +101,7 @@ Options I considered and where they land:
 
 Each milestone ends with a tagged build that installs in Chrome and Firefox and a green CI. Order matters: Stage 1 hardens what exists before features land on it; features land before Stage 2 so the sweeps cover them.
 
-### M1 — Stage 1: Code, Bug, Security audit loop
+### M1 — Stage 1: Code, Bug, Security audit loop — DONE 2026-11-07 (8 sweeps, ~70 fixes; see docs/SWEEPS.md)
 
 Three categories run as independent sweeps. A sweep reads the whole relevant surface, fixes what it finds, adds a regression test where one is possible, and logs every finding in `docs/SWEEPS.md`. A category leaves the loop after **three consecutive sweeps with zero findings**. Stage 1 ends when all three have left.
 

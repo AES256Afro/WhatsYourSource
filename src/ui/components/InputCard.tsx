@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { domainOf, isHttpUrl } from '@/lib/util/url';
 import { Label } from './common';
@@ -26,7 +27,8 @@ function formatWhen(s: string): string {
   return Number.isNaN(d.getTime()) ? s : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export function InputCard({ input, when, clamp }: { input: CheckInput; when?: string; clamp?: boolean }) {
+export function InputCard({ input, when, clamp, deferImages }: { input: CheckInput; when?: string; clamp?: boolean; deferImages?: boolean }) {
+  const [showImage, setShowImage] = useState(!deferImages);
   const site = input.kind === 'post' ? input.site : domainOf(input.kind === 'page' ? input.url : input.pageUrl);
   const label = input.kind === 'text' ? 'Checked text' : input.kind === 'image' ? 'Checked image' : input.kind === 'post' ? 'Checked post' : 'Checked page';
   if (input.kind === 'post') {
@@ -86,11 +88,18 @@ export function InputCard({ input, when, clamp }: { input: CheckInput; when?: st
           {input.kind === 'page' && (input.title ? `${input.title} — ${input.url}` : input.url)}
         </p>
       </div>
-      {input.kind === 'image' && /^(https?:|data:image\/|blob:)/i.test(input.srcUrl) && (
-        <ImageFrame href={isHttpUrl(input.srcUrl) ? input.srcUrl : undefined}>
-          <img src={input.srcUrl} alt={input.alt ?? 'The checked image'} className="block max-h-[180px] w-full object-contain" loading="lazy" />
-        </ImageFrame>
-      )}
+      {input.kind === 'image' &&
+        /^(https?:|data:image\/|blob:)/i.test(input.srcUrl) &&
+        (showImage || !isHttpUrl(input.srcUrl) ? (
+          <ImageFrame href={isHttpUrl(input.srcUrl) ? input.srcUrl : undefined}>
+            <img src={input.srcUrl} alt={input.alt ?? 'The checked image'} className="block max-h-[180px] w-full object-contain" loading="lazy" />
+          </ImageFrame>
+        ) : (
+          // Opening an old check must not quietly contact the image's host; the user opts in, as for snapshot images.
+          <button className="wys-btn h-9 text-[12px]" onClick={() => setShowImage(true)}>
+            Show image (loads it from {domainOf(input.srcUrl)})
+          </button>
+        ))}
     </div>
   );
 }

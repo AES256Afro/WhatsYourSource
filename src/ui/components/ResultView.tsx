@@ -15,12 +15,15 @@ export function ResultView({
   result,
   onRecheck,
   saved,
+  saveError,
   snapshotNote,
   embedded,
 }: {
   result: CheckResult;
   onRecheck: () => void;
   saved?: boolean;
+  /** Set when saving to history failed; shown where the "Saved" badge would be. */
+  saveError?: string | null;
   snapshotNote?: string;
   /** Inside the history detail view: no action bar, no own scroll container. */
   embedded?: boolean;
@@ -35,7 +38,7 @@ export function ResultView({
   return (
     <div className={embedded ? 'flex flex-col' : 'flex h-full flex-col'}>
       <div className={`flex grow flex-col gap-3 p-3.5 ${embedded ? '' : 'overflow-y-auto'}`}>
-        <InputCard input={result.input} when={timeAgo(result.createdAt)} />
+        <InputCard input={result.input} when={timeAgo(result.createdAt)} deferImages={embedded} />
         <VerdictBanner verdict={result.verdict} />
         {result.degraded && (
           <div className="rounded-[10px] border border-warn-line bg-warn-soft px-3 py-2 text-[12px] leading-[17px] text-warn-ink">
@@ -103,6 +106,11 @@ export function ResultView({
           {saved && (
             <span className="inline-flex items-center gap-1 font-semibold text-ok">
               <Check size={12} /> {snapshotNote ?? 'Saved to history'}
+            </span>
+          )}
+          {saveError && (
+            <span className="font-semibold text-bad" title={saveError}>
+              Couldn’t save to history
             </span>
           )}
         </div>

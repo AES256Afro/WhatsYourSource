@@ -61,7 +61,7 @@ export default defineBackground(() => {
         }
         openPanel(tab);
         void (async () => {
-          const sel = await resolveSelection(tab, text);
+          const sel = await resolveSelection(tab, text, info.frameId);
           await enqueueJob(
             { kind: 'text', text: sel.text, pageUrl: sel.pageUrl || pageUrl, pageTitle: sel.pageTitle || pageTitle, surrounding: sel.surrounding },
             tab?.id,
@@ -177,17 +177,26 @@ export default defineBackground(() => {
     void openPanelSync(tab);
   }
 
-  /** Ask the content script for the richer selection (context paragraph); fall back to the menu's text. */
-  async function resolveSelection(tab: MaybeTab, fallbackText: string): Promise<SelectionInfo> {
+  /**
+   * Ask the content script for the richer selection (context paragraph); fall back to the menu's text.
+   * `frameId` (from the context menu) names the frame the user right-clicked; the top-frame script
+   * cannot see selections in other frames.
+   */
+  async function resolveSelection(tab: MaybeTab, fallbackText: string, frameId?: number): Promise<SelectionInfo> {
     const base: SelectionInfo = clampSelection({ text: fallbackText, pageUrl: tab?.url ?? '', pageTitle: tab?.title ?? '' });
     if (tab?.id == null) return base;
     try {
+      if (frameId) {
+        // Right-clicked inside an iframe: read that frame, nothing else.
+        const inFrame = await readSelectionFromFrames(tab.id, { frameIds: [frameId] }, fallbackText);
+        if (inFrame) return inFrame;
+      }
       const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:get-selection' });
       const parsed = SelectionInfoSchema.safeParse(reply);
       if (parsed.success && parsed.data.text.trim()) return parsed.data;
       // The top frame answered but has no selection: the selection may live in an iframe (a comments
       // widget, an embedded editor), which the content script does not run in. Ask every frame.
-      const inFrame = await readSelectionFromFrames(tab.id, true);
+      const inFrame = await readSelectionFromFrames(tab.id, { allFrames: true }, fallbackText);
       if (inFrame)
         return {
           ...inFrame,
@@ -197,7 +206,7 @@ export default defineBackground(() => {
     } catch {
       // No content script on this page (loaded before install, or a restricted URL). Try injecting a one-off reader.
       try {
-        const r = await readSelectionFromFrames(tab.id, false);
+        const r = await readSelectionFromFrames(tab.id, frameId ? { frameIds: [frameId] } : { allFrames: false }, fallbackText);
         if (r) return r;
       } catch {
         /* restricted page */
@@ -206,10 +215,14 @@ export default defineBackground(() => {
     return base;
   }
 
-  /** Inject a one-off selection reader; with `allFrames` the first frame that has a selection wins. */
-  async function readSelectionFromFrames(tabId: number, allFrames: boolean): Promise<SelectionInfo | null> {
+  /**
+   * Inject a one-off selection reader. Selections persist per document, so when several frames have
+   * one, the frame whose text matches what the browser reported (`prefer`) wins; else the first.
+   */
+  async function readSelectionFromFrames(tabId: number, where: { allFrames?: boolean; frameIds?: number[] }, prefer = ''): Promise<SelectionInfo | null> {
+    const target: Browser.scripting.InjectionTarget = where.frameIds ? { tabId, frameIds: where.frameIds } : { tabId, allFrames: where.allFrames ?? false };
     const results = await browser.scripting.executeScript({
-      target: { tabId, allFrames },
+      target,
       func: (limits: { text: number; url: number; title: number }) => {
         const sel = window.getSelection();
         return {
@@ -220,10 +233,12 @@ export default defineBackground(() => {
       },
       args: [{ text: LIMITS.text, url: LIMITS.url, title: LIMITS.title }],
     });
+    const found: SelectionInfo[] = [];
     for (const r of results) {
       const parsed = SelectionInfoSchema.safeParse(r.result);
-      if (parsed.success && parsed.data.text.trim()) return parsed.data;
+      if (parsed.success && parsed.data.text.trim()) found.push(parsed.data);
     }
-    return null;
+    const want = prefer.replace(/\s+/g, ' ').trim();
+    return found.find((f) => want && f.text.replace(/\s+/g, ' ').trim() === want) ?? found[0] ?? null;
   }
 });

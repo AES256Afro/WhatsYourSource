@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { clearHistory, exportAll, listChecks, storageStats, type StoredCheck } from '@/lib/history/db';
-import { downloadText } from '@/lib/history/export';
+import { downloadBlob } from '@/lib/history/export';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { Label, Pill, toneForVerdict } from './common';
 import { Camera, Globe, Image, Lines, Post } from './Icons';
@@ -19,19 +19,33 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
   const [stats, setStats] = useState<{ checks: number; snapshotBytes: number } | null>(null);
   const [tick, setTick] = useState(0);
 
+  // Typing should not scan the store on every keystroke.
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 180);
+    return () => clearTimeout(t);
+  }, [query]);
+
   useEffect(() => {
     let alive = true;
     filterSeq.current++;
-    void listChecks({ query, kind, withSnapshot, limit: PAGE + 1 }).then((r) => {
+    void listChecks({ query: debouncedQuery, kind, withSnapshot, limit: PAGE + 1 }).then((r) => {
       if (!alive) return;
       setHasMore(r.length > PAGE);
       setItems(r.slice(0, PAGE));
     });
+    return () => {
+      alive = false;
+    };
+  }, [debouncedQuery, kind, withSnapshot, tick, refreshKey]);
+
+  useEffect(() => {
+    let alive = true;
     void storageStats().then((s) => alive && setStats(s));
     return () => {
       alive = false;
     };
-  }, [query, kind, withSnapshot, tick, refreshKey]);
+  }, [tick, refreshKey]);
 
   const loadMore = async () => {
     const last = items?.[items.length - 1];
@@ -39,7 +53,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
     const seq = filterSeq.current; // the filters this request belongs to
     setLoadingMore(true);
     try {
-      const r = await listChecks({ query, kind, withSnapshot, limit: PAGE + 1, before: last.createdAt });
+      const r = await listChecks({ query: debouncedQuery, kind, withSnapshot, limit: PAGE + 1, before: last.createdAt });
       if (seq !== filterSeq.current) return; // filters changed meanwhile; the effect replaced the list
       setHasMore(r.length > PAGE);
       setItems((cur) => [...(cur ?? []), ...r.slice(0, PAGE)]);
@@ -50,15 +64,23 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
 
   const groups = useMemo(() => groupByDay(items ?? []), [items]);
 
-  const clearAll = async () => {
+  const [actionError, setActionError] = useState<string | null>(null);
+  const guard = (label: string, fn: () => Promise<void>) => async () => {
+    setActionError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setActionError(`${label} failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+  const clearAll = guard('Clear all', async () => {
     if (!confirm('Delete all saved checks and page snapshots? This cannot be undone.')) return;
     await clearHistory();
     setTick((t) => t + 1);
-  };
-  const exportJson = async () => {
-    const data = await exportAll();
-    downloadText(JSON.stringify(data, null, 2), `whatsyoursource-history-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
-  };
+  });
+  const exportJson = guard('Export', async () => {
+    downloadBlob(await exportAll(), `whatsyoursource-history-${new Date().toISOString().slice(0, 10)}.json`);
+  });
 
   return (
     <div className="flex h-full flex-col">
@@ -107,7 +129,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
           <div className="text-[13px] text-ink-2">Loading…</div>
         ) : items.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line-2 p-4 text-center text-[13px] text-ink-2">
-            {query || kind !== 'all' || withSnapshot ? 'Nothing matches.' : 'No checks yet. Highlight some text and press Check source.'}
+            {debouncedQuery || kind !== 'all' || withSnapshot ? 'Nothing matches.' : 'No checks yet. Highlight some text and press Check source.'}
           </div>
         ) : (
           groups.map((g) => (
@@ -126,7 +148,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2.5 border-t border-line bg-paper px-3.5 py-2.5 text-[11px] text-ink-2">
-        <span>Stored on this device{stats ? ` · ${fmtBytes(stats.snapshotBytes)}` : ''}</span>
+        <span className={actionError ? 'text-bad' : ''}>{actionError ?? `Stored on this device${stats ? ` · ${fmtBytes(stats.snapshotBytes)}` : ''}`}</span>
         <span className="grow" />
         <button className="wys-btn h-8 px-3 text-[12px]" onClick={exportJson} disabled={!items?.length}>
           Export

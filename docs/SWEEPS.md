@@ -7,13 +7,13 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 - **Firefox chip behaviour.** Firefox refuses `sidebarAction.open()` from a message handler, so a chip click there opens a small panel *window* (now reused, not stacked) while the context menu and shortcut open the real sidebar. Options: accept (current), or make the chip on Firefox open Google AI Mode / show a hint to use the shortcut. Your call.
 - **License.** I added an MIT `LICENSE` under the name "AES256Afro" because the stores and AMO's source submission require one. Change the name or the license if you want something else (Apache-2.0 adds a patent grant; GPL would force forks to stay open).
 
-## Stage 1 status
+## Stage 1 status — closed 2026-11-07 after 8 sweeps (by decision; see sweep 8)
 
 | Category | Sweeps run | Consecutive clean | Retired |
 |---|---|---|---|
-| Code | 7 | 0 | no |
-| Bug | 7 | 0 | no |
-| Security | 7 | 2 | no |
+| Code | 8 | 0 | closed |
+| Bug | 8 | 0 | closed |
+| Security | 8 | 0 (clean in 6 and 7) | closed |
 
 ## Stage 2 status
 
@@ -213,3 +213,15 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - Ledger said context-menu items honour the trigger setting; they follow the default provider, which matches the settings label. Ledger corrected.
 
 `clean: no` (bug, code); `clean: yes` (security)
+
+### 2026-11-07 · Sweep 8 (code, bug, security) — final Stage 1 pass, fresh-context, confirmed-only
+
+- **Store blocker (bug)**: the manifest description was 136 characters; the Chrome Web Store rejects uploads over 132. Shortened, moved to `src/lib/meta.ts`, test asserts the limit.
+- **Privacy (security)**: opening an old image check from History fetched the image from its host without asking, while snapshot images needed an opt-in → the history view shows a "Show image (loads it from host)" button instead; the just-run result still previews.
+- **Bug**: context-menu selection resolution ignored `info.frameId`, so a stale selection in an earlier frame could beat the one the user right-clicked → the clicked frame is read first; when several frames hold a selection, the one matching the browser's own `selectionText` wins.
+- **Bug**: a failed history save gave no feedback; Export, Clear all and Load more swallowed rejections → "Couldn't save to history" in the result footer; history actions report failures in the footer line.
+- **Code/perf**: the History view scanned the whole store on every keystroke and `storageStats` deserialised every snapshot (HTML plus screenshot) to sum sizes → search is debounced, stats refresh only when the list changes, and sizes come from a new `by-bytes` index via a key cursor (DB version 2, additive upgrade).
+- **Code**: JSON export built one pretty-printed string of every snapshot and would throw past roughly 1 GB → streamed into Blob parts one check at a time.
+- **Code**: no error boundary and stored rows dereferenced unguarded → `ErrorBoundary` with "Back to home" around the panel body; `normalizeStored()` fills fields older rows may lack.
+
+`clean: no` (all three), but Stage 1 closes here by decision (two sweeps past sweep 6, as instructed), with the later sweeps' finding rate well down and no security finding in two of the last three.

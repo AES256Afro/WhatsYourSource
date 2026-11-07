@@ -16,6 +16,7 @@ import { providerOrder, providerReady, type Settings } from '@/lib/storage/setti
 import { googleAiModeUrl } from '@/lib/webmode';
 import { CheckingView, type RunState } from './components/CheckingView';
 import { DetailView } from './components/DetailView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ErrorView, type RunError } from './components/ErrorView';
 import { HistoryView } from './components/HistoryView';
 import { HomeView } from './components/HomeView';
@@ -39,6 +40,7 @@ export function App() {
   const [result, setResult] = useState<CheckResult | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [savedWithSnapshot, setSavedWithSnapshot] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [error, setError] = useState<{ input: CheckInput; error: RunError } | null>(null);
   const [needsSetup, setNeedsSetup] = useState<CheckInput | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -67,6 +69,7 @@ export function App() {
       setResult(null);
       setSavedId(null);
       setSavedWithSnapshot(false);
+      setSaveError(null);
 
       if (s.defaultProvider === 'webmode') {
         openWebMode(input);
@@ -204,6 +207,7 @@ export function App() {
             void enforceSnapshotCap(s.history.maxMb * 1024 * 1024);
           } catch (e) {
             console.warn('[wys] could not save to history', e);
+            if (!stale()) setSaveError(e instanceof Error ? e.message : String(e));
           }
           return;
         }
@@ -257,6 +261,7 @@ export function App() {
             result={result}
             onRecheck={() => startCheck(result.input)}
             saved={!!savedId}
+            saveError={saveError}
             snapshotNote={savedWithSnapshot ? 'Saved with page snapshot' : 'Saved to history'}
           />
         ) : null;
@@ -348,7 +353,9 @@ export function App() {
         onHistory={() => setView(view === 'history' ? (result ? 'result' : 'home') : 'history')}
         onSettings={() => setView(view === 'settings' ? (result ? 'result' : 'home') : 'settings')}
       />
-      <div className="min-h-0 grow overflow-y-auto">{body}</div>
+      <div className="min-h-0 grow overflow-y-auto">
+        <ErrorBoundary onReset={() => setView('home')}>{body}</ErrorBoundary>
+      </div>
     </div>
   );
 }
