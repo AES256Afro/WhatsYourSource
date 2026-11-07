@@ -19,7 +19,9 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 
 ### Fixed
 - Starting a new check while one was running no longer leaves the panel on "Cancelled".
-- A check now runs in one panel even when several windows have the panel open.
+- A check now runs in exactly one panel even when several panels (or the fallback window) are open.
+- Streaming answers no longer lose text when a line break falls on a network chunk boundary.
+- Very large inline images are checked via a screenshot instead of being dropped; partly scrolled images are cropped to what is on screen.
 - Model answers with a missing source URL or an empty claim no longer fall back to the "prose only" banner.
 - Post text from X, Reddit and similar keeps its line breaks instead of running together.
 - Two quick settings edits can no longer overwrite each other; the storage-limit field no longer rewrites itself while typing.
@@ -36,7 +38,8 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 
 ### Security
 - Image metadata and every page-derived field (title, URL, author, time, links) are passed to the model as untrusted data; the untrusted delimiter can no longer be closed by content.
-- A local model may only read pages that its own search returned, that the checked content linked, or the page the selection came from; redirects are never followed.
+- A local model may only read pages that its own search returned, that the checked content linked, or the page the selection came from, and always at the address the search gave (no query-string payloads); redirects are never followed.
+- Screenshots for snapshots and image checks are taken only while the checked page is still the active tab.
 - Page snapshots are taken only of the page the check came from, never of whatever tab is active.
 - The floating chip responds only to selections made by real input, and never inside form fields or editors.
 - Plain-http endpoints off this machine show a warning before a key travels unencrypted.

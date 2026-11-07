@@ -11,9 +11,9 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 
 | Category | Sweeps run | Consecutive clean | Retired |
 |---|---|---|---|
-| Code | 4 | 0 | no |
-| Bug | 4 | 0 | no |
-| Security | 4 | 0 | no |
+| Code | 5 | 0 | no |
+| Bug | 5 | 0 | no |
+| Security | 5 | 0 | no |
 
 ## Stage 2 status
 
@@ -165,3 +165,19 @@ A reviewer who had not seen the earlier sweeps read the full diff. Findings were
 Verified sound by the reviewer (kept as regression intent): run tokens in `App.tsx`; lenient per-field settings merge and the secrets migration; serialized updates; no double-open between the chip's web-mode path and the panel; snapshot URL matching tolerates fragments, trailing slashes, `www.` and tracking params; `isPublicHttpUrl` on mapped/6to4/NAT64/odd spellings; `untrusted()` framing; schema preprocessing types; the text walker; `ownHosts`; e2e and preview fixtures still consistent.
 
 `clean: no` (bug, security); `clean: no` (code: one comment)
+
+### 2026-11-07 · Sweep 5 (code, bug, security) — fresh-context whole-tree audit, confirmed-only bar
+
+- **Security (confirmed)**: the `fetch_page` allow-list compared URLs after tracking-parameter stripping, so `hit?utm_content=<the selection>` matched the stored hit and was fetched verbatim: an exfiltration channel. The readable set is now a map from identity to the URL *as the search returned it*, and that stored URL is what gets fetched and cited; the model's spelling is never used. Test: `security.test.ts` "fetch_page readable set".
+- **Security/privacy (confirmed)**: both screenshot paths captured the window's *active* tab after an `await`, so a tab switch during capture could store a screenshot of another page → both verify the active tab is still the job's tab first.
+- **Bug (confirmed)**: a sidebar and a fallback panel window for the same browser window both ran the same job → jobs are claimed (write claim, wait, confirm) before running; at most one panel runs.
+- **Bug (confirmed)**: the SSE parser normalised CRLF per chunk, so a `\r\n\r\n` split across chunks merged two events and both were lost → normalised on the accumulated buffer; test added.
+- **Bug (confirmed)**: the content script's "nothing selected" reply was unclamped → clamped (long X titles no longer blank the "This page" card).
+- **Bug (confirmed)**: an inline `data:` image over the schema limit was enqueued and silently dropped → clamped to a sentinel; the screenshot path locates the right-clicked element; test added.
+- **Bug (confirmed)**: the screenshot crop used the image's full height even when part of it was scrolled off, sending neighbouring page pixels as "the image" → crop intersected with the viewport.
+- **Bug (confirmed)**: inside the fallback panel window `getTargetTab()` returned the panel's own tab, so "This page" and the selection card never appeared there → falls back to the last focused normal window's active tab.
+- **Code (confirmed)**: a `hostOf` duplicate survived in `LocalCard` (the sweep-2 patch for that file had failed); import added, duplicate removed.
+
+Verified sound by the auditor: clamping at every producer; untrusted framing; `isPublicHttpUrl`; `fetchPageText` policy; snapshot sanitising and sandboxing; secrets split and migration; run tokens; `jobIsForWindow` across contexts; Anthropic/Gemini/OpenAI parsers; sources merge; pricing; eviction; privacy/permission docs vs the manifests.
+
+`clean: no` (all three)

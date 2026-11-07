@@ -114,3 +114,20 @@ describe('GeminiProvider + runCheck', () => {
     expect(result!.narrative).toBe('Just prose, no block.');
   });
 });
+
+describe('sse CRLF across chunks', () => {
+  it('does not merge two events when the blank line is split between chunks', async () => {
+    const { parseSse } = await import('@/lib/util/sse');
+    const enc = new TextEncoder();
+    const chunks = ['data: {"a":1}\r\n\r', '\ndata: {"b":2}\r\n\r\n'];
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        for (const ch of chunks) c.enqueue(enc.encode(ch));
+        c.close();
+      },
+    });
+    const out: string[] = [];
+    for await (const ev of parseSse(stream)) out.push(ev.data);
+    expect(out).toEqual(['{"a":1}', '{"b":2}']);
+  });
+});

@@ -15,6 +15,7 @@ function ImageFrame({ href, children }: { href?: string; children: React.ReactNo
 }
 
 function displayUrl(u: string): string {
+  if (u.startsWith('inline:')) return 'inline image (large)';
   if (u.startsWith('data:')) return `inline image (${Math.round((u.length * 3) / 4 / 1024)} KB)`;
   if (u.startsWith('blob:')) return 'in-page image';
   return u.length > 120 ? `${u.slice(0, 117)}…` : u;

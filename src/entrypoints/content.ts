@@ -2,7 +2,7 @@ import { defineContentScript } from '#imports';
 import { browser } from 'wxt/browser';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
-import { clampSelection, LIMITS, MessageSchema, type SelectionInfo, type SnapshotPayload } from '@/lib/messaging/protocol';
+import { clampSelection, INLINE_IMAGE_SENTINEL, LIMITS, MessageSchema, type SelectionInfo, type SnapshotPayload } from '@/lib/messaging/protocol';
 import { extractPost } from '@/lib/post/extract';
 import { shortcutLabelForPlatform } from '@/lib/shortcut';
 import { DEFAULT_SETTINGS, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
@@ -86,7 +86,7 @@ export default defineContentScript({
       if (!parsed.success) return false;
       switch (parsed.data.type) {
         case 'wys:get-selection':
-          sendResponse(currentSelection() ?? { text: '', pageUrl: location.href, pageTitle: document.title });
+          sendResponse(currentSelection() ?? clampSelection({ text: '', pageUrl: location.href, pageTitle: document.title }));
           return false;
         case 'wys:capture-snapshot':
           try {
@@ -104,7 +104,11 @@ export default defineContentScript({
           return false;
         case 'wys:locate-image': {
           const src = parsed.data.srcUrl;
-          const img = Array.from(document.images).find((i) => i.currentSrc === src || i.src === src);
+          // An oversized inline image is referenced by a sentinel; the right-clicked element is the image.
+          const img =
+            src === INLINE_IMAGE_SENTINEL
+              ? (lastContextTarget?.closest('img') ?? lastContextTarget?.querySelector('img') ?? null)
+              : (Array.from(document.images).find((i) => i.currentSrc === src || i.src === src) ?? null);
           if (!img) {
             sendResponse(null);
             return false;

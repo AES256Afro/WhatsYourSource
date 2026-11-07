@@ -12,7 +12,8 @@ export async function* parseSse(body: ReadableStream<Uint8Array>): AsyncGenerato
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+      // Normalise after appending, so a CRLF pair split across two chunks still becomes one newline.
+      buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, '\n');
       let idx: number;
       while ((idx = buffer.indexOf('\n\n')) !== -1) {
         const block = buffer.slice(0, idx);

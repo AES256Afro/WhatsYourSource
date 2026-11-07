@@ -124,3 +124,12 @@ describe('clampInput', () => {
     }
   });
 });
+
+describe('oversized inline images', () => {
+  it('are replaced by the sentinel so the job still fits the schema', async () => {
+    const { clampInput, CheckInputSchema, INLINE_IMAGE_SENTINEL } = await import('@/lib/messaging/protocol');
+    const big = clampInput({ kind: 'image', srcUrl: 'data:image/png;base64,' + 'A'.repeat(2_000_000), pageUrl: 'https://x.com/a', pageTitle: 't' });
+    expect(big.kind === 'image' && big.srcUrl).toBe(INLINE_IMAGE_SENTINEL);
+    expect(CheckInputSchema.safeParse(big).success).toBe(true);
+  });
+});

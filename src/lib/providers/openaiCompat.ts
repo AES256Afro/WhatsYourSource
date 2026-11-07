@@ -132,7 +132,11 @@ export class OpenAICompatProvider implements LlmProvider {
     const seen = new Set<string>();
     // The model may only read pages it got from web_search or that the checked content itself linked.
     // Otherwise a prompt injection could make it carry the checked text to any URL it likes.
-    const readable = new Set([...(req.urls ?? []), ...(req.pageUrl ? [req.pageUrl] : [])].map(readKey));
+    // Key → the URL as the search (or the checked content) actually gave it. The model may ask for a
+    // page by any spelling, but what gets fetched is always our stored copy, so no query-string
+    // payload can ride along.
+    const readable = new Map<string, string>();
+    for (const u of [...(req.urls ?? []), ...(req.pageUrl ? [req.pageUrl] : [])]) readable.set(readKey(u), u);
     const queries: string[] = [];
     let inputTokens = 0;
     let outputTokens = 0;
@@ -181,7 +185,7 @@ export class OpenAICompatProvider implements LlmProvider {
             yield { type: 'status', message: `Searching: ${truncate(q, 60)}` };
             try {
               const hits = await search.search(q, signal);
-              for (const h of hits) readable.add(readKey(h.url));
+              for (const h of hits) if (!readable.has(readKey(h.url))) readable.set(readKey(h.url), h.url);
               content = formatHits(hits);
               const fresh = hitsToSources(hits, seen);
               if (fresh.length) yield { type: 'sources', sources: fresh };
@@ -197,13 +201,14 @@ export class OpenAICompatProvider implements LlmProvider {
           else if (!readable.has(readKey(url)))
             content = 'Only pages returned by web_search, or linked from the checked content, can be read. Search for it first.';
           else {
-            yield { type: 'status', message: `Reading ${domainOf(url)}` };
+            const stored = readable.get(readKey(url))!;
+            yield { type: 'status', message: `Reading ${domainOf(stored)}` };
             try {
-              const page = await fetchPageText(url, signal, 6000, { blockedHosts: this.ownHosts() });
+              const page = await fetchPageText(stored, signal, 6000, { blockedHosts: this.ownHosts() });
               content = `Title: ${page.title}\nURL: ${page.url}\n\n${page.text}${page.truncated ? '\n[truncated]' : ''}`;
-              if (!seen.has(url)) {
-                seen.add(url);
-                yield { type: 'sources', sources: [{ url, title: page.title || domainOf(url), domain: domainOf(url), verified: true }] };
+              if (!seen.has(stored)) {
+                seen.add(stored);
+                yield { type: 'sources', sources: [{ url: stored, title: page.title || domainOf(stored), domain: domainOf(stored), verified: true }] };
               }
             } catch (e) {
               content = `Could not fetch (${e instanceof Error ? e.message : String(e)}). The extension may lack permission for this site.`;

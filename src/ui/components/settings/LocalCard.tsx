@@ -4,6 +4,7 @@ import { OPENAI_COMPAT_PRESETS, openaiCompatLabel } from '@/lib/providers/regist
 import { OpenAICompatProvider } from '@/lib/providers/openaiCompat';
 import { createSearchBackend } from '@/lib/search/backends';
 import type { SearchToolId, Settings } from '@/lib/storage/settings';
+import { hostOf } from '@/lib/util/url';
 import { Alert, Cpu } from '../Icons';
 import { CommitInput, ProviderCard, Row, SecretInput, type Status } from './primitives';
 
@@ -240,12 +241,4 @@ function PermissionNote({ text, onAllow }: { text: string; onAllow: () => void }
       </button>
     </div>
   );
-}
-
-function hostOf(u: string): string {
-  try {
-    return new URL(u).host;
-  } catch {
-    return u;
-  }
 }

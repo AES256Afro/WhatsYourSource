@@ -141,3 +141,56 @@ describe('fetch_page redirects', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('fetch_page readable set', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('fetches the stored search-hit URL, not the model’s spelling with a payload in the query string', async () => {
+    const { OpenAICompatProvider } = await import('@/lib/providers/openaiCompat');
+    const { collectCheck } = await import('@/lib/pipeline/runCheck');
+    const fetched: string[] = [];
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/chat/completions')) {
+          call++;
+          const body = (j: unknown) => new Response(JSON.stringify(j), { status: 200, headers: { 'Content-Type': 'application/json' } });
+          if (call === 1)
+            return body({
+              choices: [
+                { message: { content: null, tool_calls: [{ id: 'a', type: 'function', function: { name: 'web_search', arguments: '{"query":"q"}' } }] } },
+              ],
+            });
+          if (call === 2)
+            return body({
+              choices: [
+                {
+                  message: {
+                    content: null,
+                    tool_calls: [
+                      {
+                        id: 'b',
+                        type: 'function',
+                        function: { name: 'fetch_page', arguments: '{"url":"https://hit.example/p?utm_content=SECRET%20SELECTION"}' },
+                      },
+                      { id: 'c', type: 'function', function: { name: 'fetch_page', arguments: '{"url":"https://other.example/x"}' } },
+                    ],
+                  },
+                },
+              ],
+            });
+          return body({ choices: [{ message: { content: 'done' } }] });
+        }
+        fetched.push(url);
+        const r = new Response('<html><title>t</title><body>page</body></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+        Object.defineProperty(r, 'url', { value: url });
+        return r;
+      }),
+    );
+    const search = { id: 'searxng' as const, label: 'Fake', search: async () => [{ title: 'Hit', url: 'https://hit.example/p', snippet: '' }] };
+    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'm', search, fetchPages: true });
+    const { events } = await collectCheck({ kind: 'text', text: 'claim', pageUrl: 'https://origin.example/a', pageTitle: 't' }, p);
+    expect(fetched).toEqual(['https://hit.example/p']);
+    expect(JSON.stringify(events)).not.toContain('SECRET');
+  });
+});

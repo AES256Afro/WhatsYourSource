@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+/** Inline (`data:`) images too big to carry in a job are replaced by this; the screenshot path locates the element. */
+export const INLINE_IMAGE_SENTINEL = 'inline:oversize';
+export const MAX_INLINE_IMAGE_URL = 1_500_000;
+
 /**
  * Everything that crosses a process boundary (content script ↔ background ↔ side panel)
  * is validated with these schemas. Page-derived strings are never trusted beyond "it's a string".
@@ -34,8 +38,8 @@ export const TextInputSchema = z.object({
 
 export const ImageInputSchema = z.object({
   kind: z.literal('image'),
-  /** http(s), data: or blob: — whatever the page used; only http(s) is ever linked. */
-  srcUrl: z.string().max(2_000_000),
+  /** http(s), data: or blob: — whatever the page used — or INLINE_IMAGE_SENTINEL; only http(s) is ever linked. */
+  srcUrl: z.string().max(MAX_INLINE_IMAGE_URL),
   pageUrl: url,
   pageTitle: z.string().max(LIMITS.title),
   alt: z.string().max(LIMITS.alt).optional(),
@@ -84,6 +88,7 @@ export function clampInput(input: CheckInput): CheckInput {
     case 'image':
       return {
         ...input,
+        srcUrl: input.srcUrl.length > MAX_INLINE_IMAGE_URL ? INLINE_IMAGE_SENTINEL : input.srcUrl,
         pageUrl: input.pageUrl.slice(0, LIMITS.url),
         pageTitle: input.pageTitle.slice(0, LIMITS.title),
         alt: cut(input.alt, LIMITS.alt),

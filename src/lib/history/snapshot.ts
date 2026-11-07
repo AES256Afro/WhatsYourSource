@@ -41,7 +41,10 @@ export async function captureFromTab(tabId: number | undefined, highlight?: stri
 
   let screenshot: Blob | undefined;
   try {
-    if (windowId != null) {
+    // The capture is of the window's active tab; the user may have switched tabs while the page was
+    // being read, so confirm it is still the job's tab before taking it.
+    const [active] = windowId != null ? await browser.tabs.query({ active: true, windowId }) : [];
+    if (windowId != null && active?.id === id) {
       const dataUrl = await browser.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 60 });
       if (dataUrl) screenshot = await (await fetch(dataUrl)).blob();
     }

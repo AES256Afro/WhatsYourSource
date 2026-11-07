@@ -34,11 +34,30 @@ export function jobIsForWindow(job: Job, windowId: number | undefined): boolean 
   return job.windowId == null || windowId == null || job.windowId === windowId;
 }
 
+const instanceId = crypto.randomUUID();
+
+/**
+ * Two panels can both be entitled to a job (a sidebar and a fallback window for the same browser
+ * window). storage has no atomic test-and-set, so: write my claim unless someone else's is there,
+ * wait a beat, and run only if my claim is still the one on record. Both contenders read the same
+ * final value, so at most one runs.
+ */
+export async function claimJob(id: string): Promise<boolean> {
+  const key = `claim:${id}`;
+  const before = (await browser.storage.session.get(key))[key];
+  if (typeof before === 'string' && before !== instanceId) return false;
+  await browser.storage.session.set({ [key]: instanceId });
+  await new Promise((r) => setTimeout(r, 80));
+  const after = (await browser.storage.session.get(key))[key];
+  return after === instanceId;
+}
+
 export async function takeJob(): Promise<Job | null> {
   const r = await browser.storage.session.get(KEY);
   const parsed = JobSchema.safeParse(r[KEY]);
   if (!parsed.success) return null;
   if (!jobIsForWindow(parsed.data, await currentWindowId())) return null;
+  if (!(await claimJob(parsed.data.id))) return null;
   await browser.storage.session.remove(KEY);
   return parsed.data;
 }
@@ -50,11 +69,12 @@ export function onJob(cb: (job: Job) => void): () => void {
     if (!change?.newValue) return;
     const parsed = JobSchema.safeParse(change.newValue);
     if (!parsed.success) return;
-    void currentWindowId().then((wid) => {
-      if (!jobIsForWindow(parsed.data, wid)) return;
+    void (async () => {
+      if (!jobIsForWindow(parsed.data, await currentWindowId())) return;
+      if (!(await claimJob(parsed.data.id))) return;
       void browser.storage.session.remove(KEY);
       cb(parsed.data);
-    });
+    })();
   };
   browser.storage.onChanged.addListener(listener);
   return () => browser.storage.onChanged.removeListener(listener);
