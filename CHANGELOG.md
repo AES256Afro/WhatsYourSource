@@ -4,7 +4,19 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-07
+
+First store release. Everything below was landed between the 0.1.0 development builds and this version, across one Stage 1 loop (code, bug and security audits, 8 sweeps) and one Stage 2 loop (readability, usability, visual, quality-of-life, feature and optimization sweeps, 3 each); the ledger is in `docs/SWEEPS.md`.
+
 ### Added
+- Seen before: an image you have checked already is recognised by its on-device fingerprint, with a link to the earlier result.
+- Right-click a link → "Check source of linked page".
+- A second opinion links back to the result it answers.
+- The claims found by the first pass show in the checking view while the main pass runs; the listing pass runs on the provider's cheapest model.
+- Local models: "Test search" runs one real query through SearXNG, Brave or Tavily; a model the server says cannot call tools skips the tool round; reasoning (`<think>`) is stripped from Qwen3 / DeepSeek-style answers; requests carry `max_tokens` so JSON is not cut off.
+- Home says what a check will send and to which provider; history search covers source domains, titles and the original source.
+- The on-page chip shows the keyboard shortcut as it is actually bound, and no hint when it is unbound.
+- Cancel lands at once on a quiet "Check cancelled" card.
 - "What was sent, and to whom" now lists everything that left the browser, including lookups and search providers, and what was kept locally; Copy as Markdown includes fact-checks, evidence and outlet ratings.
 - Archive dates link to the archived copy; a Verify button for the Fact Check Tools key.
 - Second opinion: run the same check on another configured provider from the result.
@@ -26,6 +38,8 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 - Shortcut labels follow the live key binding.
 
 ### Changed
+- The panel loads Settings, History, Detail and first-run screens on first use, and the image-metadata reader only for image checks: about 150 KB less to parse before the first paint; streamed answers render at most 25 times a second.
+- Escape stays inside a text field; notes are saved when you leave the detail view however you leave it.
 - Page snapshots are captured by a script injected only at check time; the script that runs on every page shrank from 165 KB to 13 KB.
 - Result layout answers the two questions in order: verdict first, likely original source second, then the assessment, claims and sources; "Compare in Google AI Mode" is a link, not the primary button.
 - One vocabulary for the four ways to check (Gemini (your key), Google AI Mode (web), Claude (your key), Local or OpenAI-style model) across onboarding, settings, home and errors; settings copy rewritten in plain language.

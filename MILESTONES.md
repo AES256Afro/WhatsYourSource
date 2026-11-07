@@ -163,7 +163,7 @@ Six categories, each run **at least three times**, each leaving the loop after t
 
 Exit: `docs/SWEEPS.md` shows three clean sweeps per category; no console errors across a 30-minute session on both browsers.
 
-### M7 — Publish
+### M7 — Publish — item 1 built locally 2026-11-07 (1.0.0, both zips in `.output/`, nothing pushed or published; items 2–5 wait for the owner's go-ahead)
 
 1. Version bump to 1.0.0; CHANGELOG; GitHub release with both zips; `npm run zip` reproducible from a clean clone (AMO requires source + build instructions).
 2. Chrome Web Store: developer account, listing copy, five screenshots and a promo tile, privacy disclosures, permission justifications from `docs/PERMISSIONS.md`, single-purpose statement. Expect one or two review rounds; `<all_urls>` optional permission is the likely question.

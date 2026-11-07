@@ -30,6 +30,14 @@ npm run lint           # ESLint (type-aware) · npm run format — Prettier
 npm run screenshots    # store screenshots + promo tiles into store/ (needs `npm run preview` running)
 ```
 
+### Releasing
+
+```bash
+npm run build:all && npm run zip && npm run zip:firefox
+```
+
+writes `.output/whatsyoursource-<version>-chrome.zip` (Chrome Web Store and Edge Add-ons), `-firefox.zip` (AMO) and `-sources.zip` (AMO source submission; build with Node 22, `npm ci`, `npm run build:firefox`). `npm run lint:firefox` runs the AMO linter; the warnings it reports are explained in `docs/STORE_LISTING.md`. Screenshots and promo tiles come from `npm run screenshots` with `npm run preview` running. The version comes from `package.json`.
+
 See [MILESTONES.md](MILESTONES.md) for the plan to release, [docs/SWEEPS.md](docs/SWEEPS.md) for the audit ledger and [docs/STORE_LISTING.md](docs/STORE_LISTING.md) for the store copy.
 
 On Firefox, the floating chip opens the panel in a small window (Firefox only lets the sidebar open from the context menu, the toolbar button or the shortcut); the other triggers open the real sidebar.
