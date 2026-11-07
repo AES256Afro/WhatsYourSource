@@ -5,6 +5,7 @@ import { enqueueJob } from '@/lib/jobs';
 import { openPanelSync } from '@/lib/panel';
 import { clampSelection, LIMITS, MessageSchema, PostInputSchema, SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
 import { DEFAULT_SETTINGS, loadSettingsWithoutSecrets, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
+import { SHORTCUT_KEY } from '@/lib/storage/publicSettings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
 
 /**
@@ -18,6 +19,7 @@ const MENU = {
   image: 'wys-image',
   post: 'wys-post',
   page: 'wys-page',
+  link: 'wys-link',
 } as const;
 
 type MaybeTab = Browser.tabs.Tab | undefined;
@@ -43,12 +45,23 @@ export default defineBackground(() => {
       browser.contextMenus.create({ id: MENU.selectionWeb, title: 'Open selection in Google AI Mode', contexts: ['selection'] });
       browser.contextMenus.create({ id: MENU.image, title: 'Check source of this image', contexts: ['image'] });
       // Post and page only when nothing more specific (a selection, an image) is under the cursor.
-      browser.contextMenus.create({ id: MENU.post, title: 'Check source of this post', contexts: ['page', 'link'] });
-      browser.contextMenus.create({ id: MENU.page, title: 'Check source of this page', contexts: ['page', 'link'] });
+      browser.contextMenus.create({ id: MENU.post, title: 'Check source of this post', contexts: ['page'] });
+      browser.contextMenus.create({ id: MENU.page, title: 'Check source of this page', contexts: ['page'] });
+      // A link is the canonical "where is the source?" target: check the page it points to.
+      browser.contextMenus.create({ id: MENU.link, title: 'Check source of linked page', contexts: ['link'] });
     });
   }
 
   browser.runtime.onInstalled.addListener(createMenus);
+  // The chip on pages cannot ask the commands API; publish the live binding whenever the worker starts.
+  const publishShortcut = () =>
+    void browser.commands
+      .getAll()
+      .then((all) => browser.storage.local.set({ [SHORTCUT_KEY]: all.find((c) => c.name === COMMAND_ID)?.shortcut ?? '' }))
+      .catch(() => undefined);
+  publishShortcut();
+  browser.runtime.onInstalled.addListener(publishShortcut);
+  browser.runtime.onStartup.addListener(publishShortcut);
   // Firefox does not always run the event page on startup; register on both.
   browser.runtime.onStartup.addListener(createMenus);
 
@@ -109,6 +122,11 @@ export default defineBackground(() => {
         route(tab, { kind: 'page', url: pageUrl, title: pageTitle });
         return;
       }
+      case MENU.link: {
+        if (!info.linkUrl || !/^https?:/i.test(info.linkUrl)) return;
+        route(tab, { kind: 'page', url: info.linkUrl, title: '' });
+        return;
+      }
     }
   });
 
@@ -146,6 +164,9 @@ export default defineBackground(() => {
       const sel = await resolveSelection(activeTab, '');
       const pageUrl = sel.pageUrl || activeTab?.url || '';
       if (!sel.text && !/^https?:/i.test(pageUrl)) return; // nothing selected, on a page we cannot read
+      // With nothing selected the panel is enough: its home view offers "This page" as an explicit
+      // button, so the shortcut never spends a provider call the user did not see coming.
+      if (!sel.text && target === 'panel') return;
       const input: CheckInput = sel.text
         ? { kind: 'text', text: sel.text, pageUrl: sel.pageUrl, pageTitle: sel.pageTitle, surrounding: sel.surrounding }
         : { kind: 'page', url: pageUrl, title: sel.pageTitle || activeTab?.title || '' };

@@ -7,21 +7,30 @@ export interface RunState {
   input: CheckInput;
   providerLabel: string;
   statuses: string[];
+  /** Claims the first pass found, shown while the main pass runs. */
+  claims: string[];
   text: string;
   queries: string[];
   sources: RawSource[];
   startedAt: number;
 }
 
-export function emptyRunState(input: CheckInput, providerLabel: string, statuses: string[] = []): RunState {
-  return { input, providerLabel, statuses, text: '', queries: [], sources: [], startedAt: Date.now() };
+export function emptyRunState(input: CheckInput, providerLabel: string, statuses: string[] = [], claims: string[] = []): RunState {
+  return { input, providerLabel, statuses, claims, text: '', queries: [], sources: [], startedAt: Date.now() };
 }
+
+/** Status rows that repeat per query or per page replace their predecessor; the chips keep the history. */
+const REPEATING = /^(Searching|Reading)\b/;
 
 /** Fold one stream event into the progress shown to the user. Pure: returns a new state. */
 export function reduceProgress(state: RunState, ev: CheckEvent): RunState {
   switch (ev.type) {
-    case 'status':
-      return ev.done ? state : { ...state, statuses: [...state.statuses, ev.message] };
+    case 'status': {
+      if (ev.done) return state;
+      const kind = REPEATING.exec(ev.message)?.[1];
+      const kept = kind ? state.statuses.filter((s) => !s.startsWith(kind)) : state.statuses;
+      return { ...state, statuses: [...kept, ev.message] };
+    }
     case 'delta':
       return { ...state, text: state.text + ev.text };
     case 'searchQueries':

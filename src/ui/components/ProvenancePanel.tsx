@@ -10,7 +10,6 @@ export function ProvenancePanel({ provenance: p, srcUrl }: { provenance: LocalPr
   const exifKeys = p.exif ? Object.keys(p.exif) : [];
   rows.push(['EXIF / XMP metadata', exifKeys.length ? exifKeys.map((k) => `${k}: ${p.exif![k]}`).join(' · ') : 'None (usually stripped by platforms)']);
   rows.push(['AI-generation hints', p.aiHints?.length ? p.aiHints.join(' · ') : 'None in metadata']);
-  if (p.phash) rows.push(['Fingerprint (pHash)', p.phash]);
   if (p.width && p.height)
     rows.push([
       'Dimensions',

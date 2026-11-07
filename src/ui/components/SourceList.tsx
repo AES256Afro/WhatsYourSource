@@ -89,11 +89,15 @@ function RatingPill({ rating }: { rating: Credibility }) {
 }
 
 function SourceRow({ source: s, rating }: { source: Source; rating?: Credibility }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'yes' | 'no' | null>(null);
   const copy = async () => {
-    await navigator.clipboard.writeText(s.url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(s.url);
+      setCopied('yes');
+    } catch {
+      setCopied('no');
+    }
+    setTimeout(() => setCopied(null), 2000);
   };
   const cls = `flex items-start gap-2.5 rounded-xl border px-3 py-2.5 no-underline ${s.verified ? 'border-line bg-paper hover:bg-surface' : 'border-dashed border-line-strong bg-paper'}`;
   const number = (
@@ -104,7 +108,7 @@ function SourceRow({ source: s, rating }: { source: Source; rating?: Credibility
       <a id={`src-${s.id}`} href={s.url} target="_blank" rel="noopener noreferrer" className={cls}>
         {number}
         <span className="flex min-w-0 grow flex-col gap-px">
-          <span className="truncate text-[13px] leading-[18px] font-medium text-ink">{s.title || s.domain}</span>
+          <span className="line-clamp-2 text-[13px] leading-[18px] font-medium text-ink">{s.title || s.domain}</span>
           <span className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">
             <span>
               {s.domain}
@@ -119,10 +123,14 @@ function SourceRow({ source: s, rating }: { source: Source; rating?: Credibility
   }
   // The model named this page but the search machinery never returned it: show the address as text, never a live link.
   return (
-    <div id={`src-${s.id}`} className={cls}>
+    <div
+      id={`src-${s.id}`}
+      tabIndex={-1}
+      className={`${cls} outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper`}
+    >
       {number}
       <span className="flex min-w-0 grow flex-col gap-px">
-        <span className="truncate text-[13px] leading-[18px] font-medium text-ink">{s.title || s.domain}</span>
+        <span className="line-clamp-2 text-[13px] leading-[18px] font-medium text-ink">{s.title || s.domain}</span>
         <span className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">
           <span className="truncate" title={s.url}>
             {s.url}
@@ -133,14 +141,12 @@ function SourceRow({ source: s, rating }: { source: Source; rating?: Credibility
           Cited by the model but not returned by the search, so it is not linked. Copy it to check yourself.
         </span>
       </span>
-      <button
-        type="button"
-        className="wys-icon-btn h-8 w-8 shrink-0"
-        aria-label={copied ? 'Copied' : `Copy address of source ${s.id}`}
-        onClick={() => void copy()}
-      >
-        {copied ? <Check size={14} /> : <Copy size={14} />}
+      <button type="button" className="wys-icon-btn h-8 w-8 shrink-0" aria-label={`Copy address of source ${s.id}`} onClick={() => void copy()}>
+        {copied === 'yes' ? <Check size={14} /> : <Copy size={14} />}
       </button>
+      <span role="status" className="wys-sr-only">
+        {copied === 'yes' ? 'Copied' : copied === 'no' ? 'Couldn’t copy' : ''}
+      </span>
     </div>
   );
 }

@@ -53,8 +53,8 @@
 
     --color-accent: #6fb1f0;
     --color-accent-deep: #8fc1f2;
-    --color-accent-fill: #1f66ad;
-    --color-accent-fill-hover: #2a77c4;
+    --color-accent-fill: #2270bd; /* 3.3:1 on the accent wash behind the selection card */
+    --color-accent-fill-hover: #2a7fd0;
     --color-accent-soft: #15283b;
     --color-accent-line: #2f5478;
     --color-accent-wash: #121e2b;
@@ -120,7 +120,7 @@ textarea {
   .wys-btn {
     height: 38px;
     padding: 0 14px;
-    border: 1px solid var(--color-line-2);
+    border: 1px solid var(--color-line-strong); /* 3:1 against paper, like the inputs it sits beside */
     border-radius: 10px;
     background: var(--color-paper);
     color: var(--color-ink);
@@ -250,6 +250,13 @@ textarea {
     }
     .wys-btn-narrow {
       padding: 0 10px;
+    }
+    /* Settings controls drop under their labels instead of squeezing them into a 60px column. */
+    .wys-row {
+      flex-wrap: wrap;
+    }
+    .wys-row > .wys-row-control:has(select) {
+      flex-basis: 100%;
     }
   }
   /* Everything the user cannot otherwise perceive from the side panel is announced through these. */

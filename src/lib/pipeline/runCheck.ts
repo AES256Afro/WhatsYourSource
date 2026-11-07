@@ -3,7 +3,7 @@ import { toProviderError, type LlmProvider, type ProviderErrorCode, type RawSour
 import type { ProviderId } from '../storage/settings';
 import { buildSources, resolveClaims, resolveOriginal } from './merge';
 import { buildRepairRequest, buildRequest } from './prompts';
-import { extractJsonBlock, parseModelResult, type CheckResult, type LocalProvenance, type ModelResult } from './schema';
+import { extractJsonBlock, parseModelResult, type CheckResult, type LocalProvenance, type ModelResult, stripThinking } from './schema';
 
 /** Every way a check can fail, so hints and fallback rules are checked exhaustively by the compiler. */
 export type CheckErrorCode = ProviderErrorCode | 'empty' | 'image' | 'image-permission' | 'image-page-closed';
@@ -102,6 +102,7 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
     return;
   }
 
+  text = stripThinking(text);
   const extracted = extractJsonBlock(text);
   let narrative = extracted.narrative;
   let parsed = parseModelResult(extracted.jsonText);

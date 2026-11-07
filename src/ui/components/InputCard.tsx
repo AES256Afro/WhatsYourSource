@@ -85,7 +85,7 @@ export function InputCard({ input, when, clamp, deferImages }: { input: CheckInp
         </div>
       ) : (
         <p className={`m-0 min-w-0 text-[13px] leading-[18px] text-ink-2 wrap-break-word ${clamped ? 'line-clamp-3' : ''}`}>
-          {input.kind === 'text' && <span className="text-ink">“{input.text}”</span>}
+          {input.kind === 'text' && <span className="text-ink">{/^["“]/.test(input.text) ? input.text : `“${input.text}”`}</span>}
           {input.kind === 'image' && (input.alt ? `${input.alt} — ${displayUrl(input.srcUrl)}` : displayUrl(input.srcUrl))}
           {input.kind === 'page' && (input.title ? `${input.title} — ${input.url}` : input.url)}
         </p>

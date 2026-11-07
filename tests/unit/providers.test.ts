@@ -57,7 +57,7 @@ describe('OpenAICompatProvider', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'qwen3:8b', search: fakeSearch, fetchPages: false });
+    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'qwen3:8b', search: fakeSearch });
     const { result, error } = await collectCheck(INPUT, p);
     expect(error).toBeUndefined();
     expect(fakeSearch.search).toHaveBeenCalledWith('einstein insanity quote origin', expect.anything());
@@ -80,7 +80,7 @@ describe('OpenAICompatProvider', () => {
         return sse([JSON.stringify({ choices: [{ delta: { content: ANSWER } }] }), '[DONE]']);
       }),
     );
-    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:1234/v1', apiKey: '', model: 'small', search: fakeSearch, fetchPages: false });
+    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:1234/v1', apiKey: '', model: 'small', search: fakeSearch });
     const { result, error } = await collectCheck(INPUT, p);
     expect(error).toBeUndefined();
     expect(result!.verdict.kind).toBe('misattributed');
@@ -98,7 +98,7 @@ describe('OpenAICompatProvider', () => {
         ]),
       ),
     );
-    const p = new OpenAICompatProvider({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk', model: 'gpt', search: null, fetchPages: false });
+    const p = new OpenAICompatProvider({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk', model: 'gpt', search: null });
     const { result, events } = await collectCheck(INPUT, p);
     expect(events.filter((e) => e.type === 'delta')).toHaveLength(2);
     expect(result!.narrative).toBe('Half answer.');
@@ -113,7 +113,7 @@ describe('OpenAICompatProvider', () => {
         throw new TypeError('Failed to fetch');
       }),
     );
-    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'm', search: null, fetchPages: false });
+    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'm', search: null });
     const { error } = await collectCheck(INPUT, p);
     expect(error?.code).toBe('network');
     expect(error?.details).toContain('Is the server running');
@@ -224,7 +224,7 @@ describe('empty model output', () => {
       'fetch',
       vi.fn(async () => sse([JSON.stringify({ choices: [{ delta: { content: '' } }] }), '[DONE]'])),
     );
-    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'm', search: null, fetchPages: false });
+    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'm', search: null });
     const { result, error } = await collectCheck(INPUT, p);
     expect(result).toBeUndefined();
     expect(error?.code).toBe('empty');

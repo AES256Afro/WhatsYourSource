@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RunState } from '@/lib/pipeline/progress';
+import { stripThinking } from '@/lib/pipeline/schema';
 import { InputCard } from './InputCard';
 import { Label, ProviderBadge } from './common';
 import { Check, Close, Search } from './Icons';
@@ -31,6 +32,13 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
             <StepRow key={i} done label={s} />
           ))}
           <StepRow active label={current} />
+          {run.claims.length > 0 && (
+            <ol className="m-0 flex list-decimal flex-col gap-0.5 pb-2.5 pl-11 text-[12px] leading-4 text-ink-2">
+              {run.claims.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ol>
+          )}
           {run.queries.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pb-2.5 pl-7">
               {run.queries.map((q) => (
@@ -52,14 +60,24 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
           )}
         </div>
 
+        {/* Holds the verdict's place so the text being read does not jump down when the result lands. */}
+        <div className="wys-card flex min-h-[88px] flex-col gap-2 p-3" aria-hidden="true">
+          <div className="flex items-center gap-2">
+            <span className="h-4 w-4 animate-pulse rounded-full bg-line-2" />
+            <span className="wys-label">Verdict · pending</span>
+          </div>
+          <div className="h-3 w-[70%] animate-pulse rounded-md bg-line-2" />
+          <div className="h-3 w-[90%] animate-pulse rounded-md bg-line-2" />
+        </div>
+
         <div className="flex flex-col gap-2">
           <Label>Assessment · streaming</Label>
-          <Narrative text={run.text.split('```')[0] ?? ''} streaming />
+          <Narrative text={stripThinking(run.text).split('```')[0] ?? ''} streaming />
           {!run.text && (
             <div className="mt-1 flex flex-col gap-2" aria-hidden="true">
-              <div className="h-3 w-[94%] rounded-md bg-surface-2" />
-              <div className="h-3 w-[82%] rounded-md bg-surface-2" />
-              <div className="h-3 w-[58%] rounded-md bg-surface-2" />
+              <div className="h-3 w-[94%] animate-pulse rounded-md bg-line-2" />
+              <div className="h-3 w-[82%] animate-pulse rounded-md bg-line-2" />
+              <div className="h-3 w-[58%] animate-pulse rounded-md bg-line-2" />
             </div>
           )}
         </div>

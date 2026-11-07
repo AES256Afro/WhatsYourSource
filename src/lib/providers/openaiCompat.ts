@@ -24,8 +24,6 @@ export interface OpenAICompatConfig {
   apiKey: string;
   model: string;
   search: SearchBackend | null;
-  /** Let the model read pages (needs host permission for the sites). */
-  fetchPages: boolean;
   /** The search backend's own URL (SearXNG), so the model cannot be steered into reading it. */
   searchBaseUrl?: string;
   label?: string;
@@ -33,6 +31,8 @@ export interface OpenAICompatConfig {
   jsonMode?: boolean;
   /** The selected model accepts images; `false` turns image checks into a clear error up front. */
   vision?: boolean;
+  /** The selected model can call tools; `false` (the server said so) skips the doomed tool round and searches up front. */
+  tools?: boolean;
 }
 
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
@@ -67,6 +67,9 @@ const MAX_ROUNDS = 6;
 
 /** Shown while a local model answers without a search tool; the action is in Settings. */
 export const NO_SEARCH_TOOL_STATUS = 'No search tool configured — answering from the model alone. Pick one in Settings to get sources.';
+
+/** Enough for the longest answer plus the JSON block; without it some servers stop mid-JSON and the result degrades. */
+const MAX_TOKENS = 4096;
 
 function unreachableHint(base: string): string {
   return `Could not reach ${base}. Is the server running, and does it allow requests from browser extensions (CORS)?`;
@@ -130,6 +133,11 @@ export class OpenAICompatProvider implements LlmProvider {
     }
 
     yield { type: 'status', message: `Asking ${this.label} (search via ${search.label})…` };
+    if (this.cfg.tools === false) {
+      yield { type: 'status', message: 'Model has no tool calling — searching up front instead' };
+      yield* this.presearch(req, userContent, search, signal);
+      return;
+    }
     try {
       yield* this.toolLoop(req, userContent, search, signal);
     } catch (e) {
@@ -164,7 +172,7 @@ export class OpenAICompatProvider implements LlmProvider {
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const res = await this.post(
         '/chat/completions',
-        { model: this.cfg.model, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.2, stream: false },
+        { model: this.cfg.model, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.2, max_tokens: MAX_TOKENS, stream: false },
         signal,
       );
       const j = (await res.json()) as {
@@ -216,8 +224,7 @@ export class OpenAICompatProvider implements LlmProvider {
           }
         } else if (call.function.name === 'fetch_page') {
           const url = str(args.url).trim();
-          if (!this.cfg.fetchPages) content = 'Page fetching is disabled by the user. Rely on search snippets.';
-          else if (!/^https?:\/\//i.test(url)) content = 'Invalid URL.';
+          if (!/^https?:\/\//i.test(url)) content = 'Invalid URL.';
           else if (!readable.has(readKey(url)))
             content = 'Only pages returned by web_search, or linked from the checked content, can be read. Search for it first.';
           else {
@@ -278,6 +285,7 @@ export class OpenAICompatProvider implements LlmProvider {
       '/chat/completions',
       {
         model: this.cfg.model,
+        max_tokens: MAX_TOKENS,
         messages,
         temperature: 0.2,
         stream: true,

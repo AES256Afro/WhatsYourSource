@@ -186,6 +186,11 @@ export interface CheckResult {
 }
 
 /** Split the model output into the narrative and the last ```json block (or a trailing bare object). */
+/** Reasoning models (Qwen3, DeepSeek-R1 via Ollama/LM Studio) wrap their thinking in <think> tags; none of it is the answer. */
+export function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').replace(/<think>[\s\S]*$/i, '');
+}
+
 export function extractJsonBlock(text: string): { narrative: string; jsonText: string | null } {
   const fence = /```(?:json)?\s*([\s\S]*?)```/gi;
   let match: RegExpExecArray | null;

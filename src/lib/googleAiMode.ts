@@ -1,5 +1,5 @@
 import type { CheckInput } from './messaging/protocol';
-import { IMAGE_QUESTION, PAGE_QUESTION, POST_QUESTION, QUESTION } from './pipeline/prompts';
+import { IMAGE_QUESTION, PAGE_QUESTION, POST_QUESTION, QUESTION } from './pipeline/question';
 import { truncate } from './util/url';
 
 /**

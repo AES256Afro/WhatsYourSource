@@ -19,15 +19,18 @@ export const VerdictBanner = forwardRef<HTMLDivElement, { verdict: CheckResult['
   const s = STYLES[tone];
   const Icon = tone === 'ok' ? Check : verdict.kind === 'older-than-claimed' ? Clock : tone === 'muted' ? Info : Alert;
   return (
-    <div
+    <section
       ref={ref}
       tabIndex={-1}
+      aria-labelledby="wys-verdict-h"
       className={`flex gap-2.5 rounded-xl border p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${s.box}`}
     >
       <Icon size={20} className={`mt-px shrink-0 ${s.title}`} />
       <div className="flex min-w-0 grow flex-col gap-1">
         <div className="flex items-center gap-2">
-          <h2 className={`m-0 text-[16px] leading-[20px] font-semibold ${s.title}`}>{verdict.label}</h2>
+          <h2 id="wys-verdict-h" className={`m-0 text-[16px] leading-[20px] font-semibold ${s.title}`}>
+            {verdict.label}
+          </h2>
           <span className="grow" />
           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${s.ring}`}>
             {CONFIDENCE[verdict.confidence]} confidence
@@ -35,6 +38,6 @@ export const VerdictBanner = forwardRef<HTMLDivElement, { verdict: CheckResult['
         </div>
         {verdict.summary && <p className={`wys-measure m-0 text-[13px] leading-[18px] ${s.text}`}>{verdict.summary}</p>}
       </div>
-    </div>
+    </section>
   );
 });

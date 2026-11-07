@@ -71,7 +71,7 @@ export function Cite({ id }: { id: number }) {
 
 /** A quiet text action at the right of a section label ("Open all", "See all", "Change"). */
 export function TextAction({ children, onClick, href }: { children: ReactNode; onClick?: () => void; href?: string }) {
-  const cls = 'border-0 bg-transparent p-0 text-[12px] font-medium text-accent no-underline hover:underline';
+  const cls = 'inline-block border-0 bg-transparent px-0 py-1 text-[12px] font-medium text-accent no-underline hover:underline';
   return href ? (
     <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
       {children}

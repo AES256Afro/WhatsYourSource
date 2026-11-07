@@ -7,6 +7,9 @@ import { installFakes } from './fakes';
 const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') ?? 'home';
 if (params.get('dark')) document.getElementById('scene')!.classList.add('dark');
+// Tall screens (first run) fit at a smaller zoom; everything else uses the stylesheet's 1.3.
+const zoom = params.get('zoom');
+if (zoom) (document.querySelector('.panel') as HTMLElement).style.zoom = zoom;
 const chip = document.getElementById('chip')!;
 if (params.get('chip') !== '1') chip.hidden = true;
 else {
@@ -16,7 +19,7 @@ else {
   const last = rects[rects.length - 1] ?? mark.getBoundingClientRect();
   const page = document.getElementById('page')!.getBoundingClientRect();
   chip.style.left = `${Math.round(last.right - page.left - chip.offsetWidth)}px`;
-  chip.style.top = `${Math.round(last.bottom - page.top + 8)}px`;
+  chip.style.top = `${Math.round(last.bottom - page.top + 14)}px`;
 }
 if (scenario === 'image') document.getElementById('figure')!.hidden = false;
 

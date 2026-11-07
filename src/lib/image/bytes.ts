@@ -23,6 +23,34 @@ export class ImageFetchError extends Error {
   }
 }
 
+/** Bigger than any photo worth checking; bounds memory (bytes, then the decoded bitmap) on a hostile or huge file. */
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+
+async function readBytesCapped(res: Response, max: number): Promise<Uint8Array> {
+  if (!res.body) return new Uint8Array(await res.arrayBuffer());
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let got = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      got += value.byteLength;
+      if (got > max) throw new ImageFetchError('not-image', `Image too large (over ${Math.round(max / 1048576)} MB)`);
+      chunks.push(value);
+    }
+  } finally {
+    void reader.cancel().catch(() => undefined);
+  }
+  const out = new Uint8Array(got);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.byteLength;
+  }
+  return out;
+}
+
 export async function fetchImageBytes(srcUrl: string, signal?: AbortSignal): Promise<ImageBytes> {
   if (srcUrl.startsWith('data:')) {
     const res = await fetch(srcUrl);
@@ -37,7 +65,9 @@ export async function fetchImageBytes(srcUrl: string, signal?: AbortSignal): Pro
     throw new ImageFetchError('permission', e instanceof Error ? e.message : String(e));
   }
   if (!res.ok) throw new ImageFetchError('http', `HTTP ${res.status}`);
-  const buf = new Uint8Array(await res.arrayBuffer());
+  const declared = Number(res.headers.get('content-length') ?? 0);
+  if (declared > MAX_IMAGE_BYTES) throw new ImageFetchError('not-image', `Image too large (${Math.round(declared / 1048576)} MB)`);
+  const buf = await readBytesCapped(res, MAX_IMAGE_BYTES);
   const mime = sniffMime(buf) ?? res.headers.get('content-type')?.split(';')[0] ?? '';
   if (!mime.startsWith('image/')) throw new ImageFetchError('not-image', `Not an image (${mime || 'unknown type'})`);
   return { bytes: buf, mime, via: 'fetch' };
@@ -67,6 +97,7 @@ export async function screenshotImage(tabId: number, srcUrl: string): Promise<Im
   if (sw < 8 || sh < 8) throw new ImageFetchError('unknown', 'The image is not visible on screen.');
   const canvas = new OffscreenCanvas(sw, sh);
   canvas.getContext('2d')!.drawImage(full, sx, sy, sw, sh, 0, 0, sw, sh);
+  full.close(); // the whole-tab bitmap (tens of MB at DPR 2) is not needed once cropped
   const blob = await canvas.convertToBlob({ type: 'image/png' });
   return { bytes: new Uint8Array(await blob.arrayBuffer()), mime: 'image/png', via: 'screenshot' };
 }

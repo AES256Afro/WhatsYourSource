@@ -17,6 +17,9 @@ async function open(query) {
   await page.waitForTimeout(300);
 }
 async function shot(name) {
+  // Keyboard focus rings are right in the product; in a store image they read as a selected box.
+  await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined));
+  await page.waitForTimeout(100);
   await page.screenshot({ path: `${OUT}/${name}.png`, clip: { x: 0, y: 0, width: 1280, height: 800 } });
   console.log(`${OUT}/${name}.png`);
 }
@@ -45,7 +48,10 @@ await shot('03-image');
 
 // 4. A saved check with its page snapshot open: run a text check in a fresh tab (it snapshots medium.com), then open it.
 await open('scenario=home');
-await page.getByRole('button', { name: /Check source/ }).first().click();
+await page
+  .getByRole('button', { name: /Check source/ })
+  .first()
+  .click();
 await page.getByText(/Saved with page snapshot/).waitFor({ timeout: 20_000 });
 await page.getByRole('button', { name: 'History' }).click();
 await page.getByRole('heading', { name: 'History' }).waitFor();
@@ -58,13 +64,17 @@ await shot('04-saved-page');
 await open('scenario=local');
 await page.getByRole('button', { name: 'Settings' }).click();
 await page.getByText('Local or OpenAI-style model').first().waitFor();
-await page.getByText('Local or OpenAI-style model').first().scrollIntoViewIfNeeded();
-await page.evaluate(() => document.querySelector('#root .overflow-y-auto')?.scrollBy(0, -12));
+// Align the Claude card's top edge with the gutter so the shot starts on a card, not mid-sentence.
+await page.evaluate(() => {
+  const scroller = document.querySelector('#root .overflow-y-auto');
+  const card = document.getElementById('wys-card-anthropic');
+  if (scroller && card) scroller.scrollTop = card.offsetTop - 14;
+});
 await page.waitForTimeout(300);
 await shot('05-providers');
 
 // 6. Onboarding.
-await open('scenario=fresh');
+await open('scenario=fresh&zoom=1.1');
 await page.getByText('Check the source of anything you read').waitFor();
 await shot('06-onboarding');
 

@@ -10,6 +10,9 @@ import { Check, Copy, External, Logo, Refresh } from './Icons';
 import { InputCard } from './InputCard';
 import { Narrative } from './Narrative';
 import { ProvenancePanel } from './ProvenancePanel';
+import { PROVIDER_LABELS, providerShortName } from '@/lib/providers/registry';
+import { useSeenBefore } from '../hooks/useSeenBefore';
+import type { PreviousResult } from '../hooks/useCheckRun';
 import { SearchSuggestions } from './SearchSuggestions';
 import { SourceList } from './SourceList';
 import { VerdictBanner } from './VerdictBanner';
@@ -30,6 +33,8 @@ export function ResultView({
   searchTool,
   secondOpinions,
   onSecondOpinion,
+  previous,
+  onOpenDetail,
 }: {
   result: CheckResult;
   onRecheck: () => void;
@@ -47,12 +52,22 @@ export function ResultView({
   /** Other configured providers that could give a second opinion on the same input. */
   secondOpinions?: { id: ProviderId; label: string }[];
   onSecondOpinion?: (id: ProviderId) => void;
+  /** The result this second opinion answers. */
+  previous?: PreviousResult;
+  /** Opens a saved check (the previous result, an earlier check of the same image). */
+  onOpenDetail?: (id: string) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const seenBefore = useSeenBefore(result);
+  // Copy outcome goes into the footer's live region, so it is announced and survives a failed clipboard write.
+  const [copyNote, setCopyNote] = useState<{ ok: boolean; text: string } | null>(null);
   const copy = async () => {
-    await navigator.clipboard.writeText(toMarkdown(result));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(toMarkdown(result));
+      setCopyNote({ ok: true, text: 'Copied as Markdown' });
+    } catch {
+      setCopyNote({ ok: false, text: 'Couldn’t copy — select the text instead' });
+    }
+    setTimeout(() => setCopyNote(null), 2500);
   };
   const usd = formatUsd(result.usage?.estUsd);
   const verdictRef = useRef<HTMLDivElement>(null);
@@ -72,6 +87,19 @@ export function ResultView({
         {!embedded && <InputCard input={result.input} when={timeAgo(result.createdAt)} clamp />}
         {result.factChecks && <FactCheckBanner checks={result.factChecks} />}
         <VerdictBanner ref={verdictRef} verdict={result.verdict} />
+        {previous && (
+          <p className="m-0 text-[12px] leading-4 text-ink-2">
+            {previous.label} said: <span className="font-semibold text-ink">{previous.verdict}</span>
+            {onOpenDetail && (
+              <>
+                {' '}
+                <TextAction onClick={() => onOpenDetail(previous.id)}>
+                  Open that result <span aria-hidden="true">↗</span>
+                </TextAction>
+              </>
+            )}
+          </p>
+        )}
         {result.degraded && (
           <div className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-[12px] leading-4 text-warn-ink">
             The model answered in prose only, so read the assessment below; claims and sources could not be extracted. Press Re-check below to try again.
@@ -125,6 +153,20 @@ export function ResultView({
         <EvidencePanel result={result} />
 
         {result.input.kind === 'image' && result.provenance && <ProvenancePanel provenance={result.provenance} srcUrl={result.input.srcUrl} />}
+        {seenBefore && (
+          <p className="m-0 rounded-lg bg-accent-soft px-3 py-2 text-[12px] leading-4 text-accent">
+            You checked this image before, on {new Date(seenBefore.createdAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}:{' '}
+            <span className="font-semibold">{seenBefore.verdictLabel}</span>
+            {onOpenDetail && (
+              <>
+                {' '}
+                <TextAction onClick={() => onOpenDetail(seenBefore.id)}>
+                  Open it <span aria-hidden="true">↗</span>
+                </TextAction>
+              </>
+            )}
+          </p>
+        )}
 
         <ClaimList claims={result.claims} />
         <SourceList sources={result.sources} credibility={result.credibility} notes={result.mixNotes} />
@@ -154,10 +196,16 @@ export function ResultView({
         {result.notes && <p className="wys-measure m-0 text-[12px] leading-4 text-ink-2">{result.notes}</p>}
         {result.searchSuggestionsHtml && <SearchSuggestions html={result.searchSuggestionsHtml} />}
         {!embedded && secondOpinions && secondOpinions.length > 0 && onSecondOpinion && (
-          <div className="flex flex-wrap items-center gap-2 text-[12px] text-ink-2">
-            <span>Second opinion:</span>
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-ink-2" role="group" aria-label="Second opinion">
+            <span aria-hidden="true">Second opinion:</span>
             {secondOpinions.map((p) => (
-              <button key={p.id} type="button" className="wys-btn h-8 px-2.5 text-[12px]" onClick={() => onSecondOpinion(p.id)}>
+              <button
+                key={p.id}
+                type="button"
+                className="wys-btn h-8 px-2.5 text-[12px]"
+                aria-label={`Second opinion from ${p.label}`}
+                onClick={() => onSecondOpinion(p.id)}
+              >
                 {p.label}
               </button>
             ))}
@@ -165,8 +213,10 @@ export function ResultView({
         )}
         <WhatWasSent result={result} searchTool={searchTool} snapshotSaved={saved && snapshotNote?.includes('snapshot')} />
 
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-ink-2">
-          <ProviderBadge label={result.provider.model || result.provider.label} />
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-2">
+          <ProviderBadge
+            label={`${providerShortName(result.provider.id, undefined) === PROVIDER_LABELS['openai-compat'] ? result.provider.label : providerShortName(result.provider.id)} · ${result.provider.model || '?'}`}
+          />
           <span>
             {[
               result.searchQueries.length ? `${result.searchQueries.length} search${result.searchQueries.length === 1 ? '' : 'es'}` : null,
@@ -178,10 +228,12 @@ export function ResultView({
               .filter(Boolean)
               .join(' · ')}
           </span>
-          <span className="grow" />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] text-ink-2">
           {compare}
           <span role="status" aria-live="polite">
-            {saved && (
+            {copyNote && <span className={copyNote.ok ? 'font-medium' : 'font-semibold text-bad'}>{copyNote.text}</span>}
+            {!copyNote && saved && (
               <span className="inline-flex items-center gap-1 font-medium">
                 <Check size={12} /> {snapshotNote ?? 'Saved to history'}
               </span>
@@ -196,8 +248,8 @@ export function ResultView({
       </div>
       {!embedded && (
         <div className="flex shrink-0 gap-2 border-t border-line bg-paper px-3.5 py-2.5">
-          <button className="wys-btn wys-btn-narrow" onClick={() => void copy()} aria-label={copied ? 'Copied' : 'Copy as Markdown'}>
-            {copied ? <Check size={15} /> : <Copy size={15} />} <span className="wys-btn-label">{copied ? 'Copied' : 'Copy'}</span>
+          <button className="wys-btn wys-btn-narrow" onClick={() => void copy()} aria-label="Copy as Markdown">
+            <Copy size={15} /> <span className="wys-btn-label">Copy</span>
           </button>
           <button className="wys-btn wys-btn-narrow" onClick={onRecheck} aria-label="Re-check">
             <Refresh size={15} /> <span className="wys-btn-label">Re-check</span>

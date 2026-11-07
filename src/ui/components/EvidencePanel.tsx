@@ -1,7 +1,6 @@
-import { useState } from 'react';
 import type { CheckResult } from '@/lib/pipeline/schema';
 import { domainOf, isHttpUrl } from '@/lib/util/url';
-import { Label, TextAction } from './common';
+import { Label } from './common';
 import { External, Shield } from './Icons';
 
 /** ISO or RFC dates from the lookups, shown the way the rest of the panel shows dates. */
@@ -27,7 +26,7 @@ export function FactCheckBanner({ checks }: { checks: NonNullable<CheckResult['f
           <Shield size={12} /> Fact-checked
         </h2>
         <a href={first.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 items-center gap-1 text-ink no-underline">
-          <span className="truncate">
+          <span className="min-w-0">
             {first.publisher}: <span className="font-semibold">{first.rating}</span>
             {first.reviewDate ? <span className="text-ink-2"> ({localeDate(first.reviewDate)})</span> : null}
           </span>
@@ -104,7 +103,6 @@ function Note({ title, children }: { title: string; children: React.ReactNode })
 
 /** Everything that left the browser for this check, and what stayed. */
 export function WhatWasSent({ result, searchTool, snapshotSaved }: { result: CheckResult; searchTool?: string; snapshotSaved?: boolean }) {
-  const [showAll, setShowAll] = useState(false);
   const i = result.input;
   const content =
     i.kind === 'text'
@@ -142,10 +140,7 @@ export function WhatWasSent({ result, searchTool, snapshotSaved }: { result: Che
           {result.provider.label} ({result.provider.model})
         </dd>
         <dt className="font-semibold text-ink">Content</dt>
-        <dd className="m-0 flex flex-col items-start gap-0.5 break-words">
-          <span className={showAll ? 'whitespace-pre-line' : 'line-clamp-2'}>{content}</span>
-          {content.length > 160 && <TextAction onClick={() => setShowAll((v) => !v)}>{showAll ? 'Show less' : 'Show all'}</TextAction>}
-        </dd>
+        <dd className="m-0 break-words whitespace-pre-line">{content}</dd>
         {'pageUrl' in i && i.pageUrl ? (
           <>
             <dt className="font-semibold text-ink">Page</dt>

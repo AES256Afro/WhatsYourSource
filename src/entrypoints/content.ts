@@ -4,7 +4,7 @@ import { clampSelection, INLINE_IMAGE_SENTINEL, LIMITS } from '@/lib/messaging/l
 import type { SelectionInfo } from '@/lib/messaging/protocol';
 import { extractPost } from '@/lib/post/extract';
 import { shortcutLabelForPlatform } from '@/lib/shortcut';
-import { pageTriggerTarget, readPublicSettings, SETTINGS_KEY, type PublicSettings } from '@/lib/storage/publicSettings';
+import { pageTriggerTarget, readPublicSettings, SETTINGS_KEY, SHORTCUT_KEY, type PublicSettings } from '@/lib/storage/publicSettings';
 
 /**
  * Runs on every page, does three small things and nothing else:
@@ -24,20 +24,33 @@ export default defineContentScript({
     // Only the public half of the settings (no API keys) is read here. (storage.onChanged still
     // delivers every change to this isolated world; the `secrets` key is ignored, never kept.)
     let settings: PublicSettings = readPublicSettings(undefined);
-    void browser.storage.local.get(SETTINGS_KEY).then((r) => {
+    // The live key binding, as the background last read it (users rebind or remove it); null = unknown, '' = unbound.
+    let binding: string | null = null;
+    void browser.storage.local.get([SETTINGS_KEY, SHORTCUT_KEY]).then((r) => {
       settings = readPublicSettings(r[SETTINGS_KEY]);
+      if (typeof r[SHORTCUT_KEY] === 'string') binding = r[SHORTCUT_KEY];
     });
     browser.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes[SETTINGS_KEY]) settings = readPublicSettings(changes[SETTINGS_KEY].newValue);
+      if (area !== 'local') return;
+      if (changes[SETTINGS_KEY]) settings = readPublicSettings(changes[SETTINGS_KEY].newValue);
+      if (changes[SHORTCUT_KEY] && typeof changes[SHORTCUT_KEY].newValue === 'string') {
+        binding = changes[SHORTCUT_KEY].newValue;
+        chip.setShortcut(binding);
+      }
     });
 
-    const chip = createChip(() => {
-      const sel = currentSelection();
-      chip.hide();
-      if (!sel) return;
-      const type = pageTriggerTarget(settings) === 'webmode' ? 'wys:open-webmode' : 'wys:check';
-      void browser.runtime.sendMessage({ type, input: { kind: 'text', ...sel } }).catch((e: unknown) => console.warn('[wys] could not reach the extension', e));
-    });
+    const chip = createChip(
+      () => binding,
+      () => {
+        const sel = currentSelection();
+        chip.hide();
+        if (!sel) return;
+        const type = pageTriggerTarget(settings) === 'webmode' ? 'wys:open-webmode' : 'wys:check';
+        void browser.runtime
+          .sendMessage({ type, input: { kind: 'text', ...sel } })
+          .catch((e: unknown) => console.warn('[wys] could not reach the extension', e));
+      },
+    );
 
     // A page can set a selection itself (getSelection().addRange) and park it under the pointer so a
     // click meant for the page lands on the chip. Only selections that follow real input count.
@@ -186,13 +199,17 @@ function logoSvg(): SVGSVGElement {
   return svg;
 }
 
-function createChip(onClick: () => void) {
-  const host = document.createElement('div');
-  host.setAttribute('data-wys', 'chip');
-  host.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none;';
-  const root = host.attachShadow({ mode: 'closed' });
-  const style = document.createElement('style');
-  style.textContent = `
+function createChip(binding: () => string | null, onClick: () => void) {
+  // Nothing touches the page's DOM until the first selection that deserves a chip: most page views never get one.
+  let built: { host: HTMLDivElement; root: ShadowRoot; btn: HTMLButtonElement; kbd: HTMLSpanElement } | null = null;
+  let shown = false;
+  const build = () => {
+    const host = document.createElement('div');
+    host.setAttribute('data-wys', 'chip');
+    host.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none;';
+    const root = host.attachShadow({ mode: 'closed' });
+    const style = document.createElement('style');
+    style.textContent = `
     :host { all: initial; }
     .chip { position: fixed; display: none; align-items: center; gap: 8px; padding: 7px 11px 7px 9px;
       background: #15181C; color: #fff; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.14);
@@ -204,22 +221,35 @@ function createChip(onClick: () => void) {
     .kbd { font-size: 11px; font-weight: 600; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,.18); color: #E5E7EB; }
     svg { flex-shrink: 0; }
   `;
-  const btn = document.createElement('button');
-  btn.className = 'chip';
-  btn.type = 'button';
-  btn.setAttribute('aria-label', 'Check source of selected text');
-  btn.append(logoSvg(), textSpan('Check source'), textSpan(shortcutLabelForPlatform(), 'kbd'));
-  btn.addEventListener('pointerdown', (e) => e.preventDefault()); // keep the selection alive
-  btn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onClick();
-  });
-  root.append(style, btn);
-  (document.documentElement || document.body).appendChild(host);
+    const btn = document.createElement('button');
+    btn.className = 'chip';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Check source of selected text');
+    const kbd = textSpan('', 'kbd');
+    btn.append(logoSvg(), textSpan('Check source'), kbd);
+    built = { host, root, btn, kbd };
+    setKbd(binding());
+    btn.addEventListener('pointerdown', (e) => e.preventDefault()); // keep the selection alive
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+    root.append(style, btn);
+    (document.documentElement || document.body).appendChild(host);
+    return built;
+  };
+  /** '' = the user unbound the command (no hint); null = not known yet (show the default). */
+  const setKbd = (b: string | null) => {
+    if (!built) return;
+    built.kbd.textContent = b === '' ? '' : shortcutLabelForPlatform(b ?? undefined);
+    built.kbd.style.display = b === '' ? 'none' : '';
+  };
 
   return {
     show(rect: DOMRect) {
+      const { btn } = built ?? build();
+      shown = true;
       btn.classList.add('on');
       const w = btn.offsetWidth || 180;
       const h = btn.offsetHeight || 32;
@@ -233,10 +263,15 @@ function createChip(onClick: () => void) {
       btn.style.top = `${Math.round(top)}px`;
     },
     hide() {
-      btn.classList.remove('on');
+      if (!shown || !built) return; // scroll fires constantly; nothing to do while hidden
+      shown = false;
+      built.btn.classList.remove('on');
+    },
+    setShortcut(b: string | null) {
+      setKbd(b);
     },
     contains(node: Node | null | undefined): boolean {
-      return !!node && (node === host || host.contains(node) || root.contains(node));
+      return !!node && !!built && (node === built.host || built.host.contains(node) || built.root.contains(node));
     },
   };
 }

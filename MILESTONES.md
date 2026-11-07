@@ -150,7 +150,7 @@ Exit: adapters pass fixtures; button appears on ≥95% of posts in feed and thre
 
 Exit: 30-image test set from the original plan; provenance facts correct wherever metadata exists.
 
-### M6 — Stage 2: Readability, usability, visual, QoL, features, optimization sweeps
+### M6 — Stage 2: Readability, usability, visual, QoL, features, optimization sweeps — DONE 2026-11-07 (3 sweeps per category; see docs/SWEEPS.md)
 
 Six categories, each run **at least three times**, each leaving the loop after three consecutive clean sweeps:
 

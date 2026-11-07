@@ -24,6 +24,25 @@ const CANNED_ANSWER = `No: there is no evidence Einstein ever said this. The lin
 }
 \`\`\``;
 
+/** The image scenario gets an answer about a photo, not the quote: the store screenshot must show what an image check looks like. */
+const IMAGE_ANSWER = `Older than claimed: this photo is real, but it is not from this week's storm. Its earliest appearance online is a 2019 wire-service gallery of flooding in Jakarta, and the metadata on the file carries no camera or edit history, which is normal for a reposted image.
+
+\`\`\`json
+{
+  "verdict": { "label": "Older than claimed", "kind": "older-than-claimed", "confidence": "high", "summary": "A real photograph, first published in 2019 from Jakarta; the post presents it as this week's storm." },
+  "originalSource": { "title": "Floods in Jakarta — photo gallery", "url": "https://www.reuters.com/pictures/jakarta-floods-2019", "publisher": "Reuters", "date": "2019-01-04", "how": "Earliest dated appearance; the same frame, uncropped, with the photographer's credit." },
+  "claims": [
+    { "text": "The photo shows this week's storm", "status": "disputed", "note": "The identical frame was published in January 2019.", "sourceUrls": ["https://www.reuters.com/pictures/jakarta-floods-2019"] },
+    { "text": "The photo is genuine", "status": "supported", "note": "No signs of compositing; matches the 2019 original pixel for pixel.", "sourceUrls": ["https://www.reuters.com/pictures/jakarta-floods-2019", "https://www.snopes.com/fact-check/jakarta-flood-photo/"] }
+  ],
+  "sources": [
+    { "title": "Floods in Jakarta — photo gallery", "url": "https://www.reuters.com/pictures/jakarta-floods-2019", "date": "2019" },
+    { "title": "Is this a photo of this week's storm? No — it is from 2019", "url": "https://www.snopes.com/fact-check/jakarta-flood-photo/", "date": "2024" }
+  ],
+  "notes": null
+}
+\`\`\``;
+
 const SELECTION = {
   text: 'As Einstein put it, "the definition of insanity is doing the same thing over and over again and expecting different results."',
   pageUrl: 'https://medium.com/@author/why-we-keep-repeating-ourselves',
@@ -119,14 +138,17 @@ export async function installFakes(scenario: string) {
   globalThis.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
     if (url.includes('generativelanguage.googleapis.com') && url.includes('streamGenerateContent')) {
-      return new Response(geminiStream(), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      return new Response(geminiStream(scenario === 'image' ? IMAGE_ANSWER : CANNED_ANSWER, scenario === 'image'), {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
     }
     if (url.includes('generativelanguage.googleapis.com') && url.includes('/models')) {
       return new Response(JSON.stringify({ models: [{ name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] }] }), {
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    if (url.includes('factchecktools.googleapis.com')) {
+    if (url.includes('factchecktools.googleapis.com') && scenario !== 'image') {
       return new Response(
         JSON.stringify({
           claims: [
@@ -159,10 +181,22 @@ export async function installFakes(scenario: string) {
   };
 }
 
-function geminiStream(): ReadableStream<Uint8Array> {
+function geminiStream(answer: string, image = false): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
   const chunk = (o: unknown) => enc.encode(`data: ${JSON.stringify(o)}\n\n`);
-  const words = CANNED_ANSWER.split(/(?<=\s)/);
+  const words = answer.split(/(?<=\s)/);
+  const queries = image
+    ? ['jakarta flood photo 2019 reuters', 'storm photo reverse image earliest']
+    : ['einstein insanity quote origin', 'definition of insanity earliest appearance'];
+  const chunks = image
+    ? [
+        { web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/1', title: 'reuters.com' } },
+        { web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/2', title: 'snopes.com' } },
+      ]
+    : [
+        { web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/1', title: 'quoteinvestigator.com' } },
+        { web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/2', title: 'en.wikiquote.org' } },
+      ];
   return new ReadableStream({
     async start(controller) {
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -172,7 +206,7 @@ function geminiStream(): ReadableStream<Uint8Array> {
           candidates: [
             {
               content: { parts: [] },
-              groundingMetadata: { webSearchQueries: ['einstein insanity quote origin', 'definition of insanity earliest appearance'] },
+              groundingMetadata: { webSearchQueries: queries },
             },
           ],
         }),
@@ -184,10 +218,7 @@ function geminiStream(): ReadableStream<Uint8Array> {
             {
               content: { parts: [] },
               groundingMetadata: {
-                groundingChunks: [
-                  { web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/1', title: 'quoteinvestigator.com' } },
-                  { web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/2', title: 'en.wikiquote.org' } },
-                ],
+                groundingChunks: chunks,
                 searchEntryPoint: {
                   renderedContent:
                     '<div style="font-family:system-ui;display:flex;gap:6px;flex-wrap:wrap"><a style="border:1px solid #ddd;border-radius:999px;padding:5px 10px;font-size:12px;color:#222;text-decoration:none" href="https://www.google.com/search?q=einstein+insanity+quote+origin">einstein insanity quote origin</a><a style="border:1px solid #ddd;border-radius:999px;padding:5px 10px;font-size:12px;color:#222;text-decoration:none" href="https://www.google.com/search?q=narcotics+anonymous+1981+insanity">narcotics anonymous 1981 insanity</a></div>',

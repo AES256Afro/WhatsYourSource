@@ -10,8 +10,15 @@ import type { RunError } from '@/lib/pipeline/runCheck';
 import { runProviders } from '@/lib/pipeline/runProviders';
 import type { CheckResult } from '@/lib/pipeline/schema';
 import { decideTarget } from '@/lib/pipeline/target';
-import { createProvider, providerDisplayName } from '@/lib/providers/registry';
+import { cheapestModel, createProvider, providerRunLabel } from '@/lib/providers/registry';
 import type { ProviderId, Settings } from '@/lib/storage/settings';
+
+/** The result a second opinion is answering, so the new one can point back at it. */
+export interface PreviousResult {
+  id: string;
+  label: string;
+  verdict: string;
+}
 
 export type SaveStatus = { status: 'pending' } | { status: 'saved'; withSnapshot: boolean } | { status: 'failed'; message: string };
 
@@ -20,7 +27,7 @@ export type PhasePayload =
   | { phase: 'idle' }
   | { phase: 'setup'; input: CheckInput }
   | { phase: 'checking'; run: RunState }
-  | { phase: 'result'; result: CheckResult; save: SaveStatus }
+  | { phase: 'result'; result: CheckResult; save: SaveStatus; previous?: PreviousResult }
   | { phase: 'error'; input: CheckInput; error: RunError };
 /** `seq` changes on every transition so the view can follow transitions, not re-renders. */
 export type Phase = PhasePayload & { seq: number };
@@ -45,13 +52,14 @@ export function useCheckRun(deps: CheckRunDeps) {
   const seq = useRef(0);
   const runSeq = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const currentInput = useRef<CheckInput | null>(null);
   const depsRef = useRef(deps);
   useEffect(() => {
     depsRef.current = deps;
   });
 
-  const start = useCallback(async (input: CheckInput, opts: { tabId?: number; only?: ProviderId } = {}) => {
-    const { tabId, only } = opts;
+  const start = useCallback(async (input: CheckInput, opts: { tabId?: number; only?: ProviderId; previous?: PreviousResult } = {}) => {
+    const { tabId, only, previous } = opts;
     const s = depsRef.current.settings();
     if (!s) return;
     const myRun = ++runSeq.current;
@@ -62,6 +70,7 @@ export function useCheckRun(deps: CheckRunDeps) {
       depsRef.current.onPhase(p);
     };
     abortRef.current?.abort();
+    currentInput.current = input;
 
     const target = decideTarget(s, only);
     if (target.kind === 'webmode') {
@@ -79,7 +88,7 @@ export function useCheckRun(deps: CheckRunDeps) {
     abortRef.current = controller;
     const { order } = target;
     const first = createProvider(order[0]!, s)!;
-    const firstLabel = `${providerDisplayName(order[0]!, s)} · ${first.model}`;
+    const firstLabel = providerRunLabel(order[0]!, s);
 
     // The page as it is now, beside everything else; only the page the input came from.
     const pageOfInput = input.kind === 'page' ? input.url : input.pageUrl;
@@ -87,13 +96,24 @@ export function useCheckRun(deps: CheckRunDeps) {
 
     // Two-pass: list the claims first so each gets its own lookup and the main pass knows what to verify.
     const twoPass = s.twoPass && input.kind !== 'image';
-    const claimsPromise = twoPass ? extractClaims(input, first, controller.signal) : Promise.resolve([] as string[]);
+    // The listing pass needs no tools or search, so the cheapest model of the same provider does it.
+    const lister = twoPass ? (createProvider(order[0]!, s, { model: cheapestModel(order[0]!) }) ?? first) : first;
+    const claimsPromise = twoPass ? extractClaims(input, lister, controller.signal) : Promise.resolve([] as string[]);
     const lookups = startLookups(input, s, controller.signal, twoPass ? claimsPromise : undefined);
     let preReady: PreRunLookups | null = null;
     void lookups.all.then((v) => (preReady = v)).catch(() => undefined);
-    if (twoPass) setPhase({ phase: 'checking', run: emptyRunState(input, firstLabel, ['Listing the claims to check…']) });
+    let run = emptyRunState(input, firstLabel, twoPass ? ['Listing the claims to check…'] : []);
+    if (twoPass) setPhase({ phase: 'checking', run });
     const claims = await claimsPromise;
     if (stale()) return;
+    if (twoPass) {
+      run = {
+        ...run,
+        claims,
+        statuses: [...run.statuses, claims.length ? `Checking ${claims.length} claim${claims.length === 1 ? '' : 's'}` : 'No separate claims found'],
+      };
+      setPhase({ phase: 'checking', run });
+    }
     const lookupsText = await Promise.race([
       lookups.forPrompt,
       new Promise<string>((r) => setTimeout(() => r(''), twoPass ? LOOKUP_BUDGET_MS.forPromptTwoPass : LOOKUP_BUDGET_MS.forPrompt)),
@@ -102,12 +122,12 @@ export function useCheckRun(deps: CheckRunDeps) {
 
     let image: PreparedImage | undefined;
     if (input.kind === 'image') {
-      let prep = emptyRunState(input, firstLabel, ['Preparing the image…']);
-      setPhase({ phase: 'checking', run: prep });
+      run = { ...run, statuses: [...run.statuses, 'Preparing the image…'] };
+      setPhase({ phase: 'checking', run });
       const prepared = await prepareImageForCheck(
         input,
         tabId,
-        (m) => setPhase({ phase: 'checking', run: (prep = { ...prep, statuses: [...prep.statuses, m] }) }),
+        (m) => setPhase({ phase: 'checking', run: (run = { ...run, statuses: [...run.statuses, m] }) }),
         controller.signal,
       );
       if (stale()) return;
@@ -118,36 +138,56 @@ export function useCheckRun(deps: CheckRunDeps) {
       image = prepared.image;
     }
 
-    let run = emptyRunState(input, firstLabel);
+    // Streams arrive one delta per microtask (hundreds per answer on Claude); the view is refreshed at
+    // most every 40 ms, and at once for anything that is not a text delta.
+    let flushTimer: ReturnType<typeof setTimeout> | undefined;
+    const flush = () => {
+      flushTimer = undefined;
+      setPhase({ phase: 'checking', run });
+    };
+    const flushSoon = () => {
+      flushTimer ??= setTimeout(flush, 40);
+    };
+    const flushNow = () => {
+      if (flushTimer) clearTimeout(flushTimer);
+      flush();
+    };
     let finished: CheckResult | null = null;
-    for await (const ev of runProviders(input, s, order, controller.signal, {
-      image,
-      lookups: lookupsText || undefined,
-      claims: claims.length ? claimsForPrompt(claims) : undefined,
-    })) {
-      if (stale()) return;
-      if (ev.type === 'provider') {
-        // Keep what was said so far (image prep, why the previous provider was abandoned) under the new label.
-        run = emptyRunState(input, ev.label, run.statuses);
-        setPhase({ phase: 'checking', run });
-      } else if (ev.type === 'fallback') {
-        run = { ...run, statuses: [...run.statuses, `${ev.error.message} Trying the next provider…`] };
-        setPhase({ phase: 'checking', run });
-      } else if (ev.type === 'result') {
-        finished = ev.result;
-      } else if (ev.type === 'failed') {
-        setPhase({ phase: 'error', input, error: ev.error });
-        return;
-      } else {
-        run = reduceProgress(run, ev);
-        setPhase({ phase: 'checking', run });
+    try {
+      for await (const ev of runProviders(input, s, order, controller.signal, {
+        image,
+        lookups: lookupsText || undefined,
+        claims: claims.length ? claimsForPrompt(claims) : undefined,
+      })) {
+        if (stale()) return;
+        if (ev.type === 'provider') {
+          // Keep what was said so far (claims, image prep, why the previous provider was abandoned)
+          // and the clock under the new label.
+          run = { ...emptyRunState(input, ev.label, run.statuses, run.claims), startedAt: run.startedAt };
+          flushNow();
+        } else if (ev.type === 'fallback') {
+          run = { ...run, statuses: [...run.statuses, `${ev.error.message} Trying the next provider…`] };
+          flushNow();
+        } else if (ev.type === 'result') {
+          finished = ev.result;
+        } else if (ev.type === 'failed') {
+          if (flushTimer) clearTimeout(flushTimer);
+          setPhase({ phase: 'error', input, error: ev.error });
+          return;
+        } else {
+          run = reduceProgress(run, ev);
+          if (ev.type === 'delta') flushSoon();
+          else flushNow();
+        }
       }
+    } finally {
+      if (flushTimer) clearTimeout(flushTimer);
     }
     if (!finished) return;
 
     // Whatever lookups have resolved go into the first render, so the banner is there when focus lands.
     if (preReady) finished = attachLookups(finished, preReady, { credibility: {}, mixNotes: [] });
-    setPhase({ phase: 'result', result: finished, save: { status: 'pending' } });
+    setPhase({ phase: 'result', result: finished, save: { status: 'pending' }, previous });
 
     try {
       const pre = await lookups.all;
@@ -159,7 +199,7 @@ export function useCheckRun(deps: CheckRunDeps) {
       );
       if (stale()) return;
       finished = attachLookups(finished, pre, extra);
-      setPhase({ phase: 'result', result: finished, save: { status: 'pending' } });
+      setPhase({ phase: 'result', result: finished, save: { status: 'pending' }, previous });
     } catch (e) {
       console.warn('[wys] lookups failed', e);
     }
@@ -167,16 +207,25 @@ export function useCheckRun(deps: CheckRunDeps) {
       const snap = await snapshotPromise;
       await saveCheck(finished, snap);
       if (stale()) return;
-      setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap } });
+      setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous });
       depsRef.current.onSaved();
       void enforceSnapshotCap(s.history.maxMb * 1024 * 1024);
     } catch (e) {
       console.warn('[wys] could not save to history', e);
-      setPhase({ phase: 'result', result: finished, save: { status: 'failed', message: e instanceof Error ? e.message : String(e) } });
+      setPhase({ phase: 'result', result: finished, save: { status: 'failed', message: e instanceof Error ? e.message : String(e) }, previous });
     }
   }, []);
 
-  const cancel = useCallback(() => abortRef.current?.abort(), []);
+  /** Cancel lands at once: the run is made stale so nothing it still awaits can write over the cancelled state. */
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    runSeq.current++;
+    const input = currentInput.current;
+    if (input) {
+      setPhaseState({ phase: 'error', input, error: { code: 'cancelled', message: 'Cancelled.' }, seq: ++seq.current });
+      depsRef.current.onPhase({ phase: 'error', input, error: { code: 'cancelled', message: 'Cancelled.' } });
+    }
+  }, []);
   const clearSetup = useCallback(() => setPhaseState((p) => (p.phase === 'setup' ? { phase: 'idle', seq: ++seq.current } : p)), []);
   return { phase, start, cancel, clearSetup, busy: phase.phase === 'checking' };
 }

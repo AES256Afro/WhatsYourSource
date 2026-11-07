@@ -13,6 +13,8 @@ export interface PublicSettings {
 
 /** Mirrors settings.ts; a type-only import keeps zod out of this module. */
 export const SETTINGS_KEY = 'settings';
+/** storage.local key the background writes the live keyboard binding to ('' when unbound), for the on-page chip. */
+export const SHORTCUT_KEY = 'shortcut';
 const d = { chip: true, disabledSites: [] as string[], shortcutAction: 'panel' as const, defaultProvider: 'gemini' as const };
 
 /** Mirrors `PROVIDER_IDS` in settings.ts (a value import would pull zod in); a unit test keeps them equal. */

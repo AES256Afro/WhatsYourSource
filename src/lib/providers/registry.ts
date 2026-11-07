@@ -35,31 +35,41 @@ export function openaiCompatLabel(baseUrl: string): string {
   return localServer(baseUrl).isLocal ? 'Local model' : 'Custom endpoint';
 }
 
-/** Build the provider object for an id from the current settings. Returns null for ids that aren't LLMs (webmode). */
-export function createProvider(id: ProviderId, s: Settings): LlmProvider | null {
+/**
+ * Build the provider object for an id from the current settings. Returns null for ids that aren't
+ * LLMs (webmode). `model` overrides the configured model (the claim-listing pass uses the cheapest).
+ */
+export function createProvider(id: ProviderId, s: Settings, override: { model?: string } = {}): LlmProvider | null {
   switch (id) {
     case 'gemini':
-      return new GeminiProvider(s.providers.gemini, PROVIDER_LABELS.gemini);
+      return new GeminiProvider({ ...s.providers.gemini, model: override.model ?? s.providers.gemini.model }, PROVIDER_LABELS.gemini);
     case 'openai-compat': {
       const o = s.providers.openaiCompat;
       return new OpenAICompatProvider({
         baseUrl: o.baseUrl,
         apiKey: o.apiKey,
-        model: o.model,
+        model: override.model ?? o.model,
         search: createSearchBackend(o),
-        fetchPages: true,
         searchBaseUrl: o.searchTool === 'searxng' ? o.searxngUrl : undefined,
         label: openaiCompatLabel(o.baseUrl),
         jsonMode: presetFor(o.baseUrl)?.jsonMode ?? false,
-        // `false` only when the server told us so (Test button); unknown models are allowed to try.
+        // `false` only when the server told us so (Verify button); unknown models are allowed to try.
         vision: o.modelVision !== false,
+        tools: o.modelTools !== false,
       });
     }
     case 'anthropic':
-      return new AnthropicProvider(s.providers.anthropic, PROVIDER_LABELS.anthropic);
+      return new AnthropicProvider({ ...s.providers.anthropic, model: override.model ?? s.providers.anthropic.model }, PROVIDER_LABELS.anthropic);
     case 'webmode':
       return null;
   }
+}
+
+/** The cheapest model each hosted provider offers, for the tool-less claim-listing pass. Local servers keep their model. */
+export function cheapestModel(id: ProviderId): string | undefined {
+  if (id === 'gemini') return 'gemini-3.1-flash-lite';
+  if (id === 'anthropic') return 'claude-haiku-5-5';
+  return undefined;
 }
 
 /** The one name per provider that users see everywhere: onboarding, settings, home, results, history, Markdown. */
@@ -75,9 +85,17 @@ export function providerDisplayName(id: ProviderId, s: Settings): string {
   return PROVIDER_LABELS[id];
 }
 
-/** "Gemini (your key) · gemini-3.8-flash": the provider and the model it would run with right now. */
+/** The short name for badges: "Gemini", "Claude", or the server ("Ollama", "OpenAI"). */
+export function providerShortName(id: ProviderId, s?: Settings): string {
+  if (id === 'gemini') return 'Gemini';
+  if (id === 'anthropic') return 'Claude';
+  if (id === 'webmode') return 'Google AI Mode';
+  return s ? openaiCompatLabel(s.providers.openaiCompat.baseUrl) : PROVIDER_LABELS['openai-compat'];
+}
+
+/** "Gemini · gemini-3.8-flash": the badge wording, the same on home, while checking and under a result. */
 export function providerRunLabel(id: ProviderId, s: Settings): string {
   if (id === 'webmode') return PROVIDER_LABELS.webmode;
   const model = id === 'gemini' ? s.providers.gemini.model : id === 'anthropic' ? s.providers.anthropic.model : s.providers.openaiCompat.model || 'no model';
-  return `${providerDisplayName(id, s)} · ${model}`;
+  return `${providerShortName(id, s)} · ${model}`;
 }

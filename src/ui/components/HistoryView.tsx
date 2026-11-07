@@ -97,7 +97,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
           Search history
         </label>
         <input id="wys-hsearch" type="search" className="wys-input" placeholder="Search checks…" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5" role="group" aria-label="Filter by kind">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by kind">
           {(
             [
               ['all', 'All'],
@@ -181,7 +181,12 @@ export function HistoryRow({ check: c, onOpen, compact }: { check: StoredCheck; 
             {c.verdictLabel}
           </Pill>
           <span className="truncate">{[c.site, time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })].filter(Boolean).join(' · ')}</span>
-          {c.hasSnapshot && <Camera size={12} className="shrink-0" aria-label="Has a saved page" />}
+          {c.hasSnapshot && (
+            <>
+              <Camera size={12} className="shrink-0" />
+              <span className="wys-sr-only">Has a saved page</span>
+            </>
+          )}
         </span>
       </span>
     </button>

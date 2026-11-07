@@ -1,4 +1,3 @@
-import exifr from 'exifr';
 import type { LocalProvenance } from '../pipeline/schema';
 
 /**
@@ -12,6 +11,8 @@ export async function readProvenance(bytes: Uint8Array, mime: string): Promise<L
 
   const fields: Record<string, string> = {};
   try {
+    // exifr is 74 KB; only image checks need it, so it loads on first use rather than with the panel.
+    const { default: exifr } = await import('exifr');
     const parsed = (await exifr.parse(bytes, { tiff: true, exif: true, gps: true, xmp: true, iptc: true, icc: false, interop: false, ihdr: true })) as
       Record<string, unknown> | undefined;
     if (parsed) {

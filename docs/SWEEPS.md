@@ -19,12 +19,14 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 
 | Category | Sweeps run | Consecutive clean | Retired |
 |---|---|---|---|
-| Readability | 2 | 0 | no |
-| Usability | 2 | 0 | no |
-| Visual | 2 | 0 | no |
-| Quality of life | 2 | 0 | no |
-| Platform features | 2 | 0 | no |
-| Optimization | 2 | 0 | no |
+| Readability | 3 | 0 | retired after 3 (user's rule) |
+| Usability | 3 | 0 | retired after 3 (user's rule) |
+| Visual | 3 | 0 | retired after 3 (user's rule) |
+| Quality of life | 3 | 0 | retired after 3 (user's rule) |
+| Platform features | 3 | 0 | retired after 3 (user's rule) |
+| Optimization | 3 | 0 | retired after 3 (user's rule) |
+
+Stage 2 closed 2026-11-07 after sweep 3 of every category. As with Stage 1, the owner's instruction ("at least three times each, then remove from the loop") supersedes the three-consecutive-clean criterion written in MILESTONES §M6; no sweep 3 came back clean, and every finding was either fixed or recorded below with the reason it was declined or deferred.
 
 ---
 
@@ -376,5 +378,67 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - "What was sent" Content row expanded with no affordance (clamped `<summary>` loses its marker) → Show all / Show less text action, as the input card does.
 - History footer truncated its own status → "On this device · " dropped (the privacy section says it). Evidence bullets and notes one colour (`ink-2`). Source rows `rounded-xl` like their sibling claim cards. Icon base stroke 2.2 everywhere; External 2.4 only at ≤ 12 px. Dark-mode saved page sits in a `surface-2` tile instead of a bare white block.
 - Verified from sweep 1: verdict-first order, quiet input card, token borders at 3:1, 320 px action bars, measure cap, onboarding fit — all hold.
+
+`clean: no`
+
+### 2026-11-07 · Readability sweep 3 — independent review (30 items + 5 latent bugs), all but two addressed
+
+- Latent bugs fixed: a cancelled check showed the generic "Something unexpected happened" hint (empty-string fallthrough) → hints are `string | null`, cancelled has none, `unknown` says what to try; the "Which Google page" setting was honoured in five of nine call sites (chip, popup, result "Compare", error-view link ignored it) → the variant is a required parameter and the compiler lists every site; Ollama `/api/show` without `capabilities` erased the name-based vision guess → only defined fields are copied; the fallback status vanished on the next `provider` event → statuses (and the clock) carry over; pre-provider-id history rows got a label string as `provider.id` → an id is guessed from the label.
+- Four builders of the provider label → `providerRunLabel` / `providerShortName`; four "is this local?" checks → `localServer()`; three copies of the validate error line → `describeProviderError`; three question strings duplicated between the prompt and Google AI Mode → `IMAGE_QUESTION` / `PAGE_QUESTION` / `POST_QUESTION`; `pageTriggerTarget` lives once in the zod-free module; `LLM_PROVIDER_IDS`; `PROVIDER_NAMES` alias gone; `RawSource.verified` dropped (it was always true); `StoredCheck.provider` → `providerLabel` with an upgrade shim; `useTargetSelection` shared by home and popup; onboarding uses `useProviderVerify`; `View` type; `LIMITS.postText` / `surroundingForPrompt`; magic `'inline:'` compares to the sentinel; `escapeAttr` alias and the redundant `text.trim()` clause gone; 17 exports made private; stale comments about where snapshots are captured rewritten; `COMMAND_ID` used instead of its literal; `useActionError` returns an object.
+- UI copy: "Finish setup" says "Continue to settings" when that is where it goes; "AI Mode" → "Google AI Mode ↗"; "Check" → "Check source"; "Test" → "Verify" on the local card; two bare "Allow" buttons name the host / "all sites"; search-tool options say what they need; the setup banner names the provider "Check now with …" will use; popup hint names the provider; "Open N sources in new tabs?"; delete confirm says it cannot be undone; "This check is no longer in your history"; one no-snapshot wording.
+- Declined: splitting `toolLoop` (the two tools share the loop's state; a split would pass five parameters around for 96 lines that read top to bottom); the remaining `start()` orchestration split (the phase transitions are the point of the hook; moving them out would hide them). Test-file renames: `evidence.test.ts` → `lookups.test.ts`; the other suggested splits are cosmetic and left.
+
+`clean: no`
+
+### 2026-11-07 · Platform features sweep 3 and Quality-of-life sweep 3 — independent review, before-1.0 set applied
+
+- Two-pass checking made visible and cheap (M2-1): the claim-listing call runs on the provider's cheapest model (`cheapestModel`: Gemini 3.1 Flash-Lite, Claude Haiku), the claims appear as a numbered list in the checking view the moment they exist, the step ticks to done and the clock keeps running; Settings hint and CHANGELOG say what it does. Per-claim *search* stays after 1.0 (it multiplies cost on grounding providers; the fact-check lookup already covers "already checked").
+- Second opinion (M2-7) links back: the new result carries "Gemini (model) said: Misattributed · Open that result ↗". Side-by-side comparison after 1.0.
+- "Seen before" (M5-2): every image check already computed a pHash; now an earlier check of the same image (Hamming ≤ 10) shows "You checked this image before, on 3 Nov: Older than claimed · Open it ↗". The raw fingerprint row is gone.
+- Link context menu: right-clicking a link offers "Check source of linked page" (was: the page menu on `link` contexts, which checked the page you were on). Post/page items are `page`-only.
+- Shortcut with nothing selected opens the panel and stops (it used to spend a provider call on a whole-page check the user did not see coming); "This page" is a button on home.
+- Local card coherence: switching the server preset clears the model and capability flags, and the key when local/hosted changes (an OpenAI key was being sent to localhost); the capability line is rebuilt from the stored flags on re-open; a model the server said cannot call tools skips the doomed tool round (`tools` flag); a "Test search" button runs one real query through SearXNG / Brave / Tavily; `fetchPages` (always true, dead branch) removed.
+- OpenAI-style requests send `max_tokens: 4096` (truncated JSON was the main `degraded` cause); `<think>…</think>` reasoning (Qwen3, DeepSeek-R1) is stripped before parsing and never shown as the assessment.
+- Home shows what a check will send ("Sends the selection, 345 characters around it and the page address to Gemini · model"); history search covers source domains and titles and the original source; status rows per query/page replace their predecessor; onboarding has Verify for Claude too; popup label "Default for ⌥⇧S and the chip" matches Settings.
+- Declined or deferred with reasons: two-button chip (home already offers both; a wider chip on every selection buys nothing); multiple saved endpoints (settings migration + fallback semantics, after 1.0); on-page claim underlines and site adapters (contradict the shipped single-purpose statement that reviewers read; after the listing is approved, with the statement rewritten); C2PA verification (WASM + CSP change, after 1.0); streaming inside the tool loop and a thinking toggle (flaky across servers / server-side setting); per-provider temperature (no user value for a fact-check); re-check diff and history verdict filter (after 1.0); `<all_urls>` confirm step for chip/menu (adds a click to every check; the post-check "What was sent" block is the audit).
+- Still needs a human: click the four reverse-image links once on a real image (Lens `uploadbyurl` was verified live earlier in this project; TinEye shows a Cloudflare check headless; Bing and Yandex unverified).
+
+`clean: no`
+
+### 2026-11-07 · Optimization sweep 3 — independent audit with sourcemap attribution, 9 of 17 applied
+
+- Budgets: per target 880 KB (< 1.5 MB), content script 13.4 KB (< 60 KB), both met before the sweep; after it the panel's first paint drops from 568 KB to ~420 KB of JS.
+- exifr (74 KB) loaded with every panel open although only image checks use it → dynamic import inside `readProvenance`; it is now its own chunk fetched on the first image check (sidepanel chunk 169 → 95 KB).
+- Settings, History, Detail and Onboarding views are `React.lazy` behind one `Suspense` fallback; `QUESTION` moved to `lib/pipeline/question.ts` so the popup no longer carries the 4.7 KB system prompt.
+- Streaming re-rendered the whole checking view per delta (hundreds per Claude answer, each its own microtask) → deltas coalesce into one render per 40 ms; provider, fallback, sources and status events still render at once.
+- The whole-tab screenshot bitmap (20+ MB at DPR 2) was never closed → closed after the crop. Fetched image bytes had no cap (a 12,000×9,000 PNG decoded to 432 MB) → 25 MB cap by `Content-Length` and a capped reader.
+- Post checks handed Gemini up to eight links for full retrieval (billed as input) → the first three; all links still listed as text.
+- The chip's shadow DOM was built on every page load, before settings were known, and `hide()` did class work on every scroll → built on the first qualifying selection, no-op while hidden.
+- Declined or deferred with reasons: removing zod from the background (−85 KB, ~3 ms of worker start) — the message boundary is the one place page-derived data enters the privileged side, and a hand-written validator for six schemas is a security regression risk the saving does not justify; `zod/mini` migration (large diff, after 1.0); stubbing old tool results in the tool loop (changes what the model sees mid-run; needs the 20-claim test set first); O(1) storage stats and a precomputed search field (matters at thousands of snapshots; after 1.0); the 80 ms job claim (correctness over 80 ms); Preact aliasing (React 19 ref-as-prop and compiler lint risks for 200 KB).
+
+`clean: no`
+
+### 2026-11-07 · Visual sweep 3 — independent audit (~210 captures, 18 findings), 16 addressed
+
+- Checking view no longer resets mid-check (clock and steps carry over); a "Verdict · pending" placeholder card above the streaming assessment holds the verdict's place, so the text being read no longer jumps 260–380 px when the result lands; skeleton bars are `line-2` with a pulse instead of an invisible 1.1:1 grey.
+- Secondary buttons had a 1.4:1 border beside 3:1 inputs → `line-strong`; dark accent fill 2.86:1 on the wash → #2270bd (3.3:1).
+- Settings rows at 320 px squeezed labels into a 60 px column → select controls stack under their labels below 360 px (`.wys-row` / `:has(select)`), field labels take their own line, select labels shortened ("Gemini 3.8 Flash · default", "SearXNG · self-hosted"), `max-w` raised to 220 px.
+- One badge wording on home, while checking and under a result: "Gemini · gemini-3.8-flash" (`providerShortName`).
+- Onboarding titles wrap instead of truncating, the tag is 11 px like every other pill, rows are 12 px like the Settings cards; provider-card subtitles clamp to two lines; the fact-check strip wraps at 320; source titles clamp to two lines; "What was sent" content is no longer clamped inside the details block; history filter chips wrap; the result footer is two deliberate rows (badge + stats, then Compare + Saved).
+- Store: the image screenshot was the Einstein answer under a photo → an image-specific canned reply (Older than claimed, Reuters 2019 gallery); focus rings blurred before every shot; onboarding shot at zoom 1.1 so step 2 is whole; providers shot aligned to the Claude card; chip 6 px lower; no doubled curly quotes when the text already starts with one. All seven regenerated.
+- Google "Related searches" frame: a light tile in both themes (Google's chips bring light-theme colours), 60 px tall so a wrapped second row is not clipped, scripts stripped before `srcdoc` (the CSP blocked them, but with a console error per result), `focus-within` ring.
+- Deferred: "Make default" under the header below 420 px (subtitle clamp covers it); rhythm notes needed no action.
+
+`clean: no`
+
+### 2026-11-07 · Usability sweep 3 — independent audit (keyboard walks, ARIA snapshots, live-region polling; 15 findings), 14 addressed
+
+- Escape inside the note textarea or the history search box navigated away and lost the note → Escape is the field's inside a field; the note is also flushed when the detail view unmounts. Escape on a finished result now goes to a new check.
+- A check that needs setup dropped focus on `<body>` → the "Pick how to check sources" banner is a focusable region that receives focus; Settings has a focusable `<h1>` landing like History.
+- Cancel did nothing visible for up to 4 s and then showed a red alert → cancel lands at once (the run is made stale, nothing it still awaits can write back) on a quiet "Check cancelled" status card with "Run it again" / "New check".
+- The chip showed the shipped default shortcut even when the user rebound or removed it → the background publishes the live binding to storage on every worker start; the chip reads it and hides the hint when unbound.
+- Copy had no accessible feedback and no error path → outcome goes into the footer live region ("Copied as Markdown" / "Couldn't copy — select the text instead"); per-source copy announces too.
+- Cite links to an unverified source lost focus → the row is focusable; "Has a saved page" is announced; "This page" stays focusable when unavailable (`aria-disabled`); the Home button is 36 px tall and text actions have vertical padding; the verdict banner is a labelled region; second-opinion buttons are named "Second opinion from …" in a group; history chips and settings rows at 320 px as in the visual sweep.
+- Not done: the first-run button label follows the committed key, so it flips after Tab or Enter rather than per keystroke (clicking it directly does the right thing; a per-keystroke draft would duplicate the input's own state) — recorded, low.
 
 `clean: no`

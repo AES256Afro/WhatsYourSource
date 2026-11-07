@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { PROVIDER_LABELS } from '@/lib/providers/registry';
 import { searchFactChecks } from '@/lib/lookups/factcheck';
 import type { ProviderId, Settings } from '@/lib/storage/settings';
@@ -31,8 +31,12 @@ export function SettingsView({
   focusProvider?: ProviderId;
 }) {
   const shortcut = useShortcutLabel();
+  const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    if (!focusProvider) return;
+    if (!focusProvider) {
+      heading.current?.focus();
+      return;
+    }
     const el = document.getElementById(PROVIDER_CARD_ID[focusProvider]);
     el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     el?.focus({ preventScroll: true });
@@ -40,7 +44,9 @@ export function SettingsView({
   return (
     <div className={`flex flex-col gap-4 p-3.5 ${wide ? 'mx-auto max-w-[720px]' : ''}`}>
       <div className="flex flex-col gap-1.5">
-        <Label>How checks are done</Label>
+        <h1 ref={heading} tabIndex={-1} className="wys-label m-0 outline-none">
+          How checks are done
+        </h1>
         <p className="m-0 text-[12px] leading-4 text-ink-2">The provider marked Default does your checks. Add a key to the ones you want to use.</p>
       </div>
       <GeminiCard settings={settings} update={update} />
@@ -103,7 +109,10 @@ export function SettingsView({
       <div className="flex flex-col gap-1.5">
         <Label>Behaviour</Label>
         <div className="wys-card flex flex-col px-3">
-          <Row label="List the claims first, then check each one" hint="One extra, cheap call; each claim gets its own fact-check lookup.">
+          <Row
+            label="List the claims first, then check each one"
+            hint="One extra call on the provider’s cheapest model; each claim gets its own fact-check lookup and the claims show while you wait."
+          >
             {(id) => <Toggle checked={settings.twoPass} onChange={(v) => update((s) => ({ ...s, twoPass: v }))} labelledBy={id} />}
           </Row>
           <Row label="If the default provider fails or is over quota, try the next one that has a key">

@@ -74,6 +74,12 @@ export function HomeView({
             <span className="text-accent">Selected on this page</span>
           </Label>
           <p className="m-0 line-clamp-3 text-[13px] leading-[18px]">“{selection.text}”</p>
+          {!webmode && ready && (
+            <span className="text-[11px] leading-[15px] text-ink-2">
+              Sends the selection{selection.surrounding ? `, ${selection.surrounding.length.toLocaleString()} characters around it` : ''} and the page address
+              to {providerLabel}.
+            </span>
+          )}
           <div className="flex gap-2">
             <button
               ref={landing as React.RefObject<HTMLButtonElement>}
@@ -123,8 +129,8 @@ export function HomeView({
       <div className="flex flex-col gap-1.5">
         <Label>Or check</Label>
         <button
-          className="wys-card flex items-center gap-3 px-3 py-2.5 text-left hover:bg-surface disabled:opacity-50"
-          disabled={!pageInput}
+          className={`wys-card flex items-center gap-3 px-3 py-2.5 text-left hover:bg-surface ${pageInput ? '' : 'opacity-60'}`}
+          aria-disabled={!pageInput}
           onClick={() => pageInput && run(pageInput)}
         >
           <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-surface-2 text-ink-2">

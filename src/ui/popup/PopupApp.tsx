@@ -90,7 +90,7 @@ export function PopupApp() {
         <div className="h-px bg-line" />
         <div className="flex items-center gap-2">
           <label htmlFor="wys-default-action" className="text-[13px]">
-            Default when I press {shortcut ?? 'the shortcut'}
+            Default for {shortcut ?? 'the shortcut'} and the chip
           </label>
           <span className="grow" />
           <select

@@ -7,11 +7,8 @@ import { domainOf, truncate } from '../util/url';
  * The question every check asks, in the user's own words. It is put to the model verbatim, leads
  * the search query for backends that search before the model runs, and is what Google AI Mode gets.
  */
-export const QUESTION = 'Is this true, and where can I find the source of this topic?';
-/** The same question, shaped for the other kinds of input; Google AI Mode asks these verbatim too. */
-export const IMAGE_QUESTION = 'Is this image real, and where can I find its original source?';
-export const PAGE_QUESTION = 'Is what this page says true, and where can I find the source of this topic?';
-export const POST_QUESTION = 'Is this post true, and where can I find the source of what it claims?';
+import { IMAGE_QUESTION, PAGE_QUESTION, POST_QUESTION, QUESTION } from './question';
+export { IMAGE_QUESTION, PAGE_QUESTION, POST_QUESTION, QUESTION };
 
 const SCHEMA_DOC = `{
   "verdict": {
@@ -154,7 +151,8 @@ export function buildRequest(input: CheckInput, extra?: RequestExtras): Generate
       if (input.images.length) lines.push(`Images attached to the post:\n${untrusted('image-urls', {}, input.images.slice(0, 4).join('\n'))}`);
       if (input.links.length) {
         lines.push(`Links in the post:\n${untrusted('link-urls', {}, input.links.slice(0, 8).join('\n'))}`);
-        urls.push(...input.links.slice(0, 8));
+        // Every URL in `urls` is retrieved in full and billed as input; the first links carry the claim.
+        urls.push(...input.links.slice(0, 3));
       }
       lines.push(
         `${POST_QUESTION} Identify the specific claims it makes, say whether they hold up, whether the linked material says what the post says it does, and where the claims originally come from (is this the original source or a repost?).`,

@@ -137,7 +137,10 @@ export async function listChecks(opts: ListOptions = {}): Promise<StoredCheck[]>
       c.site.toLowerCase().includes(q) ||
       c.verdictLabel.toLowerCase().includes(q) ||
       c.note.toLowerCase().includes(q) ||
-      c.result.narrative.toLowerCase().includes(q);
+      c.result.narrative.toLowerCase().includes(q) ||
+      c.result.sources.some((s) => s.domain.includes(q) || s.title.toLowerCase().includes(q)) ||
+      (c.result.originalSource?.title ?? '').toLowerCase().includes(q) ||
+      (c.result.originalSource?.publisher ?? '').toLowerCase().includes(q);
     if (kindOk && snapOk && textOk) out.push(c);
     cursor = await cursor.continue();
   }

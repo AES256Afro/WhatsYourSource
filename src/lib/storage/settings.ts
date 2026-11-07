@@ -16,10 +16,10 @@ export type SearchToolId = (typeof SEARCH_TOOLS)[number];
  * the key can actually use, so this is only the starting menu.
  */
 export const GEMINI_MODELS = [
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash — best balance (default)' },
-  { id: 'gemini-4-argon', label: 'Gemini 4 Argon — flagship, pricier' },
-  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite — fast and cheap' },
-  { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite — cheapest' },
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash · default' },
+  { id: 'gemini-4-argon', label: 'Gemini 4 Argon · flagship' },
+  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite · cheap' },
+  { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite · cheapest' },
 ] as const;
 
 export const SettingsSchema = z.object({

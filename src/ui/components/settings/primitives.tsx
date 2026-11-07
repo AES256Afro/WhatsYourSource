@@ -41,7 +41,7 @@ export function ProviderCard({
               className={`inline-flex items-center gap-1 text-[11px] ${subtitleTone === 'ok' ? 'font-semibold text-ok' : subtitleTone === 'bad' ? 'font-semibold text-bad' : 'text-ink-2'}`}
             >
               {subtitleTone === 'ok' && <Check size={11} />}
-              <span className="truncate">{subtitle}</span>
+              <span className="line-clamp-2">{subtitle}</span>
             </span>
           )}
         </span>
@@ -65,12 +65,12 @@ export function ProviderCard({
 export function Row({ label, hint, children }: { label: string; hint?: string; children: (labelId: string) => React.ReactNode }) {
   const labelId = useId();
   return (
-    <div className="flex min-h-[40px] items-center gap-3 border-b border-surface-2 py-1.5 text-[13px] last:border-b-0">
-      <span className="flex grow flex-col">
+    <div className="wys-row flex min-h-[40px] items-center gap-3 border-b border-surface-2 py-1.5 text-[13px] last:border-b-0">
+      <span className="flex grow basis-0 flex-col">
         <span id={labelId}>{label}</span>
         {hint && <span className="text-[11px] text-ink-2">{hint}</span>}
       </span>
-      {children(labelId)}
+      <span className="wys-row-control flex shrink-0 justify-end">{children(labelId)}</span>
     </div>
   );
 }

@@ -26,7 +26,7 @@ export function TopBar({
           <ArrowLeft size={18} />
         </button>
       ) : (
-        <button className="flex items-center gap-2 border-0 bg-transparent p-0 text-ink" onClick={onHome} aria-label="Home">
+        <button className="flex h-9 items-center gap-2 rounded-lg border-0 bg-transparent px-1 text-ink" onClick={onHome} aria-label="Home">
           <Logo size={22} className="text-accent" />
           <span className="text-[14px] font-semibold tracking-tight">WhatsYourSource</span>
         </button>

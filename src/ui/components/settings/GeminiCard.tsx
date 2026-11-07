@@ -26,7 +26,7 @@ export function GeminiCard({ settings, update }: { settings: Settings; update: U
       onMakeDefault={() => update((s) => ({ ...s, defaultProvider: 'gemini' }))}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor="wys-gkey" className="w-[70px] shrink-0 text-[13px]">
+        <label htmlFor="wys-gkey" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
           API key
         </label>
         <div className="min-w-[160px] grow basis-0">

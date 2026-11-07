@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PROVIDER_LABELS } from '@/lib/providers/registry';
+import { AnthropicProvider } from '@/lib/providers/anthropic';
 import { GeminiProvider } from '@/lib/providers/gemini';
 import { providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
 import { Cpu, Globe, Link, Sparkle } from './Icons';
@@ -70,6 +71,11 @@ export function Onboarding({
     geminiKey,
     () => 'Key works.',
   );
+  const { status: verifyA, verify: verifyAnthropic } = useProviderVerify(
+    () => new AnthropicProvider(settings.providers.anthropic),
+    anthropicKey,
+    () => 'Key works.',
+  );
 
   const keyMissing = (choice === 'gemini' && !geminiKey) || (choice === 'anthropic' && !anthropicKey);
 
@@ -108,7 +114,7 @@ export function Onboarding({
             <label
               key={c.id}
               htmlFor={`wys-ob-${c.id}`}
-              className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 ${choice === c.id ? 'border-accent bg-accent-wash' : 'border-line bg-paper'}`}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 ${choice === c.id ? 'border-accent bg-accent-wash' : 'border-line bg-paper'}`}
             >
               <input
                 id={`wys-ob-${c.id}`}
@@ -125,9 +131,9 @@ export function Onboarding({
               </span>
               <span className="flex min-w-0 grow flex-col">
                 <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[13px] font-semibold">{c.title}</span>
+                  <span className="min-w-0 text-[13px] font-semibold">{c.title}</span>
                   <span
-                    className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold ${c.tagTone === 'accent' ? 'bg-accent-fill text-white' : c.tagTone === 'ok' ? 'bg-ok-soft text-ok' : 'bg-muted-soft text-ink-2'}`}
+                    className={`shrink-0 rounded-full px-1.5 py-px text-[11px] font-semibold ${c.tagTone === 'accent' ? 'bg-accent-fill text-white' : c.tagTone === 'ok' ? 'bg-ok-soft text-ok' : 'bg-muted-soft text-ink-2'}`}
                   >
                     {c.tag}
                   </span>
@@ -182,12 +188,25 @@ export function Onboarding({
                 Your Anthropic API key
               </label>
             </div>
-            <SecretInput
-              id="wys-ob-akey"
-              value={settings.providers.anthropic.apiKey}
-              onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, anthropic: { ...s.providers.anthropic, apiKey: v } } }))}
-              placeholder="sk-ant-…"
-            />
+            <div className="flex gap-2">
+              <div className="min-w-0 grow">
+                <SecretInput
+                  id="wys-ob-akey"
+                  value={settings.providers.anthropic.apiKey}
+                  onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, anthropic: { ...s.providers.anthropic, apiKey: v } } }))}
+                  placeholder="sk-ant-…"
+                />
+              </div>
+              <button
+                className="wys-btn px-2.5"
+                type="button"
+                aria-disabled={!anthropicKey || verifyA.kind === 'checking'}
+                onClick={() => anthropicKey && verifyA.kind !== 'checking' && void verifyAnthropic()}
+              >
+                Verify
+              </button>
+            </div>
+            <StatusLine status={verifyA} />
             <span className="text-[12px] leading-4 text-ink-2">
               Using OpenAI or another API instead? Finish, then pick it under Settings → Local or OpenAI-style model → Server.
             </span>

@@ -1,6 +1,6 @@
 import type { CheckInput } from '../messaging/protocol';
 import type { PreparedImage } from '../image/prepare';
-import { createProvider, providerDisplayName } from '../providers/registry';
+import { createProvider, providerRunLabel } from '../providers/registry';
 import type { ProviderId, Settings } from '../storage/settings';
 import { runCheck, type CheckErrorCode, type CheckEvent, type RunError } from './runCheck';
 
@@ -45,7 +45,7 @@ export async function* runProviders(
     const id = order[i]!;
     const provider = createProvider(id, s);
     if (!provider) continue;
-    yield { type: 'provider', id, label: `${providerDisplayName(id, s)} · ${provider.model}` };
+    yield { type: 'provider', id, label: providerRunLabel(id, s) };
 
     let failed: RunError | null = null;
     if (input.kind === 'image' && !provider.capabilities.image) {

@@ -35,6 +35,18 @@ export function DetailView({
   const [note, setNoteText] = useState('');
   const { error: actionError, guard } = useActionError();
   const title = useRef<HTMLHeadingElement>(null);
+  // Escape or a tab switch unmounts the textarea without a blur event; save whatever was typed.
+  const latest = useRef<{ id: string; note: string; saved: string } | null>(null);
+  useEffect(() => {
+    latest.current = check ? { id: check.id, note, saved: check.note } : null;
+  }, [check, note]);
+  useEffect(
+    () => () => {
+      const l = latest.current;
+      if (l && l.note !== l.saved) void setNote(l.id, l.note).catch(() => undefined);
+    },
+    [],
+  );
 
   useEffect(() => {
     let alive = true;

@@ -188,7 +188,7 @@ describe('fetch_page readable set', () => {
       }),
     );
     const search = { id: 'searxng' as const, label: 'Fake', search: async () => [{ title: 'Hit', url: 'https://hit.example/p', snippet: '' }] };
-    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'm', search, fetchPages: true });
+    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'm', search });
     const { events } = await collectCheck({ kind: 'text', text: 'claim', pageUrl: 'https://origin.example/a', pageTitle: 't' }, p);
     expect(fetched).toEqual(['https://hit.example/p']);
     expect(JSON.stringify(events)).not.toContain('SECRET');

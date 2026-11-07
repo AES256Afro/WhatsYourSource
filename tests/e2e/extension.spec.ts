@@ -102,9 +102,16 @@ test.beforeEach(async ({ context, sw }) => {
   });
 });
 
-test('content script injects the chip host and answers selection queries', async ({ context, sw }) => {
+test('content script leaves the page alone until a real selection, then shows the chip and answers selection queries', async ({ context, sw }) => {
   const page = await context.newPage();
   await page.goto('http://example.test/article');
+  // Nothing is added to the DOM on load; the chip host appears on the first user-made selection.
+  await expect(page.locator('[data-wys="chip"]')).toHaveCount(0);
+  await page.mouse.move(10, 10);
+  await page.mouse.down();
+  await page.mouse.move(300, 60, { steps: 4 });
+  await page.mouse.up();
+  await page.locator('#p').dblclick();
   await expect(page.locator('[data-wys="chip"]')).toHaveCount(1);
 
   await page.evaluate(() => {

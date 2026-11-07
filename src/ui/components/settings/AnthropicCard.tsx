@@ -23,7 +23,7 @@ export function AnthropicCard({ settings, update }: { settings: Settings; update
       onMakeDefault={() => update((s) => ({ ...s, defaultProvider: 'anthropic' }))}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor="wys-akey" className="w-[70px] shrink-0 text-[13px]">
+        <label htmlFor="wys-akey" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
           API key
         </label>
         <div className="min-w-[160px] grow basis-0">
@@ -39,7 +39,7 @@ export function AnthropicCard({ settings, update }: { settings: Settings; update
       </div>
       <StatusLine status={status} />
       <div className="flex items-center gap-2">
-        <label htmlFor="wys-amodel" className="w-[70px] shrink-0 text-[13px]">
+        <label htmlFor="wys-amodel" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
           Model
         </label>
         <CommitInput

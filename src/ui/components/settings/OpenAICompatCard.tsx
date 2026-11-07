@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { hasAllUrls, hasOrigin, requestAllUrls, requestOrigin } from '@/lib/permissions';
-import { OPENAI_COMPAT_PRESETS, openaiCompatLabel, PROVIDER_LABELS } from '@/lib/providers/registry';
+import { OPENAI_COMPAT_PRESETS, openaiCompatLabel, presetFor, PROVIDER_LABELS } from '@/lib/providers/registry';
 import { describeLocalModels, localServer, type LocalModelInfo } from '@/lib/providers/localModels';
 import { OpenAICompatProvider } from '@/lib/providers/openaiCompat';
 import { createSearchBackend } from '@/lib/search/backends';
@@ -8,7 +8,7 @@ import type { SearchToolId, Settings } from '@/lib/storage/settings';
 import { hostOf } from '@/lib/util/url';
 import { Alert, Cpu } from '../Icons';
 import { PROVIDER_CARD_ID } from '../SettingsView';
-import { CommitInput, ProviderCard, Row, SecretInput, StatusLine } from './primitives';
+import { CommitInput, ProviderCard, Row, SecretInput, StatusLine, type Status } from './primitives';
 import { useProviderVerify } from './useProviderVerify';
 import type { UpdateSettings } from '../../hooks/useSettings';
 
@@ -40,7 +40,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
     models,
     verify: test,
   } = useProviderVerify(
-    () => new OpenAICompatProvider({ baseUrl: o.baseUrl, apiKey: o.apiKey, model: o.model, search: createSearchBackend(o), fetchPages: true }),
+    () => new OpenAICompatProvider({ baseUrl: o.baseUrl, apiKey: o.apiKey, model: o.model, search: createSearchBackend(o) }),
     `${o.baseUrl} ${o.apiKey} ${o.model}`,
     async (ids) => {
       const described = await describeLocalModels(o.baseUrl, ids);
@@ -52,7 +52,12 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
       return `Connected · ${ids.length} model${ids.length === 1 ? '' : 's'}${loaded ? ` · ${loaded} loaded` : ''}${me?.vision === false ? ' · text only' : me?.vision ? ' · can see images' : ''}`;
     },
   );
-  const chosenInfo = info.find((m) => m.id === o.model);
+  // What Verify learned about the chosen model, or what an earlier Verify stored in settings.
+  const chosenInfo =
+    info.find((m) => m.id === o.model) ??
+    (o.model && (o.modelVision != null || o.modelTools != null || o.modelContext != null)
+      ? { id: o.model, vision: o.modelVision ?? undefined, tools: o.modelTools ?? undefined, contextLength: o.modelContext ?? undefined }
+      : undefined);
   const capsLine = [
     chosenInfo?.vision === true ? 'Can see images' : chosenInfo?.vision === false ? 'Text only (no image checks)' : null,
     chosenInfo?.tools === true ? 'Tool calling' : chosenInfo?.tools === false ? 'No tool calling (search runs up front instead)' : null,
@@ -65,6 +70,19 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
     setOriginOk(ok);
   };
   const allowAll = async () => setAllUrls(await requestAllUrls());
+  // One real query through the configured backend: a SearXNG without JSON output or a bad key fails here, not mid-check.
+  const [searchStatus, setSearchStatus] = useState<Status>({ kind: 'idle' });
+  const testSearch = async () => {
+    const backend = createSearchBackend(o);
+    if (!backend) return;
+    setSearchStatus({ kind: 'checking' });
+    try {
+      const hits = await backend.search('Wayback Machine first archived', AbortSignal.timeout(15000));
+      setSearchStatus({ kind: 'ok', text: `${backend.label} works · ${hits.length} result${hits.length === 1 ? '' : 's'}` });
+    } catch (e) {
+      setSearchStatus({ kind: 'bad', text: e instanceof Error ? e.message : String(e) });
+    }
+  };
   const allowSearxng = async () => setSearxngOk(await requestOrigin(o.searxngUrl));
 
   const needsPermission = !isLocal && !isOpenAI && originOk === false;
@@ -95,11 +113,21 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         {(id) => (
           <select
             aria-labelledby={id}
-            className="wys-input h-8 w-auto max-w-[200px] text-[12px]"
+            className="wys-input h-8 w-auto max-w-[220px] text-[12px]"
             value={preset}
             onChange={(e) => {
               const p = OPENAI_COMPAT_PRESETS.find((x) => x.id === e.target.value);
-              if (p?.baseUrl) void set({ baseUrl: p.baseUrl });
+              if (!p?.baseUrl) return;
+              // A new server means a new model list; a key for a hosted API must not be sent to localhost (or vice versa).
+              const wasLocal = presetFor(o.baseUrl)?.local ?? localServer(o.baseUrl).isLocal;
+              void set({
+                baseUrl: p.baseUrl,
+                model: '',
+                modelVision: null,
+                modelTools: null,
+                modelContext: null,
+                ...(p.local !== wasLocal ? { apiKey: '' } : {}),
+              });
             }}
           >
             {OPENAI_COMPAT_PRESETS.map((p) => (
@@ -111,7 +139,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         )}
       </Row>
       <div className="flex items-center gap-2">
-        <label htmlFor="wys-ocurl" className="w-[70px] shrink-0 text-[13px]">
+        <label htmlFor="wys-ocurl" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
           Endpoint
         </label>
         <CommitInput
@@ -132,7 +160,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
       )}
       {needsPermission && <PermissionNote text="The model server is on another host" host={hostOf(o.baseUrl) || o.baseUrl} onAllow={allow} />}
       <div className="flex items-center gap-2">
-        <label htmlFor="wys-ockey" className="w-[70px] shrink-0 text-[13px]">
+        <label htmlFor="wys-ockey" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
           API key
         </label>
         <div className="min-w-0 grow">
@@ -140,7 +168,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <label htmlFor="wys-ocmodel" className="w-[70px] shrink-0 text-[13px]">
+        <label htmlFor="wys-ocmodel" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
           Model
         </label>
         <CommitInput
@@ -188,21 +216,33 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         {(id) => (
           <select
             aria-labelledby={id}
-            className="wys-input h-8 w-auto max-w-[200px] text-[12px]"
+            className="wys-input h-8 w-auto max-w-[220px] text-[12px]"
             value={o.searchTool}
             onChange={(e) => set({ searchTool: e.target.value as SearchToolId })}
           >
-            <option value="none">None — answers from memory, no sources</option>
-            <option value="searxng">SearXNG — your own search server</option>
-            <option value="brave">Brave Search — needs an API key</option>
-            <option value="tavily">Tavily — needs an API key</option>
+            <option value="none">None · no sources</option>
+            <option value="searxng">SearXNG · self-hosted</option>
+            <option value="brave">Brave Search · API key</option>
+            <option value="tavily">Tavily · API key</option>
           </select>
         )}
       </Row>
+      {o.searchTool !== 'none' && (
+        <div className="flex items-center gap-2">
+          <button
+            className="wys-btn h-8 px-2.5 text-[12px]"
+            aria-disabled={searchStatus.kind === 'checking'}
+            onClick={() => searchStatus.kind !== 'checking' && void testSearch()}
+          >
+            {searchStatus.kind === 'checking' ? '…' : 'Test search'}
+          </button>
+          <StatusLine status={searchStatus} />
+        </div>
+      )}
       {o.searchTool === 'searxng' && (
         <>
           <div className="flex items-center gap-2">
-            <label htmlFor="wys-searx" className="w-[70px] shrink-0 text-[13px]">
+            <label htmlFor="wys-searx" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
               SearXNG URL
             </label>
             <CommitInput
@@ -224,7 +264,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
       )}
       {o.searchTool === 'brave' && (
         <div className="flex items-center gap-2">
-          <label htmlFor="wys-brave" className="w-[70px] shrink-0 text-[13px]">
+          <label htmlFor="wys-brave" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
             Brave key
           </label>
           <div className="min-w-0 grow">
@@ -234,7 +274,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
       )}
       {o.searchTool === 'tavily' && (
         <div className="flex items-center gap-2">
-          <label htmlFor="wys-tavily" className="w-[70px] shrink-0 text-[13px]">
+          <label htmlFor="wys-tavily" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
             Tavily key
           </label>
           <div className="min-w-0 grow">

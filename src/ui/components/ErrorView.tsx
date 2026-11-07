@@ -44,6 +44,7 @@ export function ErrorView({
   onRetry,
   onSettings,
   onAllowHost,
+  onNewCheck,
   webmodeVariant,
 }: {
   input: CheckInput;
@@ -53,6 +54,7 @@ export function ErrorView({
   /** Opens Settings, scrolled to the provider that failed when known. */
   onSettings: (provider?: ProviderId) => void;
   onAllowHost?: () => void;
+  onNewCheck?: () => void;
 }) {
   const host = input.kind === 'image' ? hostOf(input.srcUrl) : '';
   const hint = hintFor(error);
@@ -60,6 +62,33 @@ export function ErrorView({
   useEffect(() => {
     banner.current?.focus();
   }, []);
+  if (error.code === 'cancelled') {
+    // The user asked for this: a quiet card, not an alert.
+    return (
+      <div className="flex flex-col gap-3.5 p-3.5">
+        <InputCard input={input} clamp />
+        <div
+          ref={banner}
+          tabIndex={-1}
+          role="status"
+          className="wys-card flex flex-col gap-1 p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+        >
+          <h2 className="m-0 text-[14px] leading-[18px] font-semibold">Check cancelled</h2>
+          <span className="text-[12px] leading-4 text-ink-2">Nothing was saved. Run it again, or start a new check.</span>
+        </div>
+        <div className="flex gap-2">
+          <button className="wys-btn wys-btn-primary grow" onClick={onRetry}>
+            <Refresh size={15} /> Run it again
+          </button>
+          {onNewCheck && (
+            <button className="wys-btn grow" onClick={onNewCheck}>
+              New check
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-3.5 p-3.5">
       <InputCard input={input} clamp />
@@ -71,7 +100,7 @@ export function ErrorView({
       >
         <Alert size={20} className="mt-px shrink-0 text-bad" />
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="m-0 text-[16px] leading-[20px] font-semibold text-bad">{error.code === 'cancelled' ? 'Cancelled' : 'Couldn’t complete the check'}</h2>
+          <h2 className="m-0 text-[16px] leading-[20px] font-semibold text-bad">Couldn’t complete the check</h2>
           <span className="text-[13px] leading-[18px] text-bad-ink">{error.message}</span>
           {error.details && <span className="text-[11px] leading-[15px] text-bad-ink wrap-break-word">{error.details}</span>}
         </div>
