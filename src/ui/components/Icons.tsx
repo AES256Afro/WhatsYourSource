@@ -10,7 +10,7 @@ function base({ size = 16, ...rest }: P, children: React.ReactNode) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={2.2}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -50,7 +50,8 @@ export const Sliders = (p: P) =>
   );
 export const External = (p: P) =>
   base(
-    { strokeWidth: 2.4, ...p },
+    // Thin at the sizes it is used inline (11–14 px); the base weight would smear.
+    { strokeWidth: (p.size ?? 16) <= 12 ? 2.4 : 2.2, ...p },
     <>
       <path d="M14 4h6v6" />
       <path d="M20 4l-9 9" />

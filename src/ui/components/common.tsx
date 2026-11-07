@@ -32,7 +32,7 @@ export function Pill({ tone, children, className = '' }: { tone: Tone; children:
 export function Label({ children, right, id }: { children: ReactNode; right?: ReactNode; id?: string }) {
   return (
     <div className="flex items-center gap-2">
-      <h2 id={id} className="wys-label m-0">
+      <h2 id={id} className="wys-label m-0 whitespace-nowrap">
         {children}
       </h2>
       {right !== undefined && (
@@ -46,7 +46,7 @@ export function Label({ children, right, id }: { children: ReactNode; right?: Re
 }
 
 export function Count({ n }: { n: number }) {
-  return <span className="rounded-full bg-muted-soft px-[7px] text-[11px] font-semibold text-ink-2">{n}</span>;
+  return <span className="shrink-0 rounded-full bg-muted-soft px-[7px] text-[11px] font-semibold text-ink-2">{n}</span>;
 }
 
 export function ProviderBadge({ label }: { label: string }) {

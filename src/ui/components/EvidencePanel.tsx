@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import type { CheckResult } from '@/lib/pipeline/schema';
 import { domainOf, isHttpUrl } from '@/lib/util/url';
-import { Label } from './common';
+import { Label, TextAction } from './common';
 import { External, Shield } from './Icons';
 
 /** ISO or RFC dates from the lookups, shown the way the rest of the panel shows dates. */
@@ -12,42 +13,46 @@ export function localeDate(iso?: string): string {
 
 /**
  * Published fact-checks found for this claim: deterministic, from the ClaimReview index, shown above
- * the model's verdict. Lives in a polite live region because it can arrive after focus has moved on.
+ * the model's verdict as a one-line strip (the verdict stays the first tinted block). Lives in a
+ * polite live region because it can arrive after focus has moved on.
  */
 export function FactCheckBanner({ checks }: { checks: NonNullable<CheckResult['factChecks']> }) {
   if (checks.length === 0) return null;
   const first = checks[0]!;
   const more = checks.slice(1, 4);
   return (
-    <section aria-live="polite" aria-labelledby="wys-factcheck-h" className="flex flex-col gap-1.5 rounded-xl border border-accent-line bg-accent-wash p-3">
-      <h2 id="wys-factcheck-h" className="m-0 flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.06em] text-accent uppercase">
-        <Shield size={12} /> Already fact-checked
-      </h2>
-      <a href={first.url} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 no-underline">
-        <span className="flex min-w-0 grow flex-col gap-0.5">
-          <span className="text-[13px] leading-[18px] font-semibold text-ink">
-            {first.publisher}: <span className="text-accent">{first.rating}</span>
-            {first.reviewDate ? <span className="font-normal text-ink-2"> · {localeDate(first.reviewDate)}</span> : null}
+    <section aria-live="polite" aria-labelledby="wys-factcheck-h" className="flex flex-col gap-1 border-b border-line pb-2 text-[12px] leading-4">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <h2 id="wys-factcheck-h" className="m-0 inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold tracking-[0.06em] text-ink-2 uppercase">
+          <Shield size={12} /> Fact-checked
+        </h2>
+        <a href={first.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 items-center gap-1 text-ink no-underline">
+          <span className="truncate">
+            {first.publisher}: <span className="font-semibold">{first.rating}</span>
+            {first.reviewDate ? <span className="text-ink-2"> ({localeDate(first.reviewDate)})</span> : null}
           </span>
-          {first.claim && <span className="line-clamp-2 text-[12px] leading-4 text-ink-2">“{first.claim}”</span>}
-        </span>
-        <External size={13} className="mt-1 shrink-0 text-ink-3" />
-      </a>
-      {more.length > 0 && (
-        <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-[12px] leading-4">
-          {more.map((c) => (
-            <li key={c.url}>
-              <a href={c.url} target="_blank" rel="noopener noreferrer" className="no-underline">
-                {c.publisher}: {c.rating}
-              </a>
-              {c.reviewDate ? <span className="text-ink-2"> · {localeDate(c.reviewDate)}</span> : null}
-            </li>
-          ))}
-        </ul>
-      )}
-      <span className="text-[11px] leading-[15px] text-ink-2">
-        From Google’s Fact Check Tools index of published fact-checks. Matches are by wording; read the check before relying on it.
-      </span>
+          <External size={11} className="shrink-0 text-ink-3" />
+        </a>
+      </div>
+      <details className="text-[11px] leading-[15px] text-ink-2">
+        <summary className="cursor-pointer">{more.length > 0 ? `${more.length} more, and what was matched` : 'What was matched'}</summary>
+        <div className="mt-1 flex flex-col gap-1">
+          {first.claim && <span className="line-clamp-3">“{first.claim}”</span>}
+          {more.length > 0 && (
+            <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+              {more.map((c) => (
+                <li key={c.url}>
+                  <a href={c.url} target="_blank" rel="noopener noreferrer" className="no-underline">
+                    {c.publisher}: {c.rating}
+                  </a>
+                  {c.reviewDate ? <span> · {localeDate(c.reviewDate)}</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          <span>From Google’s Fact Check Tools index of published fact-checks. Matches are by wording; read the check before relying on it.</span>
+        </div>
+      </details>
     </section>
   );
 }
@@ -77,7 +82,7 @@ function Side({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="flex flex-col gap-1">
       <h3 className="m-0 text-[12px] font-semibold">{title}</h3>
-      <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-[12px] leading-4">
+      <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-[12px] leading-4 text-ink-2">
         {items.slice(0, 5).map((t, i) => (
           <li key={i} className="wys-measure">
             {t}
@@ -99,6 +104,7 @@ function Note({ title, children }: { title: string; children: React.ReactNode })
 
 /** Everything that left the browser for this check, and what stayed. */
 export function WhatWasSent({ result, searchTool, snapshotSaved }: { result: CheckResult; searchTool?: string; snapshotSaved?: boolean }) {
+  const [showAll, setShowAll] = useState(false);
   const i = result.input;
   const content =
     i.kind === 'text'
@@ -136,11 +142,9 @@ export function WhatWasSent({ result, searchTool, snapshotSaved }: { result: Che
           {result.provider.label} ({result.provider.model})
         </dd>
         <dt className="font-semibold text-ink">Content</dt>
-        <dd className="m-0 break-words">
-          <details>
-            <summary className="line-clamp-2 cursor-pointer">{content}</summary>
-            <span className="whitespace-pre-line">{content}</span>
-          </details>
+        <dd className="m-0 flex flex-col items-start gap-0.5 break-words">
+          <span className={showAll ? 'whitespace-pre-line' : 'line-clamp-2'}>{content}</span>
+          {content.length > 160 && <TextAction onClick={() => setShowAll((v) => !v)}>{showAll ? 'Show less' : 'Show all'}</TextAction>}
         </dd>
         {'pageUrl' in i && i.pageUrl ? (
           <>

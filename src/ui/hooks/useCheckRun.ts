@@ -150,7 +150,7 @@ export function useCheckRun(deps: CheckRunDeps) {
     try {
       const pre = await lookups.all;
       const extra = await sourceLookups(
-        finished.sources.map((x) => x.url),
+        finished.sources.map((x) => x.domain || x.url),
         finished.originalSource?.url,
         s,
         controller.signal,

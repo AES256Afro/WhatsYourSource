@@ -127,9 +127,7 @@ export function Onboarding({
                     {c.tag}
                   </span>
                 </span>
-                <span className="truncate text-[12px] leading-4 text-ink-2" title={c.blurb}>
-                  {c.blurb}
-                </span>
+                <span className="line-clamp-2 text-[12px] leading-4 text-ink-2">{c.blurb}</span>
               </span>
             </label>
           ))}

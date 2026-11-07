@@ -28,7 +28,7 @@ export function ProviderCard({
       id={id}
       tabIndex={-1}
       aria-label={title}
-      className={`flex flex-col gap-2.5 rounded-xl border p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent-line ${isDefault ? 'border-accent bg-accent-wash' : 'border-line'} ${disabled ? 'opacity-70' : ''}`}
+      className={`flex flex-col gap-2.5 rounded-xl border p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${isDefault ? 'border-accent bg-accent-wash' : 'border-line'} ${disabled ? 'opacity-70' : ''}`}
     >
       <div className="flex items-center gap-2">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isDefault ? 'bg-accent-fill text-white' : 'bg-surface-2 text-ink-2'}`}>

@@ -157,12 +157,14 @@ export function DetailView({ id, onRecheck, onDeleted }: { id: string; onRecheck
                   <Toggle checked={loadImages} onChange={setLoadImages} labelledBy="wys-loadimages" />
                 </div>
                 {snapshot.screenshot && <Screenshot blob={snapshot.screenshot} />}
-                <iframe
-                  title="Saved page"
-                  sandbox="allow-popups allow-popups-to-escape-sandbox"
-                  srcDoc={srcdoc}
-                  className="h-[520px] w-full rounded-lg border border-line-2 bg-paper"
-                />
+                <div className="rounded-xl bg-surface-2 p-1">
+                  <iframe
+                    title="Saved page"
+                    sandbox="allow-popups allow-popups-to-escape-sandbox"
+                    srcDoc={srcdoc}
+                    className="block h-[520px] w-full rounded-lg border border-line-2 bg-white"
+                  />
+                </div>
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-line-strong p-4 text-center text-[13px] text-ink-2">

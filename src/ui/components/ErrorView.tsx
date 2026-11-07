@@ -63,7 +63,7 @@ export function ErrorView({
         ref={banner}
         tabIndex={-1}
         role="alert"
-        className="flex gap-2.5 rounded-xl border border-bad-line bg-bad-soft p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent-line"
+        className="flex gap-2.5 rounded-xl border border-bad-line bg-bad-soft p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
       >
         <Alert size={20} className="mt-px shrink-0 text-bad" />
         <div className="flex min-w-0 flex-col gap-1">

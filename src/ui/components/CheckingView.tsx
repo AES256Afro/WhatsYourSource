@@ -25,7 +25,7 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
           role="status"
           aria-live="polite"
           aria-atomic="false"
-          className="wys-card flex flex-col px-3 py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent-line"
+          className="wys-card flex flex-col px-3 py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
         >
           {earlier.map((s, i) => (
             <StepRow key={i} done label={s} />

@@ -124,7 +124,7 @@ export function ResultView({
         {result.input.kind === 'image' && result.provenance && <ProvenancePanel provenance={result.provenance} srcUrl={result.input.srcUrl} />}
 
         <ClaimList claims={result.claims} />
-        <SourceList sources={result.sources} right={compare} credibility={result.credibility} notes={result.mixNotes} />
+        <SourceList sources={result.sources} credibility={result.credibility} notes={result.mixNotes} />
         {result.pageCapture && (
           <p className="m-0 text-[12px] leading-4 text-ink-2">
             {result.pageCapture.firstCaptured && result.pageCapture.archiveUrl ? (
@@ -176,6 +176,7 @@ export function ResultView({
               .join(' · ')}
           </span>
           <span className="grow" />
+          {compare}
           <span role="status" aria-live="polite">
             {saved && (
               <span className="inline-flex items-center gap-1 font-medium">

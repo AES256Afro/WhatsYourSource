@@ -88,13 +88,14 @@ Data-use disclosures: the extension does not collect or transmit user data to th
 
 ## Screenshots (store/)
 
-Generated at 1280×800 (Chrome, Edge) and reused for AMO. Each shows a realistic article on the left and the side panel on the right.
+Generated at 1280×800 (Chrome, Edge) and reused for AMO. Each shows a realistic article on the left and the side panel on the right (the panel is laid out at its real 400 px width and shown at 1.3× so the store's 440 px thumbnails stay legible).
 
 1. `01-result.png` — the result card: verdict, original source, claims, sources.
 2. `02-chip.png` — highlighted text on a page with the "Check source" chip.
 3. `03-image.png` — an image check: provenance facts and reverse-image buttons.
-4. `04-history.png` — history with the saved page tab open.
+4. `04-saved-page.png` — a saved check with its page snapshot open (history → detail).
 5. `05-providers.png` — settings: the four ways to check, local model card with LM Studio / Ollama.
 6. `06-onboarding.png` — first-run screen.
+7. `07-result-dark.png` — the result card in dark mode.
 
 Promo images (Chrome): small tile 440×280 (`promo-440x280.png`), marquee 1400×560 (`promo-1400x560.png`).

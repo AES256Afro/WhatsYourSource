@@ -21,7 +21,7 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 |---|---|---|---|
 | Readability | 2 | 0 | no |
 | Usability | 2 | 0 | no |
-| Visual | 1 | 0 | no |
+| Visual | 2 | 0 | no |
 | Quality of life | 2 | 0 | no |
 | Platform features | 2 | 0 | no |
 | Optimization | 2 | 0 | no |
@@ -361,5 +361,20 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - Settings: "List the claims first, then check each one" toggle (two-pass); "Which Google page" (AI Mode / Search with AI Overview) on the Google AI Mode card.
 - Local model card: Test now asks LM Studio or Ollama about the models (vision, tool calling, context length, loaded state), remembers the chosen model's answer, and shows a capability line; a text-only model declines image checks up front.
 - **Second opinion** (QoL): buttons under a result run the same input on each other configured provider.
+
+`clean: no`
+
+### 2026-11-07 · Visual sweep 2 — independent audit (15 findings, ~120 captures at 320/400/600 px, both themes), all addressed
+
+- **Every size override on a `wys-*` class was silently ignored**: the component classes sat outside any `@layer`, and unlayered CSS beats Tailwind's layered utilities, so `h-8`, `px-2.5`, `text-[12px]`, `w-auto`, `h-16` on buttons, inputs, selects and textareas never applied (every "small" button was 38 px, the disabled-sites textarea a single line, the popup's select 199 px wide). → `@layer components { … }`; the ~30 call sites now render as written (small buttons 30–32 px, textareas 64 px, selects sized to content). Measured after: settings selects 32 px, Verify 32 px, Make default 30 px, textarea 64 px.
+- Fact-check card competed with the verdict (176 px of accent-tinted card above it) → a one-line strip under a bottom rule: "Fact-checked · Quote Investigator: **Misattributed** (date) ↗", with the matched claim, further checks and the Google note in a `<details>`. The verdict is the first tinted block again.
+- Focus indicators failed 3:1 (accent-line ring, 1.5:1 on paper) → `outline: 2px solid accent; offset 2px` for inputs and buttons, `ring-accent ring-offset-2 ring-offset-paper` on the verdict, error, checking and provider cards.
+- Store scene CSS (`h1`, `p`, `mark`, `figure`) leaked into the panel in every screenshot (17 px body copy, 34 px titles) → rules scoped to `.page`; the panel is laid out at its real 400 px and shown at 1.3× so the store's 440 px thumbnails stay legible; `04-history` renamed `04-saved-page` (that is what it shows); all seven regenerated.
+- Reputation pills ("Wikipedia: No consensus / context-dependent", 268 px) wrapped the source meta line onto three rows at 400 px → short labels (Reliable / No consensus / Depends / Unreliable / Deprecated / Blacklisted), full wording in the tooltip and the existing footnote; `shrink-0`. Ratings are looked up by the source's domain rather than its (possibly unresolved redirect) URL, so preview and grounding sources get pills too.
+- Sources header broke three ways at 320 px → "Compare in Google AI Mode" moved to the footer row beside the provider badge; the label and count no longer wrap; "Open all N" is one unit.
+- Onboarding blurbs truncated to half a sentence with 250 px of empty screen → two-line clamp (still fits 820 px: 706/706).
+- "What was sent" Content row expanded with no affordance (clamped `<summary>` loses its marker) → Show all / Show less text action, as the input card does.
+- History footer truncated its own status → "On this device · " dropped (the privacy section says it). Evidence bullets and notes one colour (`ink-2`). Source rows `rounded-xl` like their sibling claim cards. Icon base stroke 2.2 everywhere; External 2.4 only at ≤ 12 px. Dark-mode saved page sits in a `surface-2` tile instead of a bare white block.
+- Verified from sweep 1: verdict-first order, quiet input card, token borders at 3:1, 320 px action bars, measure cap, onboarding fit — all hold.
 
 `clean: no`

@@ -19,7 +19,11 @@ export const VerdictBanner = forwardRef<HTMLDivElement, { verdict: CheckResult['
   const s = STYLES[tone];
   const Icon = tone === 'ok' ? Check : verdict.kind === 'older-than-claimed' ? Clock : tone === 'muted' ? Info : Alert;
   return (
-    <div ref={ref} tabIndex={-1} className={`flex gap-2.5 rounded-xl border p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent-line ${s.box}`}>
+    <div
+      ref={ref}
+      tabIndex={-1}
+      className={`flex gap-2.5 rounded-xl border p-3 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${s.box}`}
+    >
       <Icon size={20} className={`mt-px shrink-0 ${s.title}`} />
       <div className="flex min-w-0 grow flex-col gap-1">
         <div className="flex items-center gap-2">

@@ -103,159 +103,162 @@ textarea {
 }
 
 /* Small reusable bits that read better as classes than as 12 utilities repeated 40 times. */
-.wys-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--color-ink-2);
-  text-transform: uppercase;
-}
-.wys-card {
-  border: 1px solid var(--color-line);
-  border-radius: 12px;
-  background: var(--color-paper);
-}
-.wys-btn {
-  height: 38px;
-  padding: 0 14px;
-  border: 1px solid var(--color-line-2);
-  border-radius: 10px;
-  background: var(--color-paper);
-  color: var(--color-ink);
-  font-weight: 600;
-  font-size: 13px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.wys-btn:hover {
-  background: var(--color-surface);
-}
-.wys-btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-.wys-btn-primary {
-  background: var(--color-accent-fill);
-  border-color: var(--color-accent-fill);
-  color: #fff;
-}
-.wys-btn-primary:hover {
-  background: var(--color-accent-fill-hover);
-  border-color: var(--color-accent-fill-hover);
-}
-.wys-icon-btn {
-  width: 36px;
-  height: 36px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-ink-2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.wys-icon-btn:hover,
-.wys-icon-btn[aria-pressed='true'] {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-}
-.wys-input {
-  height: 38px;
-  box-sizing: border-box;
-  width: 100%;
-  border: 1px solid var(--color-line-strong);
-  border-radius: 10px;
-  padding: 0 12px;
-  background: var(--color-paper);
-  color: var(--color-ink);
-}
-.wys-input:focus,
-.wys-btn:focus-visible,
-.wys-icon-btn:focus-visible {
-  outline: 2px solid var(--color-accent-line);
-  outline-offset: 1px;
-}
-.wys-cite {
-  display: inline-block;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
-  text-decoration: none;
-  vertical-align: 1px;
-}
-.wys-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.wys-spin {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid var(--color-accent);
-  border-right-color: var(--color-accent-line);
-  box-sizing: border-box;
-  animation: wys-spin 0.9s linear infinite;
-}
-@keyframes wys-spin {
-  to {
-    transform: rotate(360deg);
+/* Declared in the components layer: Tailwind utilities (h-8, px-2.5, text-[12px]) on the same element win, as the call sites expect. */
+@layer components {
+  .wys-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--color-ink-2);
+    text-transform: uppercase;
   }
-}
-.wys-caret::after {
-  content: '';
-  display: inline-block;
-  width: 2px;
-  height: 14px;
-  background: var(--color-accent);
-  vertical-align: -2px;
-  margin-left: 2px;
-  animation: wys-blink 1s steps(2) infinite;
-}
-@keyframes wys-blink {
-  to {
-    opacity: 0;
+  .wys-card {
+    border: 1px solid var(--color-line);
+    border-radius: 12px;
+    background: var(--color-paper);
   }
-}
-.wys-prose p {
-  margin: 0 0 8px;
-}
-.wys-prose p:last-child {
-  margin-bottom: 0;
-}
-/* Long lines read badly in a wide panel. */
-.wys-prose,
-.wys-measure {
-  max-width: 64ch;
-}
-/* Action bars: under 360px the button labels go, the icons stay. */
-@media (max-width: 359px) {
-  .wys-btn-label {
-    display: none;
+  .wys-btn {
+    height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--color-line-2);
+    border-radius: 10px;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-weight: 600;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    white-space: nowrap;
   }
-  .wys-btn-narrow {
-    padding: 0 10px;
+  .wys-btn:hover {
+    background: var(--color-surface);
   }
-}
-/* Everything the user cannot otherwise perceive from the side panel is announced through these. */
-.wys-sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+  .wys-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .wys-btn-primary {
+    background: var(--color-accent-fill);
+    border-color: var(--color-accent-fill);
+    color: #fff;
+  }
+  .wys-btn-primary:hover {
+    background: var(--color-accent-fill-hover);
+    border-color: var(--color-accent-fill-hover);
+  }
+  .wys-icon-btn {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-ink-2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .wys-icon-btn:hover,
+  .wys-icon-btn[aria-pressed='true'] {
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+  }
+  .wys-input {
+    height: 38px;
+    box-sizing: border-box;
+    width: 100%;
+    border: 1px solid var(--color-line-strong);
+    border-radius: 10px;
+    padding: 0 12px;
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+  .wys-input:focus,
+  .wys-btn:focus-visible,
+  .wys-icon-btn:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  .wys-cite {
+    display: inline-block;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    text-decoration: none;
+    vertical-align: 1px;
+  }
+  .wys-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .wys-spin {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--color-accent);
+    border-right-color: var(--color-accent-line);
+    box-sizing: border-box;
+    animation: wys-spin 0.9s linear infinite;
+  }
+  @keyframes wys-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .wys-caret::after {
+    content: '';
+    display: inline-block;
+    width: 2px;
+    height: 14px;
+    background: var(--color-accent);
+    vertical-align: -2px;
+    margin-left: 2px;
+    animation: wys-blink 1s steps(2) infinite;
+  }
+  @keyframes wys-blink {
+    to {
+      opacity: 0;
+    }
+  }
+  .wys-prose p {
+    margin: 0 0 8px;
+  }
+  .wys-prose p:last-child {
+    margin-bottom: 0;
+  }
+  /* Long lines read badly in a wide panel. */
+  .wys-prose,
+  .wys-measure {
+    max-width: 64ch;
+  }
+  /* Action bars: under 360px the button labels go, the icons stay. */
+  @media (max-width: 359px) {
+    .wys-btn-label {
+      display: none;
+    }
+    .wys-btn-narrow {
+      padding: 0 10px;
+    }
+  }
+  /* Everything the user cannot otherwise perceive from the side panel is announced through these. */
+  .wys-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 }

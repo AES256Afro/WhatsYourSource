@@ -43,7 +43,7 @@ await page.getByText(/Saved/).waitFor();
 await page.waitForTimeout(400);
 await shot('03-image');
 
-// 4. History with the saved page open: run a text check in a fresh tab (it snapshots medium.com), then open it.
+// 4. A saved check with its page snapshot open: run a text check in a fresh tab (it snapshots medium.com), then open it.
 await open('scenario=home');
 await page.getByRole('button', { name: /Check source/ }).first().click();
 await page.getByText(/Saved with page snapshot/).waitFor({ timeout: 20_000 });
@@ -52,7 +52,7 @@ await page.getByRole('heading', { name: 'History' }).waitFor();
 await page.locator('button.wys-card').first().click();
 await page.getByRole('tab', { name: /Saved page/ }).click();
 await page.waitForTimeout(800);
-await shot('04-history');
+await shot('04-saved-page');
 
 // 5. Providers / settings.
 await open('scenario=local');

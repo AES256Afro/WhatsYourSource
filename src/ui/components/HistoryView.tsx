@@ -149,7 +149,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
       </div>
       <div className="flex shrink-0 items-center gap-2.5 border-t border-line bg-paper px-3.5 py-2.5 text-[11px] text-ink-2">
         <span role="status" className={`min-w-0 truncate ${actionError ? 'text-bad' : ''}`}>
-          {actionError ?? `On this device${stats ? ` · ${fmtBytes(stats.snapshotBytes)} of saved pages` : ''}`}
+          {actionError ?? (stats ? `${fmtBytes(stats.snapshotBytes)} of saved pages` : '')}
         </span>
         <span className="grow" />
         <button className="wys-btn h-8 px-3 text-[12px]" onClick={exportJson} disabled={!items?.length} aria-label="Export all checks as JSON">

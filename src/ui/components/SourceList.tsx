@@ -31,7 +31,9 @@ export function SourceList({
             {right}
             {verified.length > 1 && (
               <TextAction onClick={openAll}>
-                Open all {verified.length} <span aria-hidden="true">↗</span>
+                <span className="whitespace-nowrap">
+                  Open all {verified.length} <span aria-hidden="true">↗</span>
+                </span>
               </TextAction>
             )}
           </span>
@@ -56,6 +58,16 @@ export function SourceList({
   );
 }
 
+/** Pill text: short enough to sit beside the domain at 320 px; the full Wikipedia wording is in the tooltip. */
+const RATING_SHORT: Record<Credibility['status'], string> = {
+  reliable: 'Reliable',
+  'no-consensus': 'No consensus',
+  mixed: 'Depends',
+  unreliable: 'Unreliable',
+  deprecated: 'Deprecated',
+  blacklisted: 'Blacklisted',
+};
+
 const RATING_TONE: Record<Credibility['status'], string> = {
   reliable: 'bg-ok-soft text-ok',
   'no-consensus': 'bg-muted-soft text-ink-2',
@@ -68,10 +80,10 @@ const RATING_TONE: Record<Credibility['status'], string> = {
 function RatingPill({ rating }: { rating: Credibility }) {
   return (
     <span
-      className={`wys-pill px-1.5 py-0 text-[11px] ${RATING_TONE[rating.status]}`}
-      title={`${rating.name}: ${rating.statusLabel} (Wikipedia editors' consensus). ${rating.summary}`}
+      className={`wys-pill shrink-0 px-1.5 py-0 text-[11px] ${RATING_TONE[rating.status]}`}
+      title={`Wikipedia: ${rating.name} is rated "${rating.statusLabel}" by editors' consensus. ${rating.summary}`}
     >
-      Wikipedia: {rating.statusLabel}
+      {RATING_SHORT[rating.status]}
     </span>
   );
 }
@@ -83,7 +95,7 @@ export function SourceRow({ source: s, rating }: { source: Source; rating?: Cred
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-  const cls = `flex items-start gap-2.5 rounded-lg border px-3 py-2.5 no-underline ${s.verified ? 'border-line bg-paper hover:bg-surface' : 'border-dashed border-line-strong bg-paper'}`;
+  const cls = `flex items-start gap-2.5 rounded-xl border px-3 py-2.5 no-underline ${s.verified ? 'border-line bg-paper hover:bg-surface' : 'border-dashed border-line-strong bg-paper'}`;
   const number = (
     <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-accent-soft text-[11px] font-bold text-accent">{s.id}</span>
   );
