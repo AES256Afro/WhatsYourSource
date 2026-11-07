@@ -30,7 +30,7 @@ import { useSettings } from './hooks/useSettings';
 type View = 'home' | 'checking' | 'result' | 'error' | 'settings' | 'history' | 'detail';
 
 /** Errors worth trying the next provider for. */
-const FALLBACK_CODES = new Set(['no-key', 'auth', 'quota', 'network', 'server', 'bad-request']);
+const FALLBACK_CODES = new Set(['no-key', 'auth', 'quota', 'network', 'server', 'bad-request', 'empty']);
 
 export function App() {
   const { settings, update } = useSettings();
@@ -207,7 +207,7 @@ export function App() {
           }
           return;
         }
-        lastError = failed ?? { code: 'unknown', message: 'The provider returned nothing.' };
+        lastError = failed ?? { code: 'unknown', message: 'The check ended without a result.' };
         if (!FALLBACK_CODES.has(lastError.code) || !s.fallback) break;
       }
       setError({ input, error: lastError ?? { code: 'unknown', message: 'Unknown error.' } });

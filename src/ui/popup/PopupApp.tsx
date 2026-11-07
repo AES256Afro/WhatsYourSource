@@ -46,8 +46,10 @@ export function PopupApp() {
   /** Open the panel synchronously (user gesture), then hand over the job. */
   const checkInPanel = () => {
     if (!input) return;
-    openPanelSync(tab ?? undefined, () => void browser.runtime.sendMessage({ type: 'wys:open-panel' }));
-    void enqueueJob(input, tab?.id, tab?.windowId).then(() => window.close());
+    // Don't close the popup until the panel (or its fallback window) is actually open, or the job
+    // would sit in storage until some later panel picks it up.
+    const opened = openPanelSync(tab ?? undefined, () => void browser.runtime.sendMessage({ type: 'wys:open-panel' }));
+    void Promise.all([opened.catch(() => undefined), enqueueJob(input, tab?.id, tab?.windowId)]).then(() => window.close());
   };
 
   const openWeb = () => {

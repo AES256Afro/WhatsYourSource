@@ -11,9 +11,9 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 
 | Category | Sweeps run | Consecutive clean | Retired |
 |---|---|---|---|
-| Code | 6 | 0 | no |
-| Bug | 6 | 0 | no |
-| Security | 6 | 1 | no |
+| Code | 7 | 0 | no |
+| Bug | 7 | 0 | no |
+| Security | 7 | 2 | no |
 
 ## Stage 2 status
 
@@ -53,7 +53,7 @@ Findings and fixes:
 
 Findings and fixes:
 - `src/entrypoints/background.ts`: the keyboard command awaited `loadSettings()` before `openPanel()`, losing the user gesture so Chrome fell back to a detached window. The background now keeps a copy of the public settings in memory (loaded at start, updated on `storage.onChanged`) and decides synchronously.
-- Chip/shortcut with Google AI Mode as the trigger or default opened an empty side panel *and* a google.com tab. New `pageTriggerTarget()` rule (web if either the trigger setting or the default provider is web mode); the content script sends `wys:open-webmode` and the background never opens the panel in that case. Context-menu items honour the same rule.
+- Chip/shortcut with Google AI Mode as the trigger or default opened an empty side panel *and* a google.com tab. New `pageTriggerTarget()` rule (web if either the trigger setting or the default provider is web mode); the content script sends `wys:open-webmode` and the background never opens the panel in that case. Context-menu items follow only the default-provider setting (the trigger setting is labelled as applying to the shortcut and the chip), corrected in sweep 7.
 - `mergeSettings` discarded all settings on one invalid field → per-field reset guided by zod issue paths (`tests/unit/settings-storage.test.ts`).
 - Paste box attributed pasted text to the current tab's URL → no page URL; prompt says "pasted text (origin unknown)" (`tests/unit/prompts.test.ts`).
 - Context menus: "Check source of this post/page" also appeared on selections and images, giving four items → now only on `page` and `link` contexts.
@@ -197,3 +197,19 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - History was hard-capped at 300 rows while the header counted all checks → paged by `createdAt` ("Load older checks"), `listChecks({ before })`; test added.
 
 `clean: no` (bug, code); `clean: yes` (security, 1 of 3)
+
+### 2026-11-07 · Sweep 7 (code, bug, security) — fresh-context whole-tree audit, confirmed-only bar
+
+**Security: 0 confirmed (clean, 2 of 3).**
+
+**Bugs**
+- History "Load older checks" could run twice at once or append a page from the previous filter after the filter changed → in-flight guard and a filter token; stale results dropped.
+- An empty model reply (`unknown` code) never reached the fallback provider although the sweep-6 note said it would → its own `empty` code, in the fallback set, with its own hint; the unreachable default in `App.tsx` removed.
+- The content script crashed on every XML, SVG, RSS and sitemap document (`attachShadow` throws outside the HTML namespace), and because the chip was built before the message listener, those pages never answered selection or snapshot requests → the script returns early on non-HTML documents.
+- A selection inside an iframe (comment widgets, embedded editors) was silently turned into a whole-page check: the content script runs in the top frame only → when the top frame reports no selection, a one-off reader is injected into all frames and the first frame with a selection wins (context menu, shortcut, popup and home view all go through it).
+- The popup closed itself before the side panel (or its fallback window) had opened, so a rejected open left the job waiting for whatever panel came next → `openPanelSync` returns a promise and the popup waits for it.
+
+**Code**
+- Ledger said context-menu items honour the trigger setting; they follow the default provider, which matches the settings label. Ledger corrected.
+
+`clean: no` (bug, code); `clean: yes` (security)

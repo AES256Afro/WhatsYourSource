@@ -174,7 +174,7 @@ export default defineBackground(() => {
   });
 
   function openPanel(tab: MaybeTab) {
-    openPanelSync(tab);
+    void openPanelSync(tab);
   }
 
   /** Ask the content script for the richer selection (context paragraph); fall back to the menu's text. */
@@ -185,27 +185,45 @@ export default defineBackground(() => {
       const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:get-selection' });
       const parsed = SelectionInfoSchema.safeParse(reply);
       if (parsed.success && parsed.data.text.trim()) return parsed.data;
+      // The top frame answered but has no selection: the selection may live in an iframe (a comments
+      // widget, an embedded editor), which the content script does not run in. Ask every frame.
+      const inFrame = await readSelectionFromFrames(tab.id, true);
+      if (inFrame)
+        return {
+          ...inFrame,
+          pageUrl: parsed.success ? parsed.data.pageUrl : inFrame.pageUrl,
+          pageTitle: parsed.success ? parsed.data.pageTitle : inFrame.pageTitle,
+        };
     } catch {
       // No content script on this page (loaded before install, or a restricted URL). Try injecting a one-off reader.
       try {
-        const [r] = await browser.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: (limits: { text: number; url: number; title: number }) => {
-            const sel = window.getSelection();
-            return {
-              text: sel ? sel.toString().trim().slice(0, limits.text) : '',
-              pageUrl: location.href.slice(0, limits.url),
-              pageTitle: document.title.slice(0, limits.title),
-            };
-          },
-          args: [{ text: LIMITS.text, url: LIMITS.url, title: LIMITS.title }],
-        });
-        const parsed = SelectionInfoSchema.safeParse(r?.result);
-        if (parsed.success && parsed.data.text.trim()) return parsed.data;
+        const r = await readSelectionFromFrames(tab.id, false);
+        if (r) return r;
       } catch {
         /* restricted page */
       }
     }
     return base;
+  }
+
+  /** Inject a one-off selection reader; with `allFrames` the first frame that has a selection wins. */
+  async function readSelectionFromFrames(tabId: number, allFrames: boolean): Promise<SelectionInfo | null> {
+    const results = await browser.scripting.executeScript({
+      target: { tabId, allFrames },
+      func: (limits: { text: number; url: number; title: number }) => {
+        const sel = window.getSelection();
+        return {
+          text: sel ? sel.toString().trim().slice(0, limits.text) : '',
+          pageUrl: location.href.slice(0, limits.url),
+          pageTitle: document.title.slice(0, limits.title),
+        };
+      },
+      args: [{ text: LIMITS.text, url: LIMITS.url, title: LIMITS.title }],
+    });
+    for (const r of results) {
+      const parsed = SelectionInfoSchema.safeParse(r.result);
+      if (parsed.success && parsed.data.text.trim()) return parsed.data;
+    }
+    return null;
   }
 });

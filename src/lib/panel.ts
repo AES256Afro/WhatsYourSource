@@ -10,7 +10,7 @@ interface PanelApis {
  * a user-gesture handler, with no `await` before it, or both browsers refuse. Falls back to a
  * detached popup window when neither API exists or the call is rejected.
  */
-export function openPanelSync(tab: { id?: number; windowId?: number } | undefined, onNoApi?: () => void): void {
+export function openPanelSync(tab: { id?: number; windowId?: number } | undefined, onNoApi?: () => void): Promise<void> {
   const apis = browser as unknown as PanelApis;
   const fallback = async () => {
     // Reuse a panel window we already opened rather than stacking a new one per click.
@@ -30,22 +30,23 @@ export function openPanelSync(tab: { id?: number; windowId?: number } | undefine
   try {
     if (apis.sidePanel?.open) {
       const opts = tab?.windowId != null ? { windowId: tab.windowId } : { tabId: tab?.id };
-      apis.sidePanel.open(opts).catch((e: unknown) => {
+      return apis.sidePanel.open(opts).catch((e: unknown) => {
         console.warn('[wys] sidePanel.open failed, opening a window instead', e);
-        void fallback();
+        return fallback();
       });
-      return;
     }
     if (apis.sidebarAction?.open) {
-      apis.sidebarAction.open().catch((e: unknown) => {
+      return apis.sidebarAction.open().catch((e: unknown) => {
         console.warn('[wys] sidebarAction.open failed, opening a window instead', e);
-        void fallback();
+        return fallback();
       });
-      return;
     }
   } catch (e) {
     console.warn('[wys] no side panel API', e);
   }
-  if (onNoApi) onNoApi();
-  else void fallback();
+  if (onNoApi) {
+    onNoApi();
+    return Promise.resolve();
+  }
+  return fallback();
 }

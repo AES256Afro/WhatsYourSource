@@ -18,6 +18,8 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
   main(ctx) {
+    // XML, SVG and other non-HTML documents: no chip (attachShadow throws there) and nothing to snapshot.
+    if (!(document instanceof HTMLDocument) || document.contentType === 'application/xml' || document.contentType === 'text/xml') return;
     // Only the public half of the settings (no API keys) is read here. (storage.onChanged still
     // delivers every change to this isolated world; the `secrets` key is ignored, never kept.)
     let settings: Settings = DEFAULT_SETTINGS;

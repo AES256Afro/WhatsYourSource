@@ -227,7 +227,7 @@ describe('empty model output', () => {
     const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'm', search: null, fetchPages: false });
     const { result, error } = await collectCheck(INPUT, p);
     expect(result).toBeUndefined();
-    expect(error?.code).toBe('unknown');
+    expect(error?.code).toBe('empty');
     expect(error?.message).toMatch(/returned nothing/);
   });
 });

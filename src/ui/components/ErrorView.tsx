@@ -20,6 +20,8 @@ const HINT: Record<string, string> = {
   blocked: 'The provider declined this content. Try a shorter selection or a different provider.',
   'bad-request': 'The provider didn’t accept the request — often an unknown model name. Check the model in settings.',
   server: 'The provider had a server error. Try again in a moment.',
+  empty:
+    'The model sent back an empty answer. For a local model, give it a bigger context window or a shorter selection; otherwise try again or another provider.',
   cancelled: 'Cancelled.',
   'image-permission':
     'The site doesn’t allow extensions to read its images directly. Allow access to that host once and try again, or make sure the image is visible on screen so a screenshot can be used.',

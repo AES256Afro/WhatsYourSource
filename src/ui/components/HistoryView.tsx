@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { clearHistory, exportAll, listChecks, storageStats, type StoredCheck } from '@/lib/history/db';
 import { downloadText } from '@/lib/history/export';
 import type { CheckInput } from '@/lib/messaging/protocol';
@@ -14,11 +14,14 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
   const [withSnapshot, setWithSnapshot] = useState(false);
   const [items, setItems] = useState<StoredCheck[] | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const filterSeq = useRef(0);
   const [stats, setStats] = useState<{ checks: number; snapshotBytes: number } | null>(null);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let alive = true;
+    filterSeq.current++;
     void listChecks({ query, kind, withSnapshot, limit: PAGE + 1 }).then((r) => {
       if (!alive) return;
       setHasMore(r.length > PAGE);
@@ -32,10 +35,17 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
 
   const loadMore = async () => {
     const last = items?.[items.length - 1];
-    if (!last) return;
-    const r = await listChecks({ query, kind, withSnapshot, limit: PAGE + 1, before: last.createdAt });
-    setHasMore(r.length > PAGE);
-    setItems((cur) => [...(cur ?? []), ...r.slice(0, PAGE)]);
+    if (!last || loadingMore) return;
+    const seq = filterSeq.current; // the filters this request belongs to
+    setLoadingMore(true);
+    try {
+      const r = await listChecks({ query, kind, withSnapshot, limit: PAGE + 1, before: last.createdAt });
+      if (seq !== filterSeq.current) return; // filters changed meanwhile; the effect replaced the list
+      setHasMore(r.length > PAGE);
+      setItems((cur) => [...(cur ?? []), ...r.slice(0, PAGE)]);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const groups = useMemo(() => groupByDay(items ?? []), [items]);
@@ -110,8 +120,8 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
           ))
         )}
         {hasMore && (
-          <button className="wys-btn" onClick={() => void loadMore()}>
-            Load older checks
+          <button className="wys-btn" disabled={loadingMore} onClick={() => void loadMore()}>
+            {loadingMore ? 'Loading…' : 'Load older checks'}
           </button>
         )}
       </div>

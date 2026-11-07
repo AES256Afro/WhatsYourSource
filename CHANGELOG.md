@@ -18,6 +18,8 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 - The floating chip and the shortcut open Google AI Mode directly when that is the chosen trigger or default, without opening the side panel.
 
 ### Fixed
+- Selecting text inside an embedded frame (comment widgets, editors) is checked as a selection, not as the whole page.
+- RSS, XML and SVG documents no longer break the extension's page script.
 - The page-snapshot storage limit is now actually enforced (the eviction routine failed silently in real browsers).
 - A check started before finishing first-run setup is shown, not hidden behind the welcome screen.
 - Re-checking an inline image finds the page it was on; an empty model reply is reported as an error instead of an empty card.
