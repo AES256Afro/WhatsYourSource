@@ -120,21 +120,23 @@ Paste one per box; the dashboard lists exactly the permissions in the manifest.
 
 ### Data usage
 
-**What user data do you plan to collect?** — tick exactly these two.
+**What user data do you plan to collect?** — owner's decision (2026-11-07): leave every box unticked.
 
-Why two boxes when nothing is collected by the developer: Chrome's form uses "collect" in the sense of its user-data policy, where *handling* data means "collecting, transmitting, using, or sharing" it, and the policy says disclosure is required "even when data is processed or stored locally". The extension transmits the selected page content to the AI provider the user chose, and stores and transmits the user's own API keys to the provider each belongs to, so both are handled. The boxes are a disclosure of that, not a statement that data reaches the developer; the store page then shows "This developer declares that your data is not being sold…, not used for unrelated purposes, not used for creditworthiness" next to the two types. A dashboard that disagrees with the privacy policy or the behaviour is itself a policy violation, which is the risk in leaving them unticked.
+The developer receives no data: there are no servers, no analytics, and the history stays on the device. Nothing is collected *by the developer*, which is what a visitor reads these boxes as, and the owner does not want the listing to suggest otherwise.
 
-| Data type | Tick | Why |
-|---|---|---|
-| Website content | ✅ | The text, image or page address the user selected is sent to the AI provider the user configured, when the user presses Check. |
-| Authentication information | ✅ | The user's own API keys for the providers they chose, stored locally on the device and sent only to the provider each key belongs to. |
-| Personally identifiable information | ☐ | |
-| Health information | ☐ | |
-| Financial and payment information | ☐ | |
-| Personal communications | ☐ | |
-| Location | ☐ | |
-| Web history | ☐ | (The local history of checks never leaves the device and is not collected by the developer.) |
-| User activity | ☐ | |
+Known risk, so it is not a surprise later: Chrome's user-data policy counts "transmitting" as handling and asks for disclosure "even when data is processed or stored locally". When a user chooses a hosted provider, the selected text goes to Google, Anthropic or OpenAI with the user's own key; a reviewer may read that as "Website content" and "Authentication information" and ask for the boxes to be ticked. If that happens, tick those two, resubmit, and the store page will show them beside "not sold, not used for unrelated purposes" with no change to the extension. The privacy policy already describes the transfers, so the listing stays truthful either way.
+
+| Data type | Tick |
+|---|---|
+| Personally identifiable information | ☐ |
+| Health information | ☐ |
+| Financial and payment information | ☐ |
+| Authentication information | ☐ |
+| Personal communications | ☐ |
+| Location | ☐ |
+| Web history | ☐ |
+| User activity | ☐ |
+| Website content | ☐ |
 
 **Certifications** — tick all three:
 
@@ -172,7 +174,7 @@ Why two boxes when nothing is collected by the developer: Chrome's form uses "co
 ## 6. If the dashboard shows a "Notes for reviewer" or test-instructions field
 
 ```
-No account is needed. To test a full check: Settings → Gemini (your key) → paste any free Google AI Studio key (https://aistudio.google.com/apikey), press Verify, then highlight text on any article and press the "Check source" chip or Alt+Shift+S. Without a key, choose "Google AI Mode (web)" on the first-run screen: a check then opens google.com in a new tab. The optional <all_urls> permission is only requested, inside a click, when an image host blocks cross-origin reads or a local model needs to fetch a page; declining falls back to a screenshot or search snippets. Nothing is sent before the user presses Check; every result shows "What was sent, and to whom".
+The developer collects nothing: no servers, no analytics; settings, keys and history stay on the device. When the user picks a hosted AI provider, the text they selected is sent to that provider with the user's own key, as the privacy policy describes. No account is needed. To test a full check: Settings → Gemini (your key) → paste any free Google AI Studio key (https://aistudio.google.com/apikey), press Verify, then highlight text on any article and press the "Check source" chip or Alt+Shift+S. Without a key, choose "Google AI Mode (web)" on the first-run screen: a check then opens google.com in a new tab. The optional <all_urls> permission is only requested, inside a click, when an image host blocks cross-origin reads or a local model needs to fetch a page; declining falls back to a screenshot or search snippets. Nothing is sent before the user presses Check; every result shows "What was sent, and to whom".
 ```
 
 ---
