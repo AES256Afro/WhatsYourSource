@@ -24,6 +24,14 @@ Until the store listings are live, install from the [latest GitHub release](http
 
 Then open the side panel from the toolbar icon, pick how to check sources (a free Gemini key, Google AI Mode with no key, Claude, or a local model), highlight some text and press **Check source**.
 
+## Privacy
+
+Nothing leaves your browser until you press Check, and then only what you asked about goes to the one provider you configured, with your own key. No accounts, no servers of our own, no analytics. The full policy, including exactly what each provider and lookup receives, is at:
+
+**https://github.com/AES256Afro/WhatsYourSource/blob/main/docs/PRIVACY.md**
+
+(This is the privacy policy URL given to the Chrome Web Store, Firefox Add-ons and Edge Add-ons listings.) Permission-by-permission reasons are in [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
+
 ## Development
 
 ```bash
