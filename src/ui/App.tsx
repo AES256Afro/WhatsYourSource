@@ -6,6 +6,8 @@ import { ImageFetchError } from '@/lib/image/bytes';
 import { prepareImage, type PreparedImage } from '@/lib/image/prepare';
 import { requestOrigin } from '@/lib/permissions';
 import { onJob, takeJob } from '@/lib/jobs';
+import { findTabShowing } from '@/lib/tabs';
+import { isHttpUrl } from '@/lib/util/url';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { runCheck } from '@/lib/pipeline/runCheck';
 import type { CheckResult } from '@/lib/pipeline/schema';
@@ -77,6 +79,8 @@ export function App() {
         setView('settings');
         return;
       }
+      // Someone who runs a check with a working provider has been onboarded, whatever the flag says.
+      if (!s.onboarded) void update((cur) => ({ ...cur, onboarded: true }));
 
       // Capture the page as it is *now*, in parallel with the AI call. Only the page the input came from.
       const pageOfInput = input.kind === 'page' ? input.url : input.pageUrl;
@@ -92,10 +96,19 @@ export function App() {
         const prep: RunState = { input, providerLabel: 'Preparing image', statuses: [], text: '', queries: [], sources: [], startedAt: Date.now() };
         setRun({ ...prep });
         setView('checking');
+        // A re-check has no tab; an inline/blob image can only be re-read from the page it was on.
+        let imageTab = tabId;
+        if (imageTab == null) imageTab = await findTabShowing(input.pageUrl);
+        if (stale()) return;
+        if (imageTab == null && !isHttpUrl(input.srcUrl)) {
+          setError({ input, error: { code: 'image-page-closed', message: 'This image lives inside its page, which is not open.' } });
+          setView('error');
+          return;
+        }
         try {
           image = await prepareImage(
             input,
-            tabId,
+            imageTab,
             (m) => {
               if (stale()) return;
               prep.statuses = [...prep.statuses, m];
@@ -200,7 +213,7 @@ export function App() {
       setError({ input, error: lastError ?? { code: 'unknown', message: 'Unknown error.' } });
       setView('error');
     },
-    [openWebMode],
+    [openWebMode, update],
   );
 
   // Jobs from the background (context menu, shortcut, chip, popup).
@@ -224,7 +237,9 @@ export function App() {
 
   if (!settings) return <div className="p-4 text-[13px] text-ink-2">Loading…</div>;
 
-  if (!settings.onboarded && view !== 'settings') {
+  // The first-run screen only replaces the home view: a check in progress, a result, settings or
+  // history must stay visible even before "Finish setup" was pressed.
+  if (!settings.onboarded && view === 'home') {
     return (
       <div className="flex h-full flex-col bg-paper">
         <Onboarding settings={settings} update={update} onDone={() => setView('home')} onOpenSettings={() => setView('settings')} />

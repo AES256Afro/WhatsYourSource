@@ -11,9 +11,9 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 
 | Category | Sweeps run | Consecutive clean | Retired |
 |---|---|---|---|
-| Code | 5 | 0 | no |
-| Bug | 5 | 0 | no |
-| Security | 5 | 0 | no |
+| Code | 6 | 0 | no |
+| Bug | 6 | 0 | no |
+| Security | 6 | 1 | no |
 
 ## Stage 2 status
 
@@ -181,3 +181,19 @@ Verified sound by the reviewer (kept as regression intent): run tokens in `App.t
 Verified sound by the auditor: clamping at every producer; untrusted framing; `isPublicHttpUrl`; `fetchPageText` policy; snapshot sanitising and sandboxing; secrets split and migration; run tokens; `jobIsForWindow` across contexts; Anthropic/Gemini/OpenAI parsers; sources merge; pricing; eviction; privacy/permission docs vs the manifests.
 
 `clean: no` (all three)
+
+### 2026-11-07 · Sweep 6 (code, bug, security) — fresh-context whole-tree audit, confirmed-only bar
+
+**Security: 0 confirmed findings — first clean security sweep.** Verified again: framing, URL policy, snapshot sandboxing, suggestion-frame CSP, link filtering, secrets, docs vs manifests.
+
+**Bugs**
+- `enforceSnapshotCap` awaited a read on another store while an IndexedDB cursor was open; real browsers auto-commit the cursor's transaction, so `cursor.continue()` threw `TransactionInactiveError` every time and the storage cap was never enforced (the call site swallows rejections; fake-indexeddb in tests does not auto-commit, so the test passed). Rewritten as three separate passes; comment explains why they must stay separate.
+- The first-run screen replaced *every* view except settings, so a check started before "Finish setup" ran invisibly (tokens spent, result saved, nothing shown) → the gate now only covers the home view; running a check with a working provider marks onboarding done; "Finish setup" keeps a provider configured in Settings when the radio was not touched.
+- Re-checking an inline, blob or screenshot-sourced image from a result or history could never work and the error pointed at a screenshot path that was never tried → the page's tab is resolved through its content script and used; if the page is not open, a clear "open the page and re-check from there" error.
+- An empty model reply (Ollama past its context window, Gemini thoughts-only at MAX_TOKENS) was saved as a verdict card whose summary referred to an assessment that was not there → reported as "The provider returned nothing" with a hint; the fallback chain applies. Test added.
+- Links inside the exported saved page never opened (`sandbox=""` plus `target="_blank"`) → `allow-popups`, scripts still blocked.
+
+**Code**
+- History was hard-capped at 300 rows while the header counted all checks → paged by `createdAt` ("Load older checks"), `listChecks({ before })`; test added.
+
+`clean: no` (bug, code); `clean: yes` (security, 1 of 3)

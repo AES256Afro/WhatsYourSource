@@ -74,6 +74,15 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
     yield { type: 'error', code: 'cancelled', message: 'Cancelled.' };
     return;
   }
+  if (!text.trim()) {
+    yield {
+      type: 'error',
+      code: 'unknown',
+      message: 'The provider returned nothing.',
+      details: 'The reply had no text. A local model may have run out of context; try a shorter selection or a bigger context window.',
+    };
+    return;
+  }
 
   const extracted = extractJsonBlock(text);
   let narrative = extracted.narrative;

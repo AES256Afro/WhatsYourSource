@@ -28,7 +28,7 @@ export function checkToStandaloneHtml(check: StoredCheck, snapshot?: StoredSnaps
     .join('');
   const pageHtml = snapshot ? buildSnapshotSrcdoc(snapshot, { loadImages: false }) : '';
   const pageSection = snapshot
-    ? `<h2>Saved page</h2><p><small>${e(snapshot.title)} · <a href="${e(snapshot.url)}">${e(snapshot.url)}</a> · captured ${e(new Date(snapshot.capturedAt).toLocaleString())}</small></p><iframe sandbox="" style="width:100%;height:80vh;border:1px solid #E3E6EA;border-radius:8px" srcdoc="${pageHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></iframe>`
+    ? `<h2>Saved page</h2><p><small>${e(snapshot.title)} · <a href="${e(snapshot.url)}">${e(snapshot.url)}</a> · captured ${e(new Date(snapshot.capturedAt).toLocaleString())}</small></p><iframe sandbox="allow-popups allow-popups-to-escape-sandbox" style="width:100%;height:80vh;border:1px solid #E3E6EA;border-radius:8px" srcdoc="${pageHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></iframe>`
     : '';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; frame-src data: about:; img-src data:"><title>${e(check.verdictLabel)} — ${e(check.title)}</title><style>
 body{max-width:820px;margin:32px auto;padding:0 20px;font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#15181C}

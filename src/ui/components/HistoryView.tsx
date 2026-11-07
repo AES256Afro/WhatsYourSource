@@ -6,23 +6,37 @@ import { Label, Pill, toneForVerdict } from './common';
 import { Camera, Globe, Image, Lines, Post } from './Icons';
 
 type KindFilter = CheckInput['kind'] | 'all';
+const PAGE = 100;
 
 export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => void; refreshKey?: number }) {
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<KindFilter>('all');
   const [withSnapshot, setWithSnapshot] = useState(false);
   const [items, setItems] = useState<StoredCheck[] | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [stats, setStats] = useState<{ checks: number; snapshotBytes: number } | null>(null);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    void listChecks({ query, kind, withSnapshot, limit: 300 }).then((r) => alive && setItems(r));
+    void listChecks({ query, kind, withSnapshot, limit: PAGE + 1 }).then((r) => {
+      if (!alive) return;
+      setHasMore(r.length > PAGE);
+      setItems(r.slice(0, PAGE));
+    });
     void storageStats().then((s) => alive && setStats(s));
     return () => {
       alive = false;
     };
   }, [query, kind, withSnapshot, tick, refreshKey]);
+
+  const loadMore = async () => {
+    const last = items?.[items.length - 1];
+    if (!last) return;
+    const r = await listChecks({ query, kind, withSnapshot, limit: PAGE + 1, before: last.createdAt });
+    setHasMore(r.length > PAGE);
+    setItems((cur) => [...(cur ?? []), ...r.slice(0, PAGE)]);
+  };
 
   const groups = useMemo(() => groupByDay(items ?? []), [items]);
 
@@ -94,6 +108,11 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
               ))}
             </div>
           ))
+        )}
+        {hasMore && (
+          <button className="wys-btn" onClick={() => void loadMore()}>
+            Load older checks
+          </button>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2.5 border-t border-line bg-paper px-3.5 py-2.5 text-[11px] text-ink-2">

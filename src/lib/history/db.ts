@@ -108,6 +108,8 @@ export interface ListOptions {
   kind?: CheckInput['kind'] | 'all';
   withSnapshot?: boolean;
   limit?: number;
+  /** Only checks created strictly before this timestamp: the paging cursor. */
+  before?: number;
 }
 
 export async function listChecks(opts: ListOptions = {}): Promise<StoredCheck[]> {
@@ -115,7 +117,8 @@ export async function listChecks(opts: ListOptions = {}): Promise<StoredCheck[]>
   const q = (opts.query ?? '').trim().toLowerCase();
   const out: StoredCheck[] = [];
   const limit = opts.limit ?? 500;
-  let cursor = await db.transaction('checks').store.index('by-created').openCursor(null, 'prev');
+  const range = opts.before != null ? IDBKeyRange.upperBound(opts.before, true) : null;
+  let cursor = await db.transaction('checks').store.index('by-created').openCursor(range, 'prev');
   while (cursor && out.length < limit) {
     const c = cursor.value;
     const kindOk = !opts.kind || opts.kind === 'all' || c.kind === opts.kind;
@@ -178,25 +181,38 @@ export async function storageStats(): Promise<{ checks: number; snapshots: numbe
   return { checks, snapshots, snapshotBytes };
 }
 
-/** Drop the oldest snapshots (never the results) until snapshot storage fits under the cap. */
+/**
+ * Drop the oldest snapshots (never the results) until snapshot storage fits under the cap.
+ * IndexedDB auto-commits a transaction the moment control leaves it, so the cursor pass below only
+ * collects ids; every other read and write happens afterwards in its own transaction. (fake-indexeddb
+ * does not enforce this, so a unit test cannot catch an interleaved await; keep the passes separate.)
+ */
 export async function enforceSnapshotCap(maxBytes: number): Promise<number> {
   const db = await getDb();
   const { snapshotBytes } = await storageStats();
   if (snapshotBytes <= maxBytes) return 0;
   let excess = snapshotBytes - maxBytes;
-  let removed = 0;
+
+  // Pass 1: candidate ids, oldest first (one transaction, no foreign awaits).
+  const candidates: string[] = [];
   let cursor = await db.transaction('checks').store.index('by-created').openCursor(null, 'next');
-  const victims: string[] = [];
-  while (cursor && excess > 0) {
-    if (cursor.value.hasSnapshot) {
-      const snap = await db.get('snapshots', cursor.value.id);
-      if (snap) {
-        victims.push(cursor.value.id);
-        excess -= snap.bytes;
-      }
-    }
+  while (cursor) {
+    if (cursor.value.hasSnapshot) candidates.push(cursor.value.id);
     cursor = await cursor.continue();
   }
+
+  // Pass 2: sizes, then victims.
+  const victims: string[] = [];
+  for (const id of candidates) {
+    if (excess <= 0) break;
+    const snap = await db.get('snapshots', id);
+    if (!snap) continue;
+    victims.push(id);
+    excess -= snap.bytes;
+  }
+
+  // Pass 3: delete, flagging the check row.
+  let removed = 0;
   for (const id of victims) {
     const tx = db.transaction(['checks', 'snapshots'], 'readwrite');
     const c = await tx.objectStore('checks').get(id);

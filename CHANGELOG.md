@@ -18,6 +18,10 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 - The floating chip and the shortcut open Google AI Mode directly when that is the chosen trigger or default, without opening the side panel.
 
 ### Fixed
+- The page-snapshot storage limit is now actually enforced (the eviction routine failed silently in real browsers).
+- A check started before finishing first-run setup is shown, not hidden behind the welcome screen.
+- Re-checking an inline image finds the page it was on; an empty model reply is reported as an error instead of an empty card.
+- History pages through older checks instead of stopping at 300; links in exported saved pages open.
 - Starting a new check while one was running no longer leaves the panel on "Cancelled".
 - A check now runs in exactly one panel even when several panels (or the fallback window) are open.
 - Streaming answers no longer lose text when a line break falls on a network chunk boundary.

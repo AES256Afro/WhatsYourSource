@@ -216,3 +216,18 @@ describe('search backends', () => {
     await expect(createSearxng('').search('q')).rejects.toThrow(/SearXNG/);
   });
 });
+
+describe('empty model output', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('is reported as an error instead of an empty verdict card', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => sse([JSON.stringify({ choices: [{ delta: { content: '' } }] }), '[DONE]'])),
+    );
+    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'm', search: null, fetchPages: false });
+    const { result, error } = await collectCheck(INPUT, p);
+    expect(result).toBeUndefined();
+    expect(error?.code).toBe('unknown');
+    expect(error?.message).toMatch(/returned nothing/);
+  });
+});

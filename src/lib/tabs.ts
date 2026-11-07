@@ -1,4 +1,6 @@
 import { browser, type Browser } from 'wxt/browser';
+import { SelectionInfoSchema } from './messaging/protocol';
+import { normalizeUrl } from './util/url';
 
 /**
  * The tab the user means. Normally the active tab of the current window. When one of our own
@@ -30,4 +32,23 @@ export async function getTargetTab(): Promise<Browser.tabs.Tab | undefined> {
   }
   others.sort((a, b) => ((b as { lastAccessed?: number }).lastAccessed ?? 0) - ((a as { lastAccessed?: number }).lastAccessed ?? 0));
   return others[0] ?? active;
+}
+
+/**
+ * The id of the user's current tab if it is showing `pageUrl` (as its content script reports it),
+ * for re-checks that need the page (screenshots of inline images). We hold no `tabs` permission, so
+ * the content script is the only honest source of a tab's URL.
+ */
+export async function findTabShowing(pageUrl: string): Promise<number | undefined> {
+  if (!/^https?:/i.test(pageUrl)) return undefined;
+  const t = await getTargetTab();
+  if (t?.id == null) return undefined;
+  try {
+    const reply: unknown = await browser.tabs.sendMessage(t.id, { type: 'wys:get-selection' });
+    const parsed = SelectionInfoSchema.safeParse(reply);
+    if (parsed.success && normalizeUrl(parsed.data.pageUrl) === normalizeUrl(pageUrl)) return t.id;
+  } catch {
+    /* no content script */
+  }
+  return undefined;
 }

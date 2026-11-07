@@ -124,3 +124,15 @@ describe('snapshot rendering', () => {
     expect(html).toContain('srcdoc=');
   });
 });
+
+describe('history paging', () => {
+  it('lists strictly older checks when given a cursor', async () => {
+    indexedDB = new IDBFactory();
+    resetDbForTests();
+    for (let i = 0; i < 5; i++) await saveCheck(fakeResult({ createdAt: 1000 + i }));
+    const first = await listChecks({ limit: 2 });
+    expect(first.map((c) => c.createdAt)).toEqual([1004, 1003]);
+    const next = await listChecks({ limit: 2, before: first[1]!.createdAt });
+    expect(next.map((c) => c.createdAt)).toEqual([1002, 1001]);
+  });
+});

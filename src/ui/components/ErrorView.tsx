@@ -24,6 +24,7 @@ const HINT: Record<string, string> = {
   'image-permission':
     'The site doesn’t allow extensions to read its images directly. Allow access to that host once and try again, or make sure the image is visible on screen so a screenshot can be used.',
   image: 'The image couldn’t be loaded. Try opening it in its own tab and checking it from there.',
+  'image-page-closed': 'Open the page the image was on, then re-check it from there (right-click the image → Check source of this image).',
 };
 
 export function ErrorView({

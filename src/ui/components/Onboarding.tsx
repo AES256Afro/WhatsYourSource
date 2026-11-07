@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ProviderId, Settings } from '@/lib/storage/settings';
+import { providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
 import { Cpu, Globe, Link, Logo, Sparkle } from './Icons';
 import { CommitInput, SecretInput, Toggle } from './settings/primitives';
 
@@ -51,12 +51,19 @@ export function Onboarding({
   onDone: () => void;
   onOpenSettings: () => void;
 }) {
-  const [choice, setChoice] = useState<ProviderId>('gemini');
+  const [choice, setChoiceState] = useState<ProviderId>('gemini');
+  const [touched, setTouched] = useState(false);
+  const setChoice = (id: ProviderId) => {
+    setTouched(true);
+    setChoiceState(id);
+  };
   const [chip, setChip] = useState(settings.privacy.chip);
   const [snapshots, setSnapshots] = useState(settings.privacy.snapshots);
 
   const finish = async () => {
-    await update((s) => ({ ...s, onboarded: true, defaultProvider: choice, privacy: { ...s.privacy, chip, snapshots } }));
+    // A provider configured in Settings before pressing Finish wins over the untouched radio default.
+    const keepCurrent = !touched && providerReady(settings) && settings.defaultProvider !== choice;
+    await update((s) => ({ ...s, onboarded: true, defaultProvider: keepCurrent ? s.defaultProvider : choice, privacy: { ...s.privacy, chip, snapshots } }));
     if (choice === 'anthropic' || choice === 'openai-compat') onOpenSettings();
     else onDone();
   };
