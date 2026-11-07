@@ -4,7 +4,7 @@ import { enqueueJob } from '@/lib/jobs';
 import { openPanelSync } from '@/lib/panel';
 import { clampSelection, LIMITS, MessageSchema, PostInputSchema, SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
 import { DEFAULT_SETTINGS, loadPublicSettings, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
-import { googleAiModeUrl } from '@/lib/webmode';
+import { configureWebMode, googleAiModeUrl } from '@/lib/webmode';
 
 /**
  * The background is a router only: it owns the context menus and the keyboard command,
@@ -28,9 +28,13 @@ export default defineBackground(() => {
    * Until the first load resolves we assume the panel, which is the common case.
    */
   let settings: Settings = DEFAULT_SETTINGS;
-  void loadPublicSettings().then((s) => (settings = s));
+  const adopt = (s: Settings) => {
+    settings = s;
+    configureWebMode(s.webmodeVariant);
+  };
+  void loadPublicSettings().then(adopt);
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes[SETTINGS_KEY]) settings = mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue);
+    if (area === 'local' && changes[SETTINGS_KEY]) adopt(mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue));
   });
 
   function createMenus() {
@@ -133,7 +137,7 @@ export default defineBackground(() => {
     void (async () => {
       // The in-memory copy may still be the defaults right after the worker woke up; re-read now
       // that we are async anyway. (The panel may have opened needlessly; harmless.)
-      settings = await loadPublicSettings();
+      adopt(await loadPublicSettings());
       target = pageTriggerTarget(settings);
       const activeTab = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
       if (target === 'panel' && !tab) openPanel(activeTab);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { sourceLookups, startLookups } from '@/lib/evidence';
+import { claimsForPrompt, extractClaims } from '@/lib/pipeline/claims';
 import { enforceSnapshotCap, saveCheck } from '@/lib/history/db';
 import { captureFromTab } from '@/lib/history/snapshot';
 import { ImageFetchError } from '@/lib/image/bytes';
@@ -14,7 +15,7 @@ import { runCheck } from '@/lib/pipeline/runCheck';
 import type { CheckResult } from '@/lib/pipeline/schema';
 import { createProvider, providerDisplayName } from '@/lib/providers/registry';
 import { providerOrder, providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
-import { googleAiModeUrl } from '@/lib/webmode';
+import { configureWebMode, googleAiModeUrl } from '@/lib/webmode';
 import { CheckingView, type RunState } from './components/CheckingView';
 import { DetailView } from './components/DetailView';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -32,7 +33,7 @@ import { useSettings } from './hooks/useSettings';
 type View = 'home' | 'checking' | 'result' | 'error' | 'settings' | 'history' | 'detail';
 
 /** Errors worth trying the next provider for. */
-const FALLBACK_CODES = new Set(['no-key', 'auth', 'quota', 'network', 'server', 'bad-request', 'empty']);
+const FALLBACK_CODES = new Set(['no-key', 'auth', 'quota', 'network', 'server', 'bad-request', 'empty', 'unsupported']);
 
 export function App() {
   const { settings, update } = useSettings();
@@ -55,6 +56,7 @@ export function App() {
   const settingsRef = useRef<Settings | null>(null);
   useEffect(() => {
     settingsRef.current = settings;
+    if (settings) configureWebMode(settings.webmodeVariant);
   }, [settings]);
 
   const openWebMode = useCallback((input: CheckInput) => {
@@ -98,9 +100,27 @@ export function App() {
       setBusy(true);
       // Deterministic lookups run beside the model. The fast ones get a short head start so the
       // model can cite them; whatever is still pending is merged into the result afterwards.
-      const lookups = startLookups(input, s, controller.signal);
+      // Two-pass: a cheap first call lists the claims, so each can be looked up on its own and the
+      // main call knows exactly what to verify. Off for image checks (nothing to extract yet) and in Settings.
+      const firstProvider = createProvider(order[0]!, s);
+      const twoPass = s.twoPass && !!firstProvider && input.kind !== 'image';
+      const claimsPromise: Promise<string[]> = twoPass ? extractClaims(input, firstProvider, controller.signal) : Promise.resolve([]);
+      const lookups = startLookups(input, s, controller.signal, twoPass ? claimsPromise : undefined);
       const lookupsPromise = lookups.all;
-      const lookupsText = await Promise.race([lookups.forPrompt, new Promise<string>((r) => setTimeout(() => r(''), 2500))]);
+      if (twoPass)
+        setRun({
+          input,
+          providerLabel: `${providerDisplayName(order[0]!, s)} · ${firstProvider.model}`,
+          statuses: ['Listing the claims to check…'],
+          text: '',
+          queries: [],
+          sources: [],
+          startedAt: Date.now(),
+        });
+      if (twoPass) setView('checking');
+      const claimsList = await claimsPromise;
+      if (stale()) return;
+      const lookupsText = await Promise.race([lookups.forPrompt, new Promise<string>((r) => setTimeout(() => r(''), twoPass ? 4000 : 2500))]);
       if (stale()) return;
       const finish = () => {
         if (!stale()) setBusy(false);
@@ -173,7 +193,16 @@ export function App() {
         let finished: CheckResult | null = null;
         let failed: RunError | null = null;
 
-        for await (const ev of runCheck(input, provider, controller.signal, { image, lookups: lookupsText || undefined })) {
+        if (input.kind === 'image' && !provider.capabilities.image) {
+          failed = { code: 'unsupported', message: `${provider.label} (${provider.model}) cannot look at images.`, provider: id };
+        }
+        for await (const ev of failed
+          ? []
+          : runCheck(input, provider, controller.signal, {
+              image,
+              lookups: lookupsText || undefined,
+              claims: claimsList.length ? claimsForPrompt(claimsList) : undefined,
+            })) {
           if (stale()) return;
           switch (ev.type) {
             case 'status':

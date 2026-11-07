@@ -20,6 +20,8 @@ export interface RunOptions {
   image?: { base64: string; mime: string; provenance?: LocalProvenance; provenanceFacts?: string; provenanceMetadata?: string };
   /** Pre-run lookups to show the model (see `lookupsForPrompt`). */
   lookups?: string;
+  /** Claims from the extraction pass (see `claimsForPrompt`). */
+  claims?: string;
 }
 
 export async function* runCheck(input: CheckInput, provider: LlmProvider, signal: AbortSignal, opts: RunOptions = {}): AsyncGenerator<CheckEvent> {
@@ -29,6 +31,7 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
     provenanceFacts: opts.image?.provenanceFacts,
     provenanceMetadata: opts.image?.provenanceMetadata,
     lookups: opts.lookups,
+    claims: opts.claims,
   });
 
   let text = '';

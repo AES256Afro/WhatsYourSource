@@ -43,12 +43,26 @@ function pageUrlOf(input: CheckInput): string {
  * `forPrompt` resolves as soon as the fact-check lookup does (or at once when it is off), so the model
  * can be given published fact-checks without waiting for the slower archive query.
  */
-export function startLookups(input: CheckInput, settings: Settings, signal: AbortSignal): { forPrompt: Promise<string>; all: Promise<Lookups> } {
+export function startLookups(
+  input: CheckInput,
+  settings: Settings,
+  signal: AbortSignal,
+  claims?: Promise<string[]>,
+): { forPrompt: Promise<string>; all: Promise<Lookups> } {
   const l = settings.lookups;
+  // One query from the content itself, plus one per extracted claim (first three) when a first pass ran.
+  const queries: Promise<string[]> = claims
+    ? claims.then((cs) => [factCheckQuery(textOf(input)), ...cs.slice(0, 3)])
+    : Promise.resolve([factCheckQuery(textOf(input))]);
   const factChecks: Promise<Pick<Lookups, 'factChecks' | 'factCheckError'>> =
     l.factChecks && l.factCheckKey
-      ? searchFactChecks(factCheckQuery(textOf(input)), l.factCheckKey, signal)
-          .then((factChecks) => ({ factChecks }))
+      ? queries
+          .then((qs) => Promise.all(Array.from(new Set(qs.filter(Boolean))).map((q) => searchFactChecks(q, l.factCheckKey, signal))))
+          .then((lists) => {
+            const seen = new Set<string>();
+            const factChecks = lists.flat().filter((f) => (seen.has(f.url) ? false : (seen.add(f.url), true)));
+            return { factChecks: factChecks.slice(0, 8) };
+          })
           .catch((e: unknown) => ({ factChecks: [], factCheckError: e instanceof Error ? e.message : String(e) }))
       : Promise.resolve({ factChecks: [] });
   const page = pageUrlOf(input);

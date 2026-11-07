@@ -23,8 +23,8 @@ Rules (from `MILESTONES.md` §4): each sweep reads its whole surface, fixes what
 | Usability | 1 | 0 | no |
 | Visual | 1 | 0 | no |
 | Quality of life | 1 | 0 | no |
-| Platform features | 1 | 0 | no |
-| Optimization | 1 | 0 | no |
+| Platform features | 2 | 0 | no |
+| Optimization | 2 | 0 | no |
 
 ---
 
@@ -304,5 +304,22 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - The always-on content script carried Readability and DOMPurify for page snapshots (165 KB on every page) → snapshot capture moved to `snapshot-capture.js`, injected with `scripting.executeScript` only into the checked tab at check time; the content script is now 103 KB. Remaining weight is zod (message and settings validation) and the post extractor; candidate for sweep 2 (hand-written validators for the content script's two schemas).
 - Decoded image bitmaps are released (`ImageBitmap.close()`) as soon as the perceptual hash is computed.
 - Reputation dataset is a separate lazy chunk, loaded on the first result that needs it.
+
+`clean: no`
+
+### 2026-11-07 · Optimization sweep 2
+
+- The content script still pulled zod through the settings and protocol modules (103 KB) → `lib/messaging/limits.ts` (clamps, limits, sentinel) and `lib/storage/publicSettings.ts` (a hand-validated reader of the four fields the chip needs) are zod-free; message dispatch in the content script is a plain shape check (only our own extension can message it). Content script: 165 KB → 13 KB on every page. Tests cover the reader.
+
+`clean: no`
+
+### 2026-11-07 · Features sweep 2 (M2 remainder, M3 start) — library half
+
+- **Two-pass checking**: a cheap tool-less first call lists the claims (`lib/pipeline/claims.ts`); each claim gets its own published-fact-check lookup and the main pass is told exactly what to verify. Setting `twoPass` (default on; off for image checks).
+- **Native structured output** for the repair pass: Gemini `responseMimeType: application/json`; `response_format: json_object` on hosted OpenAI-style APIs that honour it (OpenAI, OpenRouter, Groq, Together), never on local servers.
+- **Local model capability detection** (`lib/providers/localModels.ts`): LM Studio `/api/v0/models` (type, loaded state, context length, tool use) and Ollama `/api/tags` + `/api/show` (vision, tools, context); name-based vision guess elsewhere. A model the server says cannot see images fails an image check up front with a clear hint and falls through to the next provider.
+- Presets: Jan, vLLM, OpenRouter, Groq, Together added beside Ollama, LM Studio, llama.cpp, OpenAI.
+- **Google AI Overview** beside AI Mode (`webmodeVariant`): a plain search page with its AI Overview, or the conversational AI Mode.
+- UI for these (Settings controls, Test button using the detection, the variant select) follows in the UI half of this sweep.
 
 `clean: no`

@@ -1,7 +1,8 @@
 import { defineUnlistedScript } from '#imports';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'dompurify';
-import { LIMITS, type SnapshotPayload } from '@/lib/messaging/protocol';
+import { LIMITS } from '@/lib/messaging/limits';
+import type { SnapshotPayload } from '@/lib/messaging/protocol';
 
 /**
  * Injected into the checked tab by the side panel (`scripting.executeScript`) when a check runs, and

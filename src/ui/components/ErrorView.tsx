@@ -29,6 +29,7 @@ const HINT: Record<string, string> = {
   'image-permission': 'Allow access to that host once and try again, or make sure the image is visible on screen so a screenshot can be used.',
   image: 'Try opening the image in its own tab and checking it from there.',
   'image-page-closed': 'Open the page the image was on, then right-click the image → Check source of this image.',
+  unsupported: 'Pick a model that can see images (for Ollama or LM Studio a “vision” or “-VL” model), or use Gemini or Claude for image checks.',
 };
 
 function hintFor(error: RunError): string {

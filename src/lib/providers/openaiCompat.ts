@@ -20,6 +20,10 @@ export interface OpenAICompatConfig {
   /** The search backend's own URL (SearXNG), so the model cannot be steered into reading it. */
   searchBaseUrl?: string;
   label?: string;
+  /** The server honours `response_format: json_object` (hosted APIs); used for the repair pass. */
+  jsonMode?: boolean;
+  /** The selected model accepts images; `false` turns image checks into a clear error up front. */
+  vision?: boolean;
 }
 
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
@@ -60,6 +64,7 @@ export class OpenAICompatProvider implements LlmProvider {
   constructor(private cfg: OpenAICompatConfig) {
     this.label = cfg.label ?? 'OpenAI-compatible';
     this.capabilities.webSearch = !!cfg.search;
+    this.capabilities.image = cfg.vision !== false;
   }
 
   get model() {
@@ -102,6 +107,8 @@ export class OpenAICompatProvider implements LlmProvider {
           { role: 'user', content: userContent },
         ],
         signal,
+        {},
+        !!req.plain && !!this.cfg.jsonMode,
       );
       return;
     }
@@ -249,10 +256,18 @@ export class OpenAICompatProvider implements LlmProvider {
     messages: Msg[],
     signal: AbortSignal,
     usageBase: { inputTokens?: number; outputTokens?: number; searches?: number } = {},
+    json = false,
   ): AsyncGenerator<GenEvent> {
     const res = await this.post(
       '/chat/completions',
-      { model: this.cfg.model, messages, temperature: 0.2, stream: true, stream_options: { include_usage: true } },
+      {
+        model: this.cfg.model,
+        messages,
+        temperature: 0.2,
+        stream: true,
+        stream_options: { include_usage: true },
+        ...(json ? { response_format: { type: 'json_object' } } : {}),
+      },
       signal,
     );
     if (!res.body) throw new ProviderError('unknown', 'Empty response body.');

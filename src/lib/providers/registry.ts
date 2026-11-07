@@ -5,17 +5,30 @@ import { GeminiProvider } from './gemini';
 import { OpenAICompatProvider } from './openaiCompat';
 import type { LlmProvider } from './types';
 
+/**
+ * Servers that speak the OpenAI chat API. `local` ones run on this machine; `jsonMode` marks hosted
+ * APIs known to honour `response_format: json_object` (local servers vary, so they get the fenced
+ * block + repair pass instead).
+ */
 export const OPENAI_COMPAT_PRESETS = [
-  { id: 'ollama', label: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1' },
-  { id: 'lmstudio', label: 'LM Studio (local)', baseUrl: 'http://localhost:1234/v1' },
-  { id: 'llamacpp', label: 'llama.cpp server (local)', baseUrl: 'http://localhost:8080/v1' },
-  { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
-  { id: 'custom', label: 'Custom endpoint', baseUrl: '' },
+  { id: 'ollama', label: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', local: true, jsonMode: false },
+  { id: 'lmstudio', label: 'LM Studio (local)', baseUrl: 'http://localhost:1234/v1', local: true, jsonMode: false },
+  { id: 'jan', label: 'Jan (local)', baseUrl: 'http://localhost:1337/v1', local: true, jsonMode: false },
+  { id: 'llamacpp', label: 'llama.cpp server (local)', baseUrl: 'http://localhost:8080/v1', local: true, jsonMode: false },
+  { id: 'vllm', label: 'vLLM (local)', baseUrl: 'http://localhost:8000/v1', local: true, jsonMode: false },
+  { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', local: false, jsonMode: true },
+  { id: 'openrouter', label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', local: false, jsonMode: true },
+  { id: 'groq', label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', local: false, jsonMode: true },
+  { id: 'together', label: 'Together AI', baseUrl: 'https://api.together.xyz/v1', local: false, jsonMode: true },
+  { id: 'custom', label: 'Custom endpoint', baseUrl: '', local: false, jsonMode: false },
 ] as const;
 
+export function presetFor(baseUrl: string) {
+  return OPENAI_COMPAT_PRESETS.find((p) => p.baseUrl && baseUrl.startsWith(p.baseUrl));
+}
+
 export function openaiCompatLabel(baseUrl: string): string {
-  const preset = OPENAI_COMPAT_PRESETS.find((p) => p.baseUrl && baseUrl.startsWith(p.baseUrl));
-  if (preset?.id === 'openai') return 'OpenAI';
+  const preset = presetFor(baseUrl);
   if (preset) return preset.label.replace(' (local)', '');
   return /localhost|127\.0\.0\.1/.test(baseUrl) ? 'Local model' : 'Custom endpoint';
 }
@@ -35,6 +48,9 @@ export function createProvider(id: ProviderId, s: Settings): LlmProvider | null 
         fetchPages: true,
         searchBaseUrl: o.searchTool === 'searxng' ? o.searxngUrl : undefined,
         label: openaiCompatLabel(o.baseUrl),
+        jsonMode: presetFor(o.baseUrl)?.jsonMode ?? false,
+        // `false` only when the server told us so (Test button); unknown models are allowed to try.
+        vision: o.modelVision !== false,
       });
     }
     case 'anthropic':

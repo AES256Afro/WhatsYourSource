@@ -5,6 +5,9 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 ## [Unreleased]
 
 ### Added
+- Two-pass checking: the claims are listed first, looked up one by one, then verified; can be turned off in Settings.
+- Local models: LM Studio and Ollama report which models can see images and call tools; text-only models decline image checks with a hint instead of a server error.
+- More servers: Jan, vLLM, OpenRouter, Groq, Together AI presets; Google AI Overview as an alternative to AI Mode.
 - Published fact-checks (Google Fact Check Tools index, free key) shown above the verdict and given to the AI; Wayback Machine first-archived dates for the page and the original source with an "Archive it now" link; outlet reputation pills from Wikipedia's perennial-sources list. All three can be switched off under Settings → Extra evidence.
 - The strongest evidence for and against, what the content leaves out, and what would change the verdict, on every result.
 - Address-bar keyword `wys`; a "What was sent, and to whom" block on every result.
@@ -20,7 +23,7 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 - Shortcut labels follow the live key binding.
 
 ### Changed
-- Page snapshots are captured by a script injected only at check time; the script that runs on every page is 40% smaller.
+- Page snapshots are captured by a script injected only at check time; the script that runs on every page shrank from 165 KB to 13 KB.
 - Result layout answers the two questions in order: verdict first, likely original source second, then the assessment, claims and sources; "Compare in Google AI Mode" is a link, not the primary button.
 - One vocabulary for the four ways to check (Gemini (your key), Google AI Mode (web), Claude (your key), Local or OpenAI-style model) across onboarding, settings, home and errors; settings copy rewritten in plain language.
 - Verify/Test results appear under the button; error hints say what to do and open Settings at the failing provider.

@@ -1,4 +1,5 @@
-import { LIMITS, type PostInput } from '../messaging/protocol';
+import { LIMITS } from '../messaging/limits';
+import type { PostInput } from '../messaging/protocol';
 
 /**
  * Generic post extraction: from the element the user right-clicked, walk up to the nearest

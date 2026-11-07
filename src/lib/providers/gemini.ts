@@ -64,7 +64,8 @@ export class GeminiProvider implements LlmProvider {
         },
       ],
       ...(tools.length ? { tools } : {}),
-      generationConfig: { temperature: 0.2 },
+      // The repair pass has no tools, so native JSON mode is allowed there (grounding and JSON mode cannot be combined).
+      generationConfig: { temperature: 0.2, ...(req.plain ? { responseMimeType: 'application/json' } : {}) },
     };
 
     const searching = !req.plain && req.wantSearch && this.cfg.grounding;

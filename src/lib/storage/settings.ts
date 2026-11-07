@@ -27,6 +27,10 @@ export const SettingsSchema = z.object({
   fallback: z.boolean(),
   /** What Ctrl+Shift+S and the floating chip do. */
   shortcutAction: z.enum(['panel', 'webmode']),
+  /** Google on the web: AI Mode (a conversational answer) or a normal search page with its AI Overview. */
+  webmodeVariant: z.enum(['ai-mode', 'overview']),
+  /** Extract the claims first (a cheap extra call) so each one can be looked up and checked on its own. */
+  twoPass: z.boolean(),
   providers: z.object({
     gemini: z.object({
       apiKey: z.string(),
@@ -42,6 +46,10 @@ export const SettingsSchema = z.object({
       searxngUrl: z.string(),
       braveKey: z.string(),
       tavilyKey: z.string(),
+      /** What the server said about the selected model (Test button); null = not asked / unknown. */
+      modelVision: z.boolean().nullable(),
+      modelTools: z.boolean().nullable(),
+      modelContext: z.number().nullable(),
     }),
     anthropic: z.object({
       apiKey: z.string(),
@@ -79,6 +87,8 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultProvider: 'gemini',
   fallback: false,
   shortcutAction: 'panel',
+  webmodeVariant: 'ai-mode',
+  twoPass: true,
   providers: {
     gemini: { apiKey: '', model: 'gemini-3.8-flash', grounding: true, urlContext: true },
     openaiCompat: {
@@ -89,6 +99,9 @@ export const DEFAULT_SETTINGS: Settings = {
       searxngUrl: '',
       braveKey: '',
       tavilyKey: '',
+      modelVision: null,
+      modelTools: null,
+      modelContext: null,
     },
     anthropic: { apiKey: '', model: 'claude-sonnet-5-5' },
   },

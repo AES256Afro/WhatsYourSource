@@ -1,9 +1,10 @@
 import { defineContentScript } from '#imports';
 import { browser } from 'wxt/browser';
-import { clampSelection, INLINE_IMAGE_SENTINEL, MessageSchema, type SelectionInfo } from '@/lib/messaging/protocol';
+import { clampSelection, INLINE_IMAGE_SENTINEL } from '@/lib/messaging/limits';
+import type { SelectionInfo } from '@/lib/messaging/protocol';
 import { extractPost } from '@/lib/post/extract';
 import { shortcutLabelForPlatform } from '@/lib/shortcut';
-import { DEFAULT_SETTINGS, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
+import { publicTriggerTarget, readPublicSettings, SETTINGS_KEY, type PublicSettings } from '@/lib/storage/publicSettings';
 
 /**
  * Runs on every page, does three small things and nothing else:
@@ -22,19 +23,19 @@ export default defineContentScript({
     if (!(document instanceof HTMLDocument) || document.contentType === 'application/xml' || document.contentType === 'text/xml') return;
     // Only the public half of the settings (no API keys) is read here. (storage.onChanged still
     // delivers every change to this isolated world; the `secrets` key is ignored, never kept.)
-    let settings: Settings = DEFAULT_SETTINGS;
+    let settings: PublicSettings = readPublicSettings(undefined);
     void browser.storage.local.get(SETTINGS_KEY).then((r) => {
-      settings = mergeSettings(DEFAULT_SETTINGS, r[SETTINGS_KEY]);
+      settings = readPublicSettings(r[SETTINGS_KEY]);
     });
     browser.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes[SETTINGS_KEY]) settings = mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue);
+      if (area === 'local' && changes[SETTINGS_KEY]) settings = readPublicSettings(changes[SETTINGS_KEY].newValue);
     });
 
     const chip = createChip(() => {
       const sel = currentSelection();
       chip.hide();
       if (!sel) return;
-      const type = pageTriggerTarget(settings) === 'webmode' ? 'wys:open-webmode' : 'wys:check';
+      const type = publicTriggerTarget(settings) === 'webmode' ? 'wys:open-webmode' : 'wys:check';
       void browser.runtime.sendMessage({ type, input: { kind: 'text', ...sel } }).catch((e: unknown) => console.warn('[wys] could not reach the extension', e));
     });
 
@@ -84,9 +85,10 @@ export default defineContentScript({
     });
 
     browser.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
-      const parsed = MessageSchema.safeParse(raw);
-      if (!parsed.success) return false;
-      switch (parsed.data.type) {
+      // Only our own extension can message a content script; a plain shape check keeps zod out of every page.
+      const msg = raw as { type?: unknown; srcUrl?: unknown } | null;
+      const type = msg && typeof msg.type === 'string' ? msg.type : '';
+      switch (type) {
         case 'wys:get-selection':
           sendResponse(currentSelection() ?? clampSelection({ text: '', pageUrl: location.href, pageTitle: document.title }));
           return false;
@@ -98,7 +100,7 @@ export default defineContentScript({
           }
           return false;
         case 'wys:locate-image': {
-          const src = parsed.data.srcUrl;
+          const src = typeof msg?.srcUrl === 'string' ? msg.srcUrl : '';
           // An oversized inline image is referenced by a sentinel; the right-clicked element is the image.
           const img =
             src === INLINE_IMAGE_SENTINEL
@@ -118,9 +120,9 @@ export default defineContentScript({
     });
 
     function chipAllowed(): boolean {
-      if (!settings.privacy.chip) return false;
+      if (!settings.chip) return false;
       const host = location.hostname.replace(/^www\./, '');
-      return !settings.privacy.disabledSites.some((s) => host === s || host.endsWith(`.${s}`));
+      return !settings.disabledSites.some((s) => host === s || host.endsWith(`.${s}`));
     }
   },
 });
