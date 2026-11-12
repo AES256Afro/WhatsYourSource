@@ -442,3 +442,12 @@ Verified sound by the auditor: clamping at every producer; untrusted framing; `i
 - Not done: the first-run button label follows the committed key, so it flips after Tab or Enter rather than per keystroke (clicking it directly does the right thing; a per-keystroke draft would duplicate the input's own state) — recorded, low.
 
 `clean: no`
+
+### 2026-11-12 · Post-release bug sweep and code audit (owner report: copy/paste freezes, errors on chrome://extensions)
+
+- Reproduced the chrome://extensions errors: six `Unchecked runtime.lastError: Cannot create item with duplicate id wys-…` entries, produced when `onInstalled` and `onStartup` both fire in one worker start (after a Chrome or extension update) and the two `removeAll().then(create×6)` chains interleave → one chain, each `create` with a callback that reads `lastError`.
+- The freeze report: not reproduced and, as a cross-application mechanism, refuted for Chrome — the clipboard is written eagerly in the browser process on Windows and macOS (no delayed rendering back into a renderer), the extension has no clipboard listeners, and nothing of it runs outside Chrome. What was real: the chip's handler ran `toString()` + `getClientRects()` on the whole selection after every selection change and every key release including the copy shortcut; measured 55–135 ms per event on a 13 MB page, ~350 ms on 18 MB (our own run). Fixed: no key schedules it, length judged from one text node, one-character end rect, select-all skipped, no `article`/`section` in the surrounding block; Readability skipped above 25,000 elements. After the fix the extension's overhead on the 18 MB page is within noise of no extension.
+- Code audit (fresh context): JSON-mode replies (bare object, no fence) were not parsed → claim listing and the repair pass were inert on Gemini and hosted OpenAI-style presets; results are now saved before the slow lookups (a second opinion started during them used to lose the first result); late result updates no longer navigate; context-menu / chip / omnibox routes re-read settings on worker wake; stale queued jobs dropped; menu chain and settings load log instead of rejecting.
+- Left as recorded: `claimJob`'s 80 ms window, `updateSettings` cross-page races (need overlapping writes within milliseconds), the omnibox landing in a fallback window on Chrome (query before `sidePanel.open`; unverified), `captureVisibleTab` after cancel (image discarded), `chip.show()`'s one forced layout on first show.
+
+`clean: no` (two confirmed runtime bugs fixed, one user-visible error fixed)

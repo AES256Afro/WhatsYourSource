@@ -1,6 +1,6 @@
 {
   "name": "whatsyoursource",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Browser extension that checks the source of highlighted text, images and posts with the AI of your choice.",
   "type": "module",

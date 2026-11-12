@@ -43,19 +43,28 @@ export default defineBackground(() => {
   // second removeAll must wait for the first chain or the creates interleave into duplicate ids.
   let menus: Promise<void> = Promise.resolve();
   function createMenus() {
+    const items: Browser.contextMenus.CreateProperties[] = [
+      { id: MENU.selection, title: 'Check source of selection', contexts: ['selection'] },
+      { id: MENU.selectionWeb, title: 'Open selection in Google AI Mode', contexts: ['selection'] },
+      { id: MENU.image, title: 'Check source of this image', contexts: ['image'] },
+      // Post and page only when nothing more specific (a selection, an image) is under the cursor.
+      { id: MENU.post, title: 'Check source of this post', contexts: ['page'] },
+      { id: MENU.page, title: 'Check source of this page', contexts: ['page'] },
+      // A link is the canonical "where is the source?" target: check the page it points to.
+      { id: MENU.link, title: 'Check source of linked page', contexts: ['link'] },
+    ];
     menus = menus
       .then(() => browser.contextMenus.removeAll())
       .then(() => {
-        browser.contextMenus.create({ id: MENU.selection, title: 'Check source of selection', contexts: ['selection'] });
-        browser.contextMenus.create({ id: MENU.selectionWeb, title: 'Open selection in Google AI Mode', contexts: ['selection'] });
-        browser.contextMenus.create({ id: MENU.image, title: 'Check source of this image', contexts: ['image'] });
-        // Post and page only when nothing more specific (a selection, an image) is under the cursor.
-        browser.contextMenus.create({ id: MENU.post, title: 'Check source of this post', contexts: ['page'] });
-        browser.contextMenus.create({ id: MENU.page, title: 'Check source of this page', contexts: ['page'] });
-        // A link is the canonical "where is the source?" target: check the page it points to.
-        browser.contextMenus.create({ id: MENU.link, title: 'Check source of linked page', contexts: ['link'] });
-      });
-    menus = menus.catch((e: unknown) => console.warn('[wys] context menus', e));
+        // Each create takes a callback that reads lastError: a duplicate id (two registrations in one
+        // worker start) is then a handled condition, not an "Unchecked runtime.lastError" entry.
+        for (const item of items)
+          browser.contextMenus.create(item, () => {
+            // Reading it is what marks the error handled; a duplicate id means the other chain already made the item.
+            if (browser.runtime.lastError) return;
+          });
+      })
+      .catch((e: unknown) => console.warn('[wys] context menus', e));
   }
 
   browser.runtime.onInstalled.addListener(createMenus);

@@ -4,6 +4,18 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-12
+
+### Fixed
+- The six "Unchecked runtime.lastError: Cannot create item with duplicate id" entries that appeared under the extension on chrome://extensions after a Chrome or extension update: the context menus were being created twice at once; they are now created through one chain, with the result read.
+- The on-page chip no longer does work that grows with the page after every selection change or key release: on very long pages a select-all or the copy shortcut cost up to a few hundred milliseconds in that tab. It now measures one character at the end of the selection, never serialises the selection until you click, and skips select-all.
+- A check on a page with more than 25,000 elements no longer runs Readability over the whole document (seconds of blocking); the check is saved without a page copy.
+- Two-pass checking and the repair pass were silently inert on Gemini and the hosted OpenAI-style presets: their native JSON mode answers without a code fence, which the parser did not accept.
+- A result is now written to history the moment it is shown; starting another check (a second opinion, say) while the slow evidence lookups were still running used to lose it.
+- A lookup finishing after you had opened History or Settings no longer pulls the panel back to the result.
+- Right-click, chip and address-bar checks re-read the settings before deciding where to go; right after the background worker woke up they could use the defaults (panel instead of Google AI Mode, AI Mode instead of the Overview page).
+- Queued checks older than a minute are dropped instead of running the next time a panel opens.
+
 ## [1.0.0] - 2026-11-07
 
 First store release. Everything below was landed between the 0.1.0 development builds and this version, across one Stage 1 loop (code, bug and security audits, 8 sweeps) and one Stage 2 loop (readability, usability, visual, quality-of-life, feature and optimization sweeps, 3 each); the ledger is in `docs/SWEEPS.md`.
