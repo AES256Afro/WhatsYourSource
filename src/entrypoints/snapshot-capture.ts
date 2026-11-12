@@ -11,7 +11,16 @@ import type { SnapshotPayload } from '@/lib/messaging/protocol';
  */
 export default defineUnlistedScript((): SnapshotPayload => captureSnapshot());
 
+/**
+ * Readability clones and scores every node synchronously; on a very long page (endless feeds,
+ * chat logs) that can block the tab for seconds. Past this size the page copy is skipped and the
+ * check is saved without one, rather than freezing the page the user is reading.
+ */
+const MAX_ELEMENTS = 25_000;
+
 function captureSnapshot(): SnapshotPayload {
+  const base = { url: location.href.slice(0, LIMITS.url), title: document.title.slice(0, LIMITS.title), capturedAt: Date.now() };
+  if (document.getElementsByTagName('*').length > MAX_ELEMENTS) return { ...base, html: '', textLength: 0 };
   const clone = document.cloneNode(true) as Document;
   let article: ReturnType<Readability['parse']> = null;
   try {
@@ -53,10 +62,9 @@ function captureSnapshot(): SnapshotPayload {
     DOMPurify.removeHook('uponSanitizeAttribute', dropDataLinks);
   }
   return {
-    url: location.href.slice(0, LIMITS.url),
+    ...base,
     title: (article?.title || document.title).slice(0, LIMITS.title),
     html: html.slice(0, 1_500_000),
     textLength: article?.textContent?.length ?? 0,
-    capturedAt: Date.now(),
   };
 }

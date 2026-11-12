@@ -36,6 +36,7 @@ export async function captureFromTab(tabId: number | undefined, highlight?: stri
     const parsed = SnapshotPayloadSchema.safeParse(r?.result);
     if (!parsed.success) return null;
     if (normalizeUrl(parsed.data.url) !== normalizeUrl(expectedUrl)) return null;
+    if (!parsed.data.html) return null; // the page was too large to copy (see snapshot-capture.ts)
     payload = parsed.data;
   } catch {
     return null;

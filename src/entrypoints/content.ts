@@ -59,12 +59,18 @@ export default defineContentScript({
       if (!e.isTrusted) return;
       lastUserInput = Date.now();
       // A slow drag-select ends with pointerup but no further selectionchange: re-evaluate now.
-      if (e.type === 'pointerup' || e.type === 'keyup') schedule();
+      // Keyboard selection already fires selectionchange per move, so no key (and never a copy or
+      // paste shortcut) schedules work here.
+      if (e.type === 'pointerup') schedule();
     };
     // pointerdown/keydown as well as the *up* events: a held shift+arrow repeats keydown for as long
     // as the user extends the selection, and a drag-select is a pointerdown long before its pointerup.
     for (const ev of ['pointerdown', 'pointerup', 'keydown', 'keyup'] as const) ctx.addEventListener(document, ev, noteInput, { capture: true, passive: true });
 
+    // Everything in here runs on the page's main thread after every selection change, so it must
+    // stay cheap on any page: no serialising the selection (`toString()` of a select-all on a long
+    // page is the whole page) and no geometry for the whole range (`getClientRects()` is one rect
+    // per text fragment). Only the end of the selection is measured; the text is read on click.
     let timer: number | undefined;
     const schedule = () => {
       window.clearTimeout(timer);
@@ -72,13 +78,16 @@ export default defineContentScript({
         if (!chipAllowed()) return chip.hide();
         if (Date.now() - lastUserInput > 1500) return chip.hide();
         const sel = window.getSelection();
-        if (!sel || sel.isCollapsed || sel.toString().trim().length < 3) return chip.hide();
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) return chip.hide();
         if (chip.contains(sel.anchorNode)) return;
         if (isEditable(sel.anchorNode) || isEditable(sel.focusNode)) return chip.hide();
         const range = sel.getRangeAt(0);
-        const rects = range.getClientRects();
-        const last = rects[rects.length - 1] ?? range.getBoundingClientRect();
-        chip.show(last);
+        // A select-all is a page, not a highlight: the panel's "This page" covers it, and the chip
+        // would sit at the bottom of the document anyway.
+        const top = range.commonAncestorContainer;
+        if (top === document || top === document.documentElement || top === document.body) return chip.hide();
+        if (!likelyLongEnough(range)) return chip.hide();
+        chip.show(selectionEndRect(sel, range));
       }, 220);
     };
 
@@ -140,6 +149,36 @@ export default defineContentScript({
   },
 });
 
+/** Three characters or more, judged without reading the selection: exact inside one text node, assumed otherwise. */
+function likelyLongEnough(range: Range): boolean {
+  if (range.startContainer === range.endContainer && range.startContainer.nodeType === Node.TEXT_NODE) {
+    return (range.startContainer as Text).data.slice(range.startOffset, range.endOffset).trim().length >= 3;
+  }
+  return true;
+}
+
+/** Where the selection ends on screen, measured from one character, so the cost does not grow with the selection. */
+function selectionEndRect(sel: Selection, range: Range): DOMRect {
+  const node = sel.focusNode ?? range.endContainer;
+  const offset = sel.focusNode ? sel.focusOffset : range.endOffset;
+  try {
+    const r = document.createRange();
+    if (node.nodeType === Node.TEXT_NODE) {
+      r.setStart(node, Math.max(0, offset - 1));
+      r.setEnd(node, offset);
+    } else {
+      r.selectNodeContents(node);
+      r.collapse(false);
+    }
+    const rect = r.getBoundingClientRect();
+    if (rect.width || rect.height || rect.x || rect.y) return rect;
+  } catch {
+    /* fall through to the element's box */
+  }
+  const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  return el?.getBoundingClientRect() ?? new DOMRect(8, 8, 0, 0);
+}
+
 /** Text the user is typing (inputs, textareas, contenteditable) is theirs, not something to check. */
 function isEditable(node: Node | null): boolean {
   const el = node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement;
@@ -155,7 +194,8 @@ function currentSelection(): SelectionInfo | null {
   if (text.length < 3) return null;
   const node = sel.anchorNode;
   const el = node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement;
-  const block = el?.closest('p, li, blockquote, td, h1, h2, h3, h4, figcaption, article, section') ?? null;
+  // Small blocks only: `article`/`section` would mean serialising a whole page for 1,200 characters of context.
+  const block = el?.closest('p, li, blockquote, td, h1, h2, h3, h4, figcaption') ?? null;
   const surrounding = block?.textContent?.replace(/\s+/g, ' ').trim().slice(0, LIMITS.surroundingForPrompt);
   return clampSelection({
     text,
