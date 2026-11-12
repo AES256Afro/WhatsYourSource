@@ -34,22 +34,28 @@ export default defineBackground(() => {
   const adopt = (s: Settings) => {
     settings = s;
   };
-  void loadSettingsWithoutSecrets().then(adopt);
+  void loadSettingsWithoutSecrets().then(adopt, (e: unknown) => console.warn('[wys] settings unreadable', e));
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[SETTINGS_KEY]) adopt(mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue));
   });
 
+  // onInstalled and onStartup can both fire in one worker start (an update applied at launch); the
+  // second removeAll must wait for the first chain or the creates interleave into duplicate ids.
+  let menus: Promise<void> = Promise.resolve();
   function createMenus() {
-    void browser.contextMenus.removeAll().then(() => {
-      browser.contextMenus.create({ id: MENU.selection, title: 'Check source of selection', contexts: ['selection'] });
-      browser.contextMenus.create({ id: MENU.selectionWeb, title: 'Open selection in Google AI Mode', contexts: ['selection'] });
-      browser.contextMenus.create({ id: MENU.image, title: 'Check source of this image', contexts: ['image'] });
-      // Post and page only when nothing more specific (a selection, an image) is under the cursor.
-      browser.contextMenus.create({ id: MENU.post, title: 'Check source of this post', contexts: ['page'] });
-      browser.contextMenus.create({ id: MENU.page, title: 'Check source of this page', contexts: ['page'] });
-      // A link is the canonical "where is the source?" target: check the page it points to.
-      browser.contextMenus.create({ id: MENU.link, title: 'Check source of linked page', contexts: ['link'] });
-    });
+    menus = menus
+      .then(() => browser.contextMenus.removeAll())
+      .then(() => {
+        browser.contextMenus.create({ id: MENU.selection, title: 'Check source of selection', contexts: ['selection'] });
+        browser.contextMenus.create({ id: MENU.selectionWeb, title: 'Open selection in Google AI Mode', contexts: ['selection'] });
+        browser.contextMenus.create({ id: MENU.image, title: 'Check source of this image', contexts: ['image'] });
+        // Post and page only when nothing more specific (a selection, an image) is under the cursor.
+        browser.contextMenus.create({ id: MENU.post, title: 'Check source of this post', contexts: ['page'] });
+        browser.contextMenus.create({ id: MENU.page, title: 'Check source of this page', contexts: ['page'] });
+        // A link is the canonical "where is the source?" target: check the page it points to.
+        browser.contextMenus.create({ id: MENU.link, title: 'Check source of linked page', contexts: ['link'] });
+      });
+    menus = menus.catch((e: unknown) => console.warn('[wys] context menus', e));
   }
 
   browser.runtime.onInstalled.addListener(createMenus);
@@ -71,12 +77,20 @@ export default defineBackground(() => {
    * `resolve` may be slow (asking the page); the panel decision cannot wait for it.
    */
   function route(tab: MaybeTab, quick: CheckInput, resolve?: () => Promise<CheckInput>): void {
-    if (settings.defaultProvider === 'webmode') {
-      void (resolve ? resolve() : Promise.resolve(quick)).then((input) => browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) }));
-      return;
-    }
-    openPanel(tab);
-    void (resolve ? resolve() : Promise.resolve(quick)).then((input) => enqueueJob(input, tab?.id, tab?.windowId));
+    // The in-memory copy may still be the defaults right after the worker woke up: decide the panel
+    // synchronously from it (the gesture cannot wait), then re-read before anything irreversible.
+    const panelOpened = settings.defaultProvider !== 'webmode';
+    if (panelOpened) openPanel(tab);
+    void (async () => {
+      adopt(await loadSettingsWithoutSecrets());
+      const input = resolve ? await resolve() : quick;
+      if (settings.defaultProvider === 'webmode') {
+        await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) });
+        return;
+      }
+      if (!panelOpened) openPanel(tab); // the stale copy said web mode; a late panel is better than a lost check
+      await enqueueJob(input, tab?.id, tab?.windowId);
+    })().catch((e: unknown) => console.warn('[wys] could not route the check', e));
   }
 
   browser.contextMenus.onClicked.addListener((info, tab) => {
@@ -137,15 +151,16 @@ export default defineBackground(() => {
     // "example.com/post" is a link too; give it a scheme rather than checking it as text.
     const asLink = /^https?:\/\/\S+$/i.test(t) ? t : /^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(t) ? `https://${t}` : null;
     const input: CheckInput = asLink ? { kind: 'page', url: asLink, title: '' } : { kind: 'text', text: t, pageUrl: '', pageTitle: '' };
-    if (settings.defaultProvider === 'webmode') {
-      void browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) });
-      return;
-    }
     void (async () => {
+      adopt(await loadSettingsWithoutSecrets());
+      if (settings.defaultProvider === 'webmode') {
+        await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) });
+        return;
+      }
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       openPanel(tab);
       await enqueueJob(input, undefined, tab?.windowId);
-    })();
+    })().catch((e: unknown) => console.warn('[wys] omnibox check failed', e));
   });
   void browser.omnibox.setDefaultSuggestion({ description: 'Check whether this is true and find its source: %s' });
 
@@ -192,10 +207,15 @@ export default defineBackground(() => {
         return true;
       }
       case 'wys:open-webmode': {
-        void browser.tabs.create({ url: googleAiModeUrl(msg.input, settings.webmodeVariant) }).then(
-          () => sendResponse({ ok: true }),
-          (e: unknown) => sendResponse({ ok: false, error: String(e) }),
-        );
+        void loadSettingsWithoutSecrets()
+          .then((fresh) => {
+            adopt(fresh);
+            return browser.tabs.create({ url: googleAiModeUrl(msg.input, settings.webmodeVariant) });
+          })
+          .then(
+            () => sendResponse({ ok: true }),
+            (e: unknown) => sendResponse({ ok: false, error: String(e) }),
+          );
         return true;
       }
       case 'wys:open-panel': {

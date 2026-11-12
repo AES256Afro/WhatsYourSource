@@ -201,6 +201,10 @@ export function extractJsonBlock(text: string): { narrative: string; jsonText: s
   }
   if (last) return { narrative: text.slice(0, last.start).trim(), jsonText: last.body.trim() };
 
+  // Native JSON mode (Gemini responseMimeType, OpenAI response_format): the whole reply is the object, no fence.
+  const whole = text.trim();
+  if (whole.startsWith('{') && whole.endsWith('}')) return { narrative: '', jsonText: whole };
+
   // No fence: look for a trailing top-level object.
   const idx = text.lastIndexOf('\n{');
   if (idx !== -1) {

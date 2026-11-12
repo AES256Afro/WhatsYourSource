@@ -54,10 +54,17 @@ async function claimJob(id: string): Promise<boolean> {
   return after === instanceId;
 }
 
+/** A job nobody claimed (the panel closed first, a window failed to open) must not run hours later when a panel next mounts. */
+const JOB_MAX_AGE_MS = 60_000;
+
 export async function takeJob(): Promise<Job | null> {
   const r = await browser.storage.session.get(KEY);
   const parsed = JobSchema.safeParse(r[KEY]);
   if (!parsed.success) return null;
+  if (Date.now() - parsed.data.createdAt > JOB_MAX_AGE_MS) {
+    await browser.storage.session.remove(KEY);
+    return null;
+  }
   if (!jobIsForWindow(parsed.data, await currentWindowId())) return null;
   if (!(await claimJob(parsed.data.id))) return null;
   await browser.storage.session.remove(KEY);

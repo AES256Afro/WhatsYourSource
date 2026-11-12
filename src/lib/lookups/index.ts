@@ -16,7 +16,7 @@ export interface PreRunLookups {
 }
 
 /** How long each lookup may hold things up. The model waits only for fact-checks; archive dates arrive whenever. */
-export const LOOKUP_BUDGET_MS = { forPrompt: 2500, forPromptTwoPass: 4000, archive: 6000 } as const;
+export const LOOKUP_BUDGET_MS = { forPrompt: 2500, forPromptTwoPass: 4000, archive: 6000, factChecks: 8000 } as const;
 
 function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
@@ -68,6 +68,8 @@ export function startLookups(
           })
           .catch(() => ({ factChecks: [] }))
       : Promise.resolve({ factChecks: [] });
+  // A hanging fact-check request must not hold the result's evidence (or anything after it) forever.
+  const factChecksBounded = withTimeout(factChecks, LOOKUP_BUDGET_MS.factChecks, { factChecks: [] });
   const page = pageUrlOf(input);
   const pageCapture: Promise<FirstCapture | undefined> =
     l.archive && isHttpUrl(page)
@@ -77,8 +79,8 @@ export function startLookups(
           undefined,
         )
       : Promise.resolve(undefined);
-  const all = Promise.all([factChecks, pageCapture]).then(([fc, pc]) => ({ ...fc, pageCapture: pc }));
-  const forPrompt = factChecks.then((fc) => lookupsForPrompt({ ...fc }));
+  const all = Promise.all([factChecksBounded, pageCapture]).then(([fc, pc]) => ({ ...fc, pageCapture: pc }));
+  const forPrompt = factChecksBounded.then((fc) => lookupsForPrompt({ ...fc }));
   return { forPrompt, all };
 }
 

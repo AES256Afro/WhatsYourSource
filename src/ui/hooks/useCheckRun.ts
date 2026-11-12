@@ -189,6 +189,20 @@ export function useCheckRun(deps: CheckRunDeps) {
     if (preReady) finished = attachLookups(finished, preReady, { credibility: {}, mixNotes: [] });
     setPhase({ phase: 'result', result: finished, save: { status: 'pending' }, previous });
 
+    // Save first, enrich later: a result the user has seen is in history even if they start the
+    // next check (a second opinion, say) while the slow lookups are still running.
+    let snap: Awaited<typeof snapshotPromise> = null;
+    try {
+      snap = await snapshotPromise;
+      await saveCheck(finished, snap);
+      depsRef.current.onSaved();
+      void enforceSnapshotCap(s.history.maxMb * 1024 * 1024);
+      setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous });
+    } catch (e) {
+      console.warn('[wys] could not save to history', e);
+      setPhase({ phase: 'result', result: finished, save: { status: 'failed', message: e instanceof Error ? e.message : String(e) }, previous });
+      return;
+    }
     try {
       const pre = await lookups.all;
       const extra = await sourceLookups(
@@ -197,22 +211,13 @@ export function useCheckRun(deps: CheckRunDeps) {
         s,
         controller.signal,
       );
-      if (stale()) return;
       finished = attachLookups(finished, pre, extra);
-      setPhase({ phase: 'result', result: finished, save: { status: 'pending' }, previous });
-    } catch (e) {
-      console.warn('[wys] lookups failed', e);
-    }
-    try {
-      const snap = await snapshotPromise;
+      // The row exists; re-put it with the evidence attached even if a newer run has taken the view.
       await saveCheck(finished, snap);
       if (stale()) return;
       setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous });
-      depsRef.current.onSaved();
-      void enforceSnapshotCap(s.history.maxMb * 1024 * 1024);
     } catch (e) {
-      console.warn('[wys] could not save to history', e);
-      setPhase({ phase: 'result', result: finished, save: { status: 'failed', message: e instanceof Error ? e.message : String(e) }, previous });
+      console.warn('[wys] lookups failed', e);
     }
   }, []);
 

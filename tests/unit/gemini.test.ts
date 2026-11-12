@@ -101,7 +101,8 @@ describe('GeminiProvider + runCheck', () => {
         return sse([
           {
             candidates: [
-              { content: { parts: [{ text: '```json\n{"verdict":{"label":"Unverified","kind":"unverified","confidence":"low","summary":"s"}}\n```' }] } },
+              // JSON mode (responseMimeType) answers with the bare object, no fence.
+              { content: { parts: [{ text: '{"verdict":{"label":"Unverified","kind":"unverified","confidence":"low","summary":"s"}}' }] } },
             ],
           },
         ]);

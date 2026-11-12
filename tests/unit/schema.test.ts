@@ -93,3 +93,16 @@ describe('nullable original source title', () => {
     if (r.ok) expect(r.value.originalSource?.url).toBe('https://a.example');
   });
 });
+
+describe('extractJsonBlock with native JSON mode', () => {
+  it('takes a bare JSON document as the whole answer', () => {
+    const { narrative, jsonText } = extractJsonBlock('{\n  "claims": ["a", "b"]\n}');
+    expect(narrative).toBe('');
+    expect(JSON.parse(jsonText!)).toEqual({ claims: ['a', 'b'] });
+  });
+  it('still prefers a fenced block when there is prose', () => {
+    const { narrative, jsonText } = extractJsonBlock('Prose first.\n```json\n{"a":1}\n```');
+    expect(narrative).toBe('Prose first.');
+    expect(jsonText).toBe('{"a":1}');
+  });
+});
