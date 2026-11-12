@@ -64,10 +64,12 @@ export function useCheckRun(deps: CheckRunDeps) {
     if (!s) return;
     const myRun = ++runSeq.current;
     const stale = () => runSeq.current !== myRun;
-    const setPhase = (p: PhasePayload) => {
+    const setPhase = (p: PhasePayload, opts: { quiet?: boolean } = {}) => {
       if (stale()) return;
       setPhaseState({ ...p, seq: ++seq.current });
-      depsRef.current.onPhase(p);
+      // Later updates to a result (saved, evidence attached) must not pull the user back to it
+      // from History or Settings; only transitions navigate.
+      if (!opts.quiet) depsRef.current.onPhase(p);
     };
     abortRef.current?.abort();
     currentInput.current = input;
@@ -197,10 +199,13 @@ export function useCheckRun(deps: CheckRunDeps) {
       await saveCheck(finished, snap);
       depsRef.current.onSaved();
       void enforceSnapshotCap(s.history.maxMb * 1024 * 1024);
-      setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous });
+      setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous }, { quiet: true });
     } catch (e) {
       console.warn('[wys] could not save to history', e);
-      setPhase({ phase: 'result', result: finished, save: { status: 'failed', message: e instanceof Error ? e.message : String(e) }, previous });
+      setPhase(
+        { phase: 'result', result: finished, save: { status: 'failed', message: e instanceof Error ? e.message : String(e) }, previous },
+        { quiet: true },
+      );
       return;
     }
     try {
@@ -215,7 +220,7 @@ export function useCheckRun(deps: CheckRunDeps) {
       // The row exists; re-put it with the evidence attached even if a newer run has taken the view.
       await saveCheck(finished, snap);
       if (stale()) return;
-      setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous });
+      setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous }, { quiet: true });
     } catch (e) {
       console.warn('[wys] lookups failed', e);
     }
