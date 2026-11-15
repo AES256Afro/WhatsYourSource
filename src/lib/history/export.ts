@@ -1,4 +1,6 @@
 import type { StoredCheck, StoredSnapshot } from './db';
+import { questionFor } from '../pipeline/question';
+import { checkToRow, defuse, TABLE_COLUMNS } from './row';
 import { toneForVerdict } from '../pipeline/schema';
 import { buildSnapshotSrcdoc, escapeHtml } from './snapshot';
 
@@ -25,6 +27,9 @@ export function checkToStandaloneHtml(check: StoredCheck, snapshot?: StoredSnaps
   const original = r.originalSource
     ? `<h3>Likely original source</h3><p><strong>${e(r.originalSource.title)}</strong>${r.originalSource.publisher ? ` — ${e(r.originalSource.publisher)}` : ''}${r.originalSource.date ? ` (${e(r.originalSource.date)})` : ''}${r.originalSource.url ? ` · <a href="${e(r.originalSource.url)}">${e(r.originalSource.url)}</a>` : ''}${r.originalSource.how ? `<br><small>${e(r.originalSource.how)}</small>` : ''}</p>`
     : '';
+  const timeline = r.timeline?.length
+    ? `<h3>Timeline</h3><ul>${r.timeline.map((t) => `<li>${t.date ? `<strong>${e(t.date)}</strong>: ` : ''}${e(t.event)}${t.sourceId ? ` [${t.sourceId}]` : ''}</li>`).join('')}</ul>`
+    : '';
   const narrative = r.narrative
     .split(/\n{2,}/)
     .map((p) => `<p>${e(p.trim())}</p>`)
@@ -44,13 +49,32 @@ small{color:#4B5563}h3{margin-top:24px}
 <h1><span class="verdict ${toneForVerdict(r.verdict.kind)}">${e(r.verdict.label)}</span> <small>${e(r.verdict.confidence)} confidence</small></h1>
 <p><strong>${e(r.verdict.summary)}</strong></p>
 ${subject}
+<p><small>Question: ${e(questionFor(r.input.ask, r.input.kind))}</small></p>
 ${narrative}
+${timeline}
 ${original}
 ${claims}
 ${sources}
 ${check.note ? `<h3>Your note</h3><p>${e(check.note)}</p>` : ''}
 ${pageSection}
 </body></html>`;
+}
+
+/**
+ * Checks as a table that Excel, Google Sheets, Numbers and LibreOffice open directly: one row per
+ * check. Plain CSV with a byte-order mark (Excel needs it to read UTF-8). Nothing is uploaded; the
+ * file goes wherever the user puts it.
+ */
+export function checksToCsv(checks: StoredCheck[]): string {
+  return CSV_HEAD + checks.map(csvLine).join('');
+}
+
+const csvCells = (row: readonly string[]) => row.map((v) => `"${defuse(v).replace(/"/g, '""')}"`).join(',') + '\r\n';
+/** The byte-order mark and the heading row. */
+export const CSV_HEAD = '\uFEFF' + csvCells(TABLE_COLUMNS);
+/** One check as one line of the table. */
+export function csvLine(check: StoredCheck): string {
+  return csvCells(checkToRow(check));
 }
 
 export function downloadText(text: string, filename: string, type = 'text/html'): void {
@@ -77,3 +101,5 @@ export function safeFilename(s: string): string {
       .slice(0, 60) || 'check'
   );
 }
+
+export { checkToRow, resultToRow, resultToTsvRow, TABLE_COLUMNS } from './row';

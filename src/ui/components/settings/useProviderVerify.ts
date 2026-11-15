@@ -9,8 +9,12 @@ import type { Status } from './primitives';
 export function useProviderVerify(
   makeProvider: () => LlmProvider,
   key: string,
-  /** Runs after a successful verify; may return the status text to show instead of the model count. */
-  onOk?: (models: string[]) => string | undefined | Promise<string | undefined>,
+  /**
+   * Runs after a successful verify. May return the status text to show instead of the model count,
+   * or that text with the configuration key the outcome now belongs to (when it changed the
+   * configuration itself, e.g. filled in the first model).
+   */
+  onOk?: (models: string[]) => string | undefined | { text: string; key: string } | Promise<string | undefined | { text: string; key: string }>,
 ) {
   const [verified, setVerified] = useState<Status & { forKey: string }>({ kind: 'idle', forKey: key });
   const [models, setModels] = useState<string[]>([]);
@@ -23,8 +27,13 @@ export function useProviderVerify(
       if (r.ok) {
         const list = r.models ?? [];
         setModels(list);
-        const text = await onOk?.(list);
-        setVerified({ kind: 'ok', text: text ?? `Works · ${list.length} model${list.length === 1 ? '' : 's'}`, forKey });
+        const out = await onOk?.(list);
+        const text = typeof out === 'object' ? out.text : out;
+        setVerified({
+          kind: 'ok',
+          text: text ?? `Works · ${list.length} model${list.length === 1 ? '' : 's'}`,
+          forKey: typeof out === 'object' ? out.key : forKey,
+        });
       } else setVerified({ kind: 'bad', text: r.error, forKey });
     } catch (e) {
       // Never leave the button stuck on "Connecting…".

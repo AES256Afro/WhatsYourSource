@@ -1,6 +1,6 @@
 # WhatsYourSource
 
-Browser extension (Chrome + Firefox, Manifest V3) that answers **"is this true, and where can I find the source?"** for highlighted text, images and posts — with the AI of your choice.
+Browser extension (Chrome + Firefox, Manifest V3) that checks highlighted text, images and posts against sources, with the AI of your choice. You pick the question: **fact-check** it, **explain** it, build a **timeline**, **find the flaws**, or ask **your own**.
 
 - **Google AI (Gemini) with your own free key** — Google Search grounding, answers and sources inside the side panel. Default.
 - **Google AI Mode on the web** — no key, no setup: hands your selection to google.com in a new tab.
@@ -9,24 +9,23 @@ Browser extension (Chrome + Firefox, Manifest V3) that answers **"is this true, 
 
 Beside the AI, every check can also show **published fact-checks** (PolitiFact, Snopes, AFP, Full Fact and others via Google's Fact Check Tools index, free key), **Wayback Machine dates** for the page and the original source, and **outlet reputation** from Wikipedia's perennial-sources list (shipped offline). Type `wys <text or link>` in the address bar to check without leaving the keyboard.
 
-Every in-panel check is kept in a local history with a saved copy of the page it came from. Nothing leaves the browser until you press **Check**.
+Every in-panel check is kept in a local history (with a saved copy of the page when it was started from the right-click menu or the shortcut). The history exports as a spreadsheet (CSV), and any result can be copied as one spreadsheet row. Nothing leaves the browser until you press **Check**.
 
 **What you can check:** highlighted text (floating chip, right-click, or `Alt+Shift+S`), an image (right-click → *Check source of this image*; EXIF, Content Credentials and a perceptual hash are read on your device first), a social post (right-click anywhere in it → *Check source of this post*), or the whole page.
 
 ## Screenshots
 
-| | |
-|---|---|
-| ![A result: verdict, likely original source, assessment](store/01-result.png) | ![The Check source chip on highlighted text](store/02-chip.png) |
-| *A result: the verdict first, then the likely original source, the assessment, the claims and the sources that were read.* | *Highlight text and the "Check source" chip appears; or press Alt+Shift+S, or right-click.* |
-| ![An image check with on-device provenance](store/03-image.png) | ![A saved check with its page snapshot](store/04-saved-page.png) |
-| *An image check: metadata read on your device, then the earliest appearance online.* | *Every check is saved locally with a copy of the page as it was.* |
-| ![Settings: the four ways to check, local model card](store/05-providers.png) | ![First-run screen](store/06-onboarding.png) |
-| *Settings: Gemini with your key, Google AI Mode with no key, Claude, or a local model with a search tool.* | *First run: pick how to check sources; a free Gemini key or no key at all.* |
-| ![A result in dark mode](store/07-result-dark.png) | ![Promo tile](store/promo-1400x560.png) |
-| *Dark mode.* | |
+Plain captures of the side panel, three per image.
 
-See [PLAN.md](PLAN.md) for the architecture, milestones and the UI mockups; [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/PERMISSIONS.md](docs/PERMISSIONS.md) for what is sent where and why each permission exists.
+![The home screen with the question picker, a fact-check result, its claims and sources](store/01-fact-check.png)
+
+![Timeline picked, the check while it runs, the timeline answer](store/02-timeline.png)
+
+![A question in your own words, its answer, the history list](store/03-your-question.png)
+
+![An image check, what was read from the file on your device, a saved page](store/04-image-and-saved-page.png)
+
+![Settings: the ways to check, the default question, the first-run screen](store/05-settings.png)
 
 ## Install
 
@@ -57,7 +56,7 @@ npm run test:e2e       # loads .output/chrome-mv3 into Chromium/Edge with Playwr
 npm run preview        # side panel + popup in a plain browser tab against a fake browser API
                        # (?scenario=fresh|home|popup|local|image) — handy for UI work without reloading the extension
 npm run lint           # ESLint (type-aware) · npm run format — Prettier
-npm run screenshots    # store screenshots + promo tiles into store/ (needs `npm run preview` running)
+npm run screenshots    # replaces store/*.png with plain captures of the panel (needs `npm run preview` running)
 ```
 
 ### Releasing

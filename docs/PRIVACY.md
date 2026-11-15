@@ -9,7 +9,7 @@ When you check something, the extension sends to your chosen provider:
 - the highlighted text (plus the surrounding paragraph for context), **or** the image bytes (downscaled), **or** the page URL and title, **or** a post's text with its links and image addresses;
 - the address and title of the page it came from;
 - if the first provider fails and you configured a second one, the same content goes to that one instead; "Second opinion" sends it to the provider you pick;
-- a fixed instruction prompt that asks "Is this true, and where can I find the source of this topic?".
+- an instruction prompt with the question you chose: one of the built-in ones (fact-check, explain it, timeline, find the flaws) or the question you wrote yourself.
 
 Providers you can choose:
 

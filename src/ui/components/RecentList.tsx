@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listChecks, type StoredCheck } from '@/lib/history/db';
 import { Label } from './common';
-import { HistoryRow } from './HistoryView';
+import { HistoryRow } from './HistoryRow';
 
 export function RecentList({ onOpen, onSeeAll, refreshKey }: { onOpen: (id: string) => void; onSeeAll: () => void; refreshKey?: number }) {
   const [items, setItems] = useState<StoredCheck[]>([]);

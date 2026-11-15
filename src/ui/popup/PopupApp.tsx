@@ -2,8 +2,10 @@ import { browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
 import { openPanelSync } from '@/lib/panel';
 import type { CheckInput } from '@/lib/messaging/protocol';
-import { providerRunLabel } from '@/lib/providers/registry';
+import { providerRunLabel } from '@/lib/providers/labels';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
+import { askLabel, availableAsks, DEFAULT_ASK, questionFor, type AskId } from '@/lib/pipeline/question';
+import { defaultAsk } from '@/lib/storage/settings';
 import { useTargetSelection } from '../hooks/useTargetSelection';
 import { domainOf } from '@/lib/util/url';
 import { useSettings } from '../hooks/useSettings';
@@ -22,6 +24,7 @@ export function PopupApp() {
       ? { kind: 'page', url: tab.url, title: tab.title }
       : null;
   const webmode = settings?.defaultProvider === 'webmode';
+  const ask = settings ? defaultAsk(settings) : DEFAULT_ASK;
 
   /** Open the panel synchronously (user gesture), then hand over the job. */
   const checkInPanel = () => {
@@ -34,7 +37,7 @@ export function PopupApp() {
 
   const openWeb = () => {
     if (!input) return;
-    void browser.tabs.create({ url: googleAiModeUrl(input, settings?.webmodeVariant ?? 'ai-mode') }).then(() => window.close());
+    void browser.tabs.create({ url: googleAiModeUrl(input, settings?.webmodeVariant ?? 'ai-mode', ask) }).then(() => window.close());
   };
 
   return (
@@ -53,6 +56,34 @@ export function PopupApp() {
         </Label>
         <div className="line-clamp-4 rounded-lg border border-line bg-surface px-3 py-2.5 text-[13px] leading-[18px]">
           {selection ? `“${selection.text}”` : input ? tab?.title || tab?.url : 'Nothing to check on this tab. Highlight some text first.'}
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <label htmlFor="wys-default-ask" className="text-[13px]">
+              Question (all checks)
+            </label>
+            <span className="grow" />
+            <select
+              id="wys-default-ask"
+              className="wys-input h-8 w-auto max-w-[200px] text-[12px]"
+              value={ask.id}
+              onChange={(e) => {
+                // Read now: by the time the updater runs, React has put the old value back in the control.
+                const id = e.target.value as AskId;
+                void update((s) => ({ ...s, ask: { ...s.ask, default: id } }));
+              }}
+            >
+              {availableAsks(settings?.ask.custom).map((a) => (
+                <option key={a.id} value={a.id}>
+                  {askLabel(a)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <span className="px-1 text-[11px] leading-[15px] text-ink-2">
+            Asks: “{questionFor(ask, input?.kind ?? 'text')}” Changes the question for every check. To write your own, open the side panel.
+          </span>
         </div>
 
         {webmode ? (
@@ -97,7 +128,10 @@ export function PopupApp() {
             id="wys-default-action"
             className="wys-input h-8 w-auto text-[12px]"
             value={settings?.shortcutAction ?? 'panel'}
-            onChange={(e) => update((s) => ({ ...s, shortcutAction: e.target.value as 'panel' | 'webmode' }))}
+            onChange={(e) => {
+              const action = e.target.value as 'panel' | 'webmode';
+              void update((s) => ({ ...s, shortcutAction: action }));
+            }}
           >
             <option value="panel">Check in the side panel</option>
             <option value="webmode">Open Google AI Mode</option>

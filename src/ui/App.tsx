@@ -1,10 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
+import { askLabel, availableAsks, DEFAULT_ASK, normalizeAsk, type Ask, type AskId } from '@/lib/pipeline/question';
 import { onJob, takeJob, type Job } from '@/lib/jobs';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { providerDisplayName, providerRunLabel } from '@/lib/providers/registry';
-import { LLM_PROVIDER_IDS, providerOrder, providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
+import { defaultAsk, LLM_PROVIDER_IDS, providerOrder, providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
 import { requestOrigin } from '@/lib/permissions';
 import { CheckingView } from './components/CheckingView';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -26,6 +27,12 @@ import { useSettings } from './hooks/useSettings';
 
 import type { View } from './views';
 
+/** The other questions the same content could be asked: every one on offer but the current one. */
+function otherAsks(current: Ask | undefined, settings: Settings): Ask[] {
+  const cur = normalizeAsk(current);
+  return availableAsks(settings.ask.custom).filter((a) => a.id !== cur.id || (a.id === 'custom' && a.custom !== cur.custom));
+}
+
 /** The panel: which view is up, and the check run that drives the checking/result/error views. */
 export function App() {
   const { settings, update } = useSettings();
@@ -33,6 +40,12 @@ export function App() {
   const [focusProvider, setFocusProvider] = useState<ProviderId | undefined>(undefined);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [historyTick, setHistoryTick] = useState(0);
+  // The question picked on the home screen, kept while the panel stays open (the home view itself comes and goes).
+  // It is remembered with the default it was picked under: a default changed since (in Settings or
+  // the popup) is the newer choice, and the pick no longer applies.
+  const [homePick, setHomePick] = useState<{ id: AskId; under: AskId } | null>(null);
+  const homeAsk = homePick && homePick.under === settings?.ask.default ? homePick.id : null;
+  const setHomeAsk = (id: AskId | null) => setHomePick(id && settings ? { id, under: settings.ask.default } : null);
   const seenJobs = useRef(new Set<string>());
   const settingsRef = useRef<Settings | null>(null);
   useEffect(() => {
@@ -40,7 +53,9 @@ export function App() {
   }, [settings]);
 
   const openGoogleAiMode = useCallback((input: CheckInput) => {
-    void browser.tabs.create({ url: googleAiModeUrl(input, settingsRef.current?.webmodeVariant ?? 'ai-mode') });
+    void browser.tabs.create({
+      url: googleAiModeUrl(input, settingsRef.current?.webmodeVariant ?? 'ai-mode', settingsRef.current ? defaultAsk(settingsRef.current) : undefined),
+    });
   }, []);
 
   const { phase, start, cancel, clearSetup, busy } = useCheckRun({
@@ -126,6 +141,20 @@ export function App() {
           <ResultView
             result={phase.result}
             onRecheck={() => void start(phase.result.input)}
+            otherAsks={otherAsks(phase.result.input.ask, settings)}
+            onAsk={(ask) =>
+              void start(
+                { ...phase.result.input, ask },
+                {
+                  // The earlier answer stays one click away, as with a second opinion.
+                  previous: {
+                    id: phase.result.id,
+                    label: `Earlier answer (${askLabel(phase.result.input.ask)})`,
+                    verdict: phase.result.verdict.label,
+                  },
+                },
+              )
+            }
             secondOpinions={LLM_PROVIDER_IDS.filter((id) => id !== phase.result.provider.id && providerReady(settings, id)).map((id) => ({
               id,
               label: providerDisplayName(id, settings),
@@ -135,7 +164,7 @@ export function App() {
                 only: id,
                 previous: {
                   id: phase.result.id,
-                  label: `${phase.result.provider.label} (${phase.result.provider.model})`,
+                  label: `${phase.result.provider.label} (${phase.result.provider.model}) said`,
                   verdict: phase.result.verdict.label,
                 },
               })
@@ -210,7 +239,9 @@ export function App() {
         return detailId ? (
           <DetailView
             id={detailId}
-            onRecheck={(input) => void start(input)}
+            // Rows from before questions existed were fact-checks.
+            onRecheck={(input) => void start({ ...input, ask: input.ask ?? DEFAULT_ASK })}
+            otherAsks={(input) => otherAsks(input.ask, settings)}
             webmodeVariant={settings.webmodeVariant}
             onDeleted={() => {
               setHistoryTick((t) => t + 1);
@@ -225,6 +256,9 @@ export function App() {
             onCheck={(i) => void start(i)}
             onWebMode={openGoogleAiMode}
             onSettings={() => openSettings()}
+            onAskChange={(patch) => void update((cur) => ({ ...cur, ask: { ...cur.ask, ...patch } }))}
+            picked={homeAsk}
+            onPick={setHomeAsk}
             recent={<RecentList onOpen={openDetail} onSeeAll={() => setView('history')} refreshKey={historyTick} />}
           />
         );

@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { askLabel, normalizeAsk } from '../pipeline/question';
 import type { CheckInput } from '../messaging/protocol';
 import type { ProviderId } from '../storage/settings';
 import type { CheckResult, VerdictKind } from '../pipeline/schema';
@@ -122,6 +123,8 @@ export interface ListOptions {
   limit?: number;
   /** Only checks created strictly before this timestamp: the paging cursor. */
   before?: number;
+  /** With `before`: also the checks created at exactly that timestamp whose id sorts below this one (an exact cursor for exports). */
+  beforeId?: string;
 }
 
 export async function listChecks(opts: ListOptions = {}): Promise<StoredCheck[]> {
@@ -129,15 +132,25 @@ export async function listChecks(opts: ListOptions = {}): Promise<StoredCheck[]>
   const q = (opts.query ?? '').trim().toLowerCase();
   const out: StoredCheck[] = [];
   const limit = opts.limit ?? 500;
-  const range = opts.before != null ? IDBKeyRange.upperBound(opts.before, true) : null;
+  // Within one timestamp a backwards cursor visits ids in descending order, so (time, id) is an exact position.
+  const range = opts.before != null ? IDBKeyRange.upperBound(opts.before, opts.beforeId == null) : null;
   let cursor = await db.transaction('checks').store.index('by-created').openCursor(range, 'prev');
   while (cursor && out.length < limit) {
+    if (opts.beforeId != null && cursor.value.createdAt === opts.before && cursor.value.id >= opts.beforeId) {
+      cursor = await cursor.continue();
+      continue;
+    }
     const c = upgradeStoredCheck(cursor.value);
     const kindOk = !opts.kind || opts.kind === 'all' || c.kind === opts.kind;
     const snapOk = !opts.withSnapshot || c.hasSnapshot;
     const textOk =
       !q ||
       c.title.toLowerCase().includes(q) ||
+      (c.result.title ?? '').toLowerCase().includes(q) ||
+      (c.result.topic ?? '').toLowerCase().includes(q) ||
+      // The question, when it was not the ordinary fact-check ("fact" must not match every row).
+      (normalizeAsk(c.result.input.ask).id !== 'factcheck' && askLabel(c.result.input.ask).toLowerCase().includes(q)) ||
+      (c.result.input.ask?.custom ?? '').toLowerCase().includes(q) ||
       c.site.toLowerCase().includes(q) ||
       c.verdictLabel.toLowerCase().includes(q) ||
       c.note.toLowerCase().includes(q) ||
@@ -149,6 +162,24 @@ export async function listChecks(opts: ListOptions = {}): Promise<StoredCheck[]>
     cursor = await cursor.continue();
   }
   return out;
+}
+
+/**
+ * Every check matching the filters, newest first, a page at a time: the heap holds one page however
+ * long the history is. Exports use this. The cursor is (time, id), so checks that share a timestamp
+ * are neither skipped nor repeated at a page boundary.
+ */
+export async function* eachCheck(opts: Omit<ListOptions, 'limit' | 'before' | 'beforeId'> = {}, pageSize = 200): AsyncGenerator<StoredCheck> {
+  let before: number | undefined;
+  let beforeId: string | undefined;
+  for (;;) {
+    const page = await listChecks({ ...opts, limit: pageSize, before, beforeId });
+    yield* page;
+    if (page.length < pageSize) return;
+    const last = page[page.length - 1]!;
+    before = last.createdAt;
+    beforeId = last.id;
+  }
 }
 
 export async function getCheck(id: string): Promise<StoredCheck | undefined> {
@@ -295,17 +326,17 @@ export async function enforceSnapshotCap(maxBytes: number): Promise<number> {
  */
 export async function exportAll(): Promise<Blob> {
   const db = await getDb();
-  const checks = await listChecks({ limit: 1_000_000 });
-  const parts: string[] = [`{"version":1,"exportedAt":${JSON.stringify(new Date().toISOString())},"checks":[`];
+  // A page of checks at a time (`eachCheck`), each row handed to a Blob at once: the heap holds one page, not the history.
+  const parts: BlobPart[] = [`{"version":1,"exportedAt":${JSON.stringify(new Date().toISOString())},"checks":[`];
   let first = true;
-  for (const c of checks) {
+  for await (const c of eachCheck()) {
     const s = await db.get('snapshots', c.id);
     let row: unknown = c;
     if (s) {
       const { screenshot: _drop, ...rest } = s;
       row = { ...c, snapshot: rest };
     }
-    parts.push((first ? '' : ',') + JSON.stringify(row));
+    parts.push(new Blob([(first ? '' : ',') + JSON.stringify(row)]));
     first = false;
   }
   parts.push(']}');

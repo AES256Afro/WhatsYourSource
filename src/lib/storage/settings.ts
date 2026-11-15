@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { browser } from 'wxt/browser';
+import { ASK_IDS, MAX_CUSTOM_QUESTION, normalizeAsk, type Ask } from '../pipeline/question';
 
 /** `'webmode'` is Google AI Mode on google.com: chosen like a provider, but never an LLM call (`createProvider` returns null for it). */
 export const PROVIDER_IDS = ['gemini', 'openai-compat', 'anthropic', 'webmode'] as const;
@@ -32,6 +33,11 @@ export const SettingsSchema = z.object({
   shortcutAction: z.enum(['panel', 'webmode']),
   /** Google on the web: AI Mode (a conversational answer) or a normal search page with its AI Overview. */
   webmodeVariant: z.enum(['ai-mode', 'overview']),
+  /** The question a check asks unless one is picked for it: a preset, or the user's own (`custom`). */
+  ask: z.object({
+    default: z.enum(ASK_IDS),
+    custom: z.string().max(MAX_CUSTOM_QUESTION),
+  }),
   /** Extract the claims first (a cheap extra call) so each one can be looked up and checked on its own. */
   twoPass: z.boolean(),
   providers: z.object({
@@ -91,6 +97,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fallback: false,
   shortcutAction: 'panel',
   webmodeVariant: 'ai-mode',
+  ask: { default: 'factcheck', custom: '' },
   twoPass: true,
   providers: {
     gemini: { apiKey: '', model: 'gemini-3.8-flash', grounding: true, urlContext: true },
@@ -112,6 +119,11 @@ export const DEFAULT_SETTINGS: Settings = {
   history: { maxMb: 200 },
   lookups: { factChecks: true, factCheckKey: '', archive: true, credibility: true },
 };
+
+/** The question checks ask by default, as chosen in Settings or on the home screen. */
+export function defaultAsk(s: Pick<Settings, 'ask'>): Ask {
+  return normalizeAsk({ id: s.ask.default, custom: s.ask.custom });
+}
 
 /**
  * Storage layout. `settings` holds everything *except* API keys and is what the content script

@@ -13,6 +13,7 @@ const raw: RawSource[] = [
 ];
 
 const model: ModelResult = {
+  timeline: [],
   verdict: { label: 'Misattributed', kind: 'misattributed', confidence: 'high', summary: '' },
   originalSource: { title: 'NA Basic Text', url: 'https://archive.org/details/na-basic-text', publisher: 'NA', date: '1981', how: '' },
   claims: [

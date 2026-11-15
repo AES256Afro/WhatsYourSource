@@ -38,7 +38,7 @@ export function AnthropicCard({ settings, update }: { settings: Settings; update
         </button>
       </div>
       <StatusLine status={status} />
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-[359px]:flex-wrap">
         <label htmlFor="wys-amodel" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
           Model
         </label>

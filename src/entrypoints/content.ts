@@ -46,6 +46,7 @@ export default defineContentScript({
       () => binding,
       () => {
         const sel = currentSelection();
+        window.clearTimeout(timer);
         chip.hide();
         if (!sel) return;
         const type = pageTriggerTarget(settings) === 'webmode' ? 'wys:open-webmode' : 'wys:check';
@@ -80,7 +81,8 @@ export default defineContentScript({
       // A slow drag-select ends with pointerup but no further selectionchange: re-evaluate now.
       // Keyboard selection already fires selectionchange per move, so no key (and never a copy or
       // paste shortcut) schedules work here.
-      if (e.type === 'pointerup') schedule();
+      // Not the click on the chip itself: that would bring the chip back 220 ms after it was used.
+      if (e.type === 'pointerup' && !chip.contains(e.target as Node | null)) schedule();
     };
     // pointerdown/keydown as well as the *up* events: a held shift+arrow repeats keydown for as long
     // as the user extends the selection, and a drag-select is a pointerdown long before its pointerup.
@@ -108,7 +110,7 @@ export default defineContentScript({
         const top = selectionTop(range);
         if (top === document || top === document.documentElement || top === document.body) return chip.hide();
         if (!likelyLongEnough(range)) return chip.hide();
-        chip.show(selectionEndRect(sel, range));
+        chip.show(selectionEndRect(sel, range), settings.askName);
       }, 220);
     };
 
@@ -188,6 +190,13 @@ export default defineContentScript({
   },
 });
 
+/** Not the gaps between blocks: line breaks, comments, scripts, styles, empty wrappers. */
+function holdsContent(n: Node): boolean {
+  if (n.nodeType === Node.TEXT_NODE) return !!(n as Text).data.trim() && !n.parentElement?.closest('script, style, noscript, template');
+  if (n.nodeType === Node.ELEMENT_NODE) return /^(IMG|VIDEO|CANVAS|SVG|PICTURE|IFRAME|INPUT|TEXTAREA|SELECT|BUTTON|HR)$/i.test((n as Element).tagName);
+  return false;
+}
+
 /**
  * The node that contains the whole selection. A triple-click ends at offset 0 of the *next* block, so
  * the range's own common ancestor can be <body> for one paragraph; step the end back to where the
@@ -202,7 +211,7 @@ function selectionTop(range: Range): Node {
     while (n && !n.previousSibling) n = n.parentNode;
     last = n?.previousSibling ?? null;
     while (last?.lastChild) last = last.lastChild;
-    if (last && !(last.nodeType === Node.TEXT_NODE && !(last as Text).data.trim())) break;
+    if (last && holdsContent(last)) break;
   }
   if (!last) return range.commonAncestorContainer;
   try {
@@ -340,7 +349,7 @@ function logoSvg(): SVGSVGElement {
 
 function createChip(binding: () => string | null, onClick: () => void) {
   // Nothing touches the page's DOM until the first selection that deserves a chip: most page views never get one.
-  let built: { host: HTMLDivElement; root: ShadowRoot; btn: HTMLButtonElement; kbd: HTMLSpanElement } | null = null;
+  let built: { host: HTMLDivElement; root: ShadowRoot; btn: HTMLButtonElement; kbd: HTMLSpanElement; ask: HTMLSpanElement } | null = null;
   let shown = false;
   const build = () => {
     const host = document.createElement('div');
@@ -361,6 +370,8 @@ function createChip(binding: () => string | null, onClick: () => void) {
     .chip:hover { background: #0F5FA8; }
     .chip:focus-visible { outline: 2px solid #8FC1F2; outline-offset: 2px; }
     .kbd { font-size: 11px; font-weight: 600; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,.18); color: #E5E7EB; }
+    .ask { font-weight: 500; color: #C9D2DC; }
+    .ask:empty { display: none; }
     svg { flex-shrink: 0; }
   `;
     const btn = document.createElement('button');
@@ -368,8 +379,9 @@ function createChip(binding: () => string | null, onClick: () => void) {
     btn.type = 'button';
     btn.setAttribute('aria-label', 'Check source of selected text');
     const kbd = textSpan('', 'kbd');
-    btn.append(logoSvg(), textSpan('Check source'), kbd);
-    built = { host, root, btn, kbd };
+    const ask = textSpan('', 'ask');
+    btn.append(logoSvg(), textSpan('Check source'), ask, kbd);
+    built = { host, root, btn, kbd, ask };
     setKbd(binding());
     btn.addEventListener('pointerdown', (e) => e.preventDefault()); // keep the selection alive
     btn.addEventListener('click', (e) => {
@@ -398,8 +410,11 @@ function createChip(binding: () => string | null, onClick: () => void) {
   };
 
   return {
-    show(rect: DOMRect) {
-      const { btn, host } = built ?? build();
+    show(rect: DOMRect, askName = '') {
+      const { btn, host, ask } = built ?? build();
+      // The chip says what it will ask when that is not the ordinary fact-check.
+      ask.textContent = askName ? `· ${askName}` : '';
+      btn.setAttribute('aria-label', askName ? `Check source of selected text (${askName})` : 'Check source of selected text');
       attach(host);
       shown = true;
       btn.classList.add('on');

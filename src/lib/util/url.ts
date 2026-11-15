@@ -20,7 +20,9 @@ export function normalizeUrl(input: string): string {
     for (const k of [...u.searchParams.keys()]) {
       if (/^(utm_|fbclid|gclid|ref$|ref_|igshid|mc_)/i.test(k)) u.searchParams.delete(k);
     }
-    let s = u.toString();
+    u.hostname = u.hostname.replace(/\.$/, '');
+    // Percent-escapes compare case-insensitively (%ed = %ED).
+    let s = u.toString().replace(/%[0-9a-f]{2}/gi, (m) => m.toUpperCase());
     if (s.endsWith('/')) s = s.slice(0, -1);
     // One scheme and no www for comparison; only the host is case-insensitive (video ids and short links are not).
     return s.replace(/^https?:\/\/(www\.)?[^/?#]*/i, (m) => m.toLowerCase().replace(/^https?:\/\/(www\.)?/, 'https://'));
@@ -45,13 +47,10 @@ export function isHttpUrl(s: string): boolean {
 export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   // toWellFormed: a cut through an emoji leaves half a surrogate pair, which encodeURIComponent rejects.
-  return (
-    s
-      .slice(0, max - 1)
-      .toWellFormed()
-      .replace(/\uFFFD$/, '')
-      .trimEnd() + '…'
-  );
+  let head = s.slice(0, max - 1);
+  const lastUnit = head.charCodeAt(head.length - 1);
+  if (lastUnit >= 0xd800 && lastUnit <= 0xdbff) head = head.slice(0, -1); // half an emoji
+  return head.toWellFormed().trimEnd() + '…';
 }
 
 /**

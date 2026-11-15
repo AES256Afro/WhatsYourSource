@@ -61,7 +61,7 @@ export async function fetchPageText(url: string, signal?: AbortSignal, maxChars 
   let text: string;
   if (/html/i.test(type) || /^\s*</.test(raw)) {
     const doc = new DOMParser().parseFromString(raw, 'text/html');
-    title = doc.title.trim();
+    title = typeof doc.title === 'string' ? doc.title.trim() : ''; // a page element named "title" shadows it
     for (const el of Array.from(doc.querySelectorAll('script, style, noscript, nav, footer, header, aside, iframe, svg, form'))) el.remove();
     const main = doc.querySelector('main, article, [role=main]') ?? doc.body;
     text = (main?.textContent ?? '').replace(/\s+/g, ' ').trim();

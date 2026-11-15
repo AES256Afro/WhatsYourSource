@@ -66,7 +66,7 @@ describe('claim extraction', () => {
 describe('public settings for the content script', () => {
   it('reads only what it needs and falls back per field', () => {
     const p = readPublicSettings({ privacy: { chip: false, disabledSites: ['a.com', 3] }, shortcutAction: 'nope', defaultProvider: 'webmode' });
-    expect(p).toEqual({ chip: false, disabledSites: ['a.com'], shortcutAction: 'panel', defaultProvider: 'webmode' });
+    expect(p).toEqual({ chip: false, disabledSites: ['a.com'], shortcutAction: 'panel', defaultProvider: 'webmode', askName: '' });
     expect(pageTriggerTarget(p)).toBe('webmode');
     expect(readPublicSettings('garbage').chip).toBe(true);
   });

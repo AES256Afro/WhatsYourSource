@@ -68,11 +68,14 @@ const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
 export function markHighlight(doc: Document, highlight: string): boolean {
   const full = norm(highlight);
   if (full.length < 3) return false;
+  const root = doc.body ?? doc.documentElement;
+  const all = norm(root.textContent ?? '');
   for (const len of [80, 40, 20]) {
     const needle = full.slice(0, len);
+    if (!all.includes(needle)) continue; // not on the page at this length: skip the walk over every element
     let best: Element | null = null;
     let bestLen = Infinity;
-    const walker = doc.createTreeWalker(doc.body ?? doc.documentElement, NodeFilter.SHOW_ELEMENT);
+    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
     let node = walker.nextNode();
     while (node) {
       const el = node as Element;

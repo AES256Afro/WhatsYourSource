@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { PROVIDER_LABELS, providerRunLabel } from '@/lib/providers/registry';
-import { providerReady, type Settings } from '@/lib/storage/settings';
+import { defaultAsk, providerReady, type Settings } from '@/lib/storage/settings';
 import { useShortcutLabel } from '../hooks/useShortcutLabel';
 import { useTargetSelection } from '../hooks/useTargetSelection';
 import { domainOf, truncate } from '@/lib/util/url';
+import { askIdLabel, normalizeAsk, type Ask, type AskId } from '@/lib/pipeline/question';
+import { AskPicker } from './AskPicker';
 import { Label, ProviderBadge, TextAction } from './common';
 import { ChevronRight, External, Globe, Image, Logo } from './Icons';
 
@@ -13,12 +15,20 @@ export function HomeView({
   onCheck,
   onWebMode,
   onSettings,
+  onAskChange,
+  picked: pickedHere,
+  onPick,
   recent,
 }: {
   settings: Settings;
   onCheck: (input: CheckInput) => void;
   onWebMode: (input: CheckInput) => void;
   onSettings: () => void;
+  /** Save the custom question's text, or make a question the default for every way of starting a check. */
+  onAskChange: (patch: Partial<Settings['ask']>) => void;
+  /** The question picked here for checks started from this panel; null follows the default. */
+  picked: AskId | null;
+  onPick: (id: AskId | null) => void;
   recent?: React.ReactNode;
 }) {
   const { tab, selection } = useTargetSelection(true);
@@ -31,6 +41,32 @@ export function HomeView({
     landing.current?.focus();
   }, [selection !== null]); // eslint-disable-line react-hooks/exhaustive-deps -- once the selection state is known
 
+  // The question for checks started here. It starts as the default and can differ from it: picking
+  // "Timeline" for one post must not quietly change what the chip and the shortcut ask.
+  // Until the user picks here, it follows the default, including a change made in the popup or Settings.
+  const picked = pickedHere ?? settings.ask.default;
+  const [typedHere, setTypedHere] = useState<string | null>(null);
+  const customText = typedHere ?? settings.ask.custom;
+  /** Shown for a few seconds after "Always ask X", with the way back. */
+  const [madeDefault, setMadeDefault] = useState<{ now: AskId; was: AskId } | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const makeDefault = (id: AskId, was: AskId) => {
+    onAskChange({ default: id });
+    onPick(null);
+    setMadeDefault(was === id ? null : { now: id, was });
+    // The line that held the action is gone; keep keyboard focus on the choice it applied to.
+    setTimeout(() => pickerRef.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus(), 0);
+  };
+  useEffect(() => {
+    if (!madeDefault) return;
+    const t = setTimeout(() => setMadeDefault(null), 6000);
+    return () => clearTimeout(t);
+  }, [madeDefault]);
+  const ask: Ask = normalizeAsk({ id: picked, custom: customText });
+  // What the default really asks: "Ask your own" with no text written falls back to Fact-check.
+  const effectiveDefault = defaultAsk(settings).id;
+  /** A question's name inside a sentence. */
+  const nameOf = (id: AskId) => (id === 'custom' ? 'your question' : askIdLabel(id));
   const webmode = settings.defaultProvider === 'webmode';
   const ready = providerReady(settings);
   const providerLabel = ready ? providerRunLabel(settings.defaultProvider, settings) : `${PROVIDER_LABELS[settings.defaultProvider]} · no key set`;
@@ -38,7 +74,8 @@ export function HomeView({
   const pageInput: CheckInput | null = tab?.url && /^https?:/i.test(tab.url) ? { kind: 'page', url: tab.url, title: tab.title } : null;
 
   /** With Google AI Mode as the default, every check leaves for a new tab; say so instead of changing nothing. */
-  const run = (input: CheckInput) => {
+  const run = (bare: CheckInput) => {
+    const input = { ...bare, ask };
     if (webmode) {
       onWebMode(input);
       setOpenedNote(true);
@@ -68,6 +105,37 @@ export function HomeView({
         </p>
       )}
 
+      <div ref={pickerRef} className="flex flex-col gap-1.5">
+        <Label>Question</Label>
+        <AskPicker
+          selected={picked}
+          custom={customText}
+          onSelect={(id) => {
+            setMadeDefault(null);
+            onPick(id);
+          }}
+          onCustom={(text) => {
+            setTypedHere(text);
+            onAskChange({ custom: text });
+          }}
+          kind={selection ? 'text' : 'page'}
+        />
+        {picked !== effectiveDefault && ask.id === picked && (
+          <span className="text-[11px] leading-[15px] text-ink-2">
+            Only for checks you start in this panel. Highlighting and right-click still ask {nameOf(effectiveDefault)}.{' '}
+            <TextAction onClick={() => makeDefault(picked, effectiveDefault)}>Always ask {nameOf(picked)}</TextAction>
+          </span>
+        )}
+        <span role="status" className="text-[11px] leading-[15px] text-ink-2 empty:hidden">
+          {madeDefault && (
+            <>
+              {madeDefault.now === 'custom' ? 'Your question is now asked everywhere.' : `${askIdLabel(madeDefault.now)} is now the question everywhere.`}{' '}
+              <TextAction onClick={() => makeDefault(madeDefault.was, madeDefault.was)}>Undo</TextAction>
+            </>
+          )}
+        </span>
+      </div>
+
       {selection ? (
         <div className="flex flex-col gap-2 rounded-xl border border-accent-line bg-accent-wash p-3">
           <Label right={<span className="text-[12px] text-ink-2">{domainOf(selection.pageUrl)}</span>}>
@@ -80,7 +148,7 @@ export function HomeView({
               to {providerLabel}.
             </span>
           )}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               ref={landing as React.RefObject<HTMLButtonElement>}
               className="wys-btn wys-btn-primary grow"
@@ -101,7 +169,7 @@ export function HomeView({
                 className="wys-btn"
                 title="Open in Google AI Mode (new tab)"
                 aria-label="Open in Google AI Mode"
-                onClick={() => onWebMode({ kind: 'text', ...selection })}
+                onClick={() => onWebMode({ kind: 'text', ...selection, ask })}
               >
                 <Globe size={15} /> Google AI Mode <External size={13} />
               </button>

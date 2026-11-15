@@ -1,6 +1,6 @@
-# Chrome Web Store developer dashboard — every field, ready to paste (1.0.2)
+# Chrome Web Store developer dashboard — every field, ready to paste (1.1.0)
 
-Dashboard: https://chrome.google.com/webstore/devconsole → **New item**. Files come from the [v1.0.2 release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.0.2) and the `store/` folder of this repo. Work through the tabs in the order below; the dashboard will not let you submit until every tab shows a tick.
+Dashboard: https://chrome.google.com/webstore/devconsole → your item → **Package** → *Upload new package* for an update (**New item** the first time). Files come from the [v1.1.0 release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.1.0) and the `store/` folder of this repo. Work through the tabs in the order below; the dashboard will not let you submit until every tab shows a tick.
 
 ---
 
@@ -8,9 +8,9 @@ Dashboard: https://chrome.google.com/webstore/devconsole → **New item**. Files
 
 | Field | Entry |
 |---|---|
-| Upload | `whatsyoursource-1.0.2-chrome.zip` (from the GitHub release, or `npm run zip`) |
+| Upload | `whatsyoursource-1.1.0-chrome.zip` (from the GitHub release, or `npm run zip`) |
 
-The dashboard reads the name, version (1.0.2), description and icon from the manifest inside the zip.
+The dashboard reads the name, version (1.1.0), description and icon from the manifest inside the zip.
 
 ---
 
@@ -21,7 +21,7 @@ The dashboard reads the name, version (1.0.2), description and icon from the man
 | Field | Entry |
 |---|---|
 | **Title** | *(from the manifest)* WhatsYourSource |
-| **Summary** | *(from the manifest, 109 characters)* Check the source of highlighted text, images and posts: Google AI by default, your own key, or a local model. |
+| **Summary** | *(from the manifest, 123 characters)* Fact-check, explain or build a timeline for highlighted text, images and posts, with sources. Your AI key or a local model. |
 | **Description** | *(paste the block below; 16,000-character limit, plain text with line breaks)* |
 | **Category** | Productivity → **Tools** |
 | **Language** | English |
@@ -29,36 +29,50 @@ The dashboard reads the name, version (1.0.2), description and icon from the man
 **Description — paste exactly this:**
 
 ```
-WhatsYourSource answers one question about anything you read online: is this true, and where can I find the source?
+WhatsYourSource checks what you read online against sources. You pick the question, and the AI you chose searches the web and answers it with the links it read.
 
 HOW IT WORKS
 1. Highlight a sentence, a quote or a statistic. A small "Check source" chip appears (or press Alt+Shift+S, or right-click).
-2. The side panel opens and the AI you chose searches the web, reads the sources and writes a short assessment.
-3. You get a verdict with its confidence, the likely original source (who said it first, where, when), each claim marked supported / disputed / misleading / unverified, and the actual links that were read. Only links the search engine returned are clickable; anything the model merely "remembers" is labelled as unverified.
+2. The side panel opens and the AI you chose searches the web, reads the sources and writes a short answer.
+3. You get a verdict with its confidence, the likely original source (who said it first, where, when), each claim marked supported / disputed / misleading / unverified, and the actual links that were read. Only links the search returned are clickable; anything the model merely "remembers" is labelled as unverified.
+
+CHOOSE WHAT TO ASK
+• Fact-check: is it accurate, what context is it missing, where is the original source.
+• Explain it: what it is about, who is behind it, where it comes from.
+• Timeline: the key events in date order, each with its source.
+• Find the flaws: what is wrong, misleading or badly argued, and what holds up.
+• Ask your own: any question, in your own words.
+Pick one in the side panel for the checks you start there, or set a default for highlighting, the shortcut and right-click. On any result, "Ask instead" puts a different question to the same content.
 
 CHECK MORE THAN TEXT
-• Images: right-click → Check source of this image. Metadata (EXIF, Content Credentials, AI-generator hints) is read on your device first, then the image is checked for its earliest appearance. One-click reverse image search on Google Lens, TinEye, Bing and Yandex. Images you have checked before are recognised.
+• Images: right-click → Check source of this image. Metadata (EXIF, Content Credentials, AI-generator hints) is read on your device first, then the image is checked for its earliest appearance. Reverse image search on Google Lens, TinEye, Bing and Yandex. Images you have checked before are recognised.
 • Posts: right-click anywhere in a social post → Check source of this post. The post's text, links and images are checked together.
 • Links and pages: right-click a link → Check source of linked page; check the page you are on; or paste any text or link into the panel.
 
 EVIDENCE THAT DOES NOT DEPEND ON THE AI
-• Already fact-checked? Published fact-checks from PolitiFact, Snopes, AFP, Full Fact and hundreds more appear above the verdict (free Google Fact Check Tools key).
-• When was it first seen? Wayback Machine dates for the page and the original source.
-• Who is the outlet? Reputation ratings from Wikipedia's perennial-sources list, shipped inside the extension.
-• The case on each side: the strongest evidence for and against, what the post leaves out, and what would change the verdict.
+• Published fact-checks from PolitiFact, Snopes, AFP, Full Fact and hundreds more (free Google Fact Check Tools key).
+• Wayback Machine dates for the page and the original source.
+• Outlet reputation from Wikipedia's perennial-sources list, shipped inside the extension.
+• The strongest evidence for and against, what the content leaves out, and what would change the verdict.
 
 YOU CHOOSE THE AI
-• Google AI (Gemini) with your own free key — Google Search grounding; answers and sources appear in the panel. Default.
-• Google AI Mode on the web — no key, no setup: your selection opens on google.com.
-• Your own frontier model — Claude, GPT or any OpenAI-compatible API key.
-• A local model on your device — Ollama or LM Studio, paired with a search tool (SearXNG, Brave, Tavily) so it can find sources. Nothing leaves your machine except the searches you allow.
+• Google AI (Gemini) with your own free key: Google Search grounding; answers and sources appear in the panel. Default.
+• Google AI Mode on the web: no key, no setup; your selection opens on google.com.
+• Your own model: Claude, GPT or any OpenAI-compatible API key.
+• A local model on your device: Ollama or LM Studio, paired with a search tool (SearXNG, Brave, Tavily) so it can find sources.
 You can set a default and a fallback, ask a second provider for a second opinion, and switch any time.
 
 YOUR HISTORY, ON YOUR DEVICE
-Every check is saved locally. Checks started from the right-click menu or the keyboard shortcut also keep a copy of the page as it was when you checked it, with your highlight marked. Search your history, add notes, re-check when sources change, export a check as a self-contained HTML file.
+Every check is saved locally. Checks started from the right-click menu or the keyboard shortcut also keep a copy of the page as it was when you checked it, with your highlight marked. Search your history, add notes, re-check when sources change.
+
+KEEP A LOG
+• Export your history as a spreadsheet (CSV): one row per check, with the title, topic, question, verdict, answer, timeline, sources and your note. It opens in Excel, Google Sheets and Numbers.
+• "Copy as spreadsheet row" on any result adds one check to a sheet you already keep.
+• Export a single check as a self-contained HTML file.
+The file is made in your browser and goes where you put it.
 
 PRIVACY
-• Nothing is sent anywhere until you press Check. Then only the selection (or image, or page URL) goes to the one provider you configured, with your own key. Every result shows exactly what was sent, and to whom.
+• Nothing is sent anywhere until you press Check. Then only the selection (or image, or page URL) and your question go to the provider you configured, with your own key. Every result shows exactly what was sent, and to whom.
 • No accounts, no servers of our own, no analytics, no telemetry.
 • API keys are stored locally, never synced, and never read by the script that runs on web pages.
 • The chip can be turned off globally or per site.
@@ -71,7 +85,7 @@ Open source (MIT): https://github.com/AES256Afro/WhatsYourSource
 | Field | Entry |
 |---|---|
 | **Store icon** (128×128) | *(taken from the manifest)* `public/icon/128.png` if the dashboard asks for it separately |
-| **Screenshots** (1280×800, up to five) | In this order: `store/01-result.png`, `store/02-chip.png`, `store/03-image.png`, `store/05-providers.png`, `store/04-saved-page.png`. (`06-onboarding.png` and `07-result-dark.png` are spares.) |
+| **Screenshots** (1280×800, up to five) | Delete the ones in the listing and upload these five, in this order: `store/01-fact-check.png`, `store/02-timeline.png`, `store/03-your-question.png`, `store/04-image-and-saved-page.png`, `store/05-settings.png`. |
 | **Small promo tile** (440×280) | `store/promo-440x280.png` |
 | **Marquee promo tile** (1400×560, optional) | `store/promo-1400x560.png` |
 | **Global promo video** | leave empty |
@@ -93,7 +107,7 @@ Open source (MIT): https://github.com/AES256Afro/WhatsYourSource
 ### Single purpose
 
 ```
-WhatsYourSource has one purpose: to check the origin and reliability of content the user explicitly selects (highlighted text, an image, a social post, a link or the current page) by sending it to the AI provider the user configured with the user's own key, and showing the verdict, the likely original source and the sources that were read. It does not read pages on its own, does not modify pages beyond its own selection chip, and collects no data for the developer.
+WhatsYourSource has one purpose: to check content the user explicitly selects (highlighted text, an image, a social post, a link or the current page) against sources: it sends the selection and the question the user chose (fact-check, explain, timeline, find the flaws, or their own) to the AI provider the user configured with the user's own key, and shows the answer, a verdict, the likely original source and the sources that were read. It does not read pages on its own, does not modify pages beyond its own selection chip, and collects no data for the developer.
 ```
 
 ### Permission justifications

@@ -4,6 +4,35 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-15
+
+Three bug sweeps and a follow-up check, three performance sweeps and three usability sweeps on top of 1.0.2; the ledger entry is in `docs/SWEEPS.md` (2026-11-15, second entry).
+
+### Added
+- Choose what to ask. Five questions: Fact-check (now "is it accurate, what context is it missing, where is the original source"), Explain it, Timeline, Find the flaws, or your own question in your own words. Pick one on the panel's home screen for the checks you start there, set the default in Settings or the popup for highlighting, the shortcut, right-click and the address bar; the same question goes to Google AI Mode. The on-page chip names the question when it is not a fact-check.
+- "Ask instead" on every result and saved check: put a different question to the same content, with a link back to the earlier answer.
+- Timeline: results can carry dated events with their sources; when a timeline was asked for it comes straight after the verdict. For any question other than a fact-check, the answer leads and published fact-checks follow it.
+- Every check gets a short title and a topic from the same model call (no extra request), used in history search and exports.
+- Spreadsheet export in History: one row per check (date, title, topic, what was checked, page address, question, verdict, summary, answer, timeline, claims, original source, sources, archived copy, note) as a CSV that Excel, Google Sheets and Numbers open directly. It follows the search and filter.
+- "Copy as spreadsheet row" and "Copy column headings" on every result and saved check, for adding to a sheet you already keep.
+
+### Fixed
+- The popup's and Settings' dropdowns (default action, Google page type, and the new Question) did not save: the choice snapped back.
+- Right-click items had disappeared inside embedded frames (webmail message bodies, widgets) in 1.0.2; they are back, and still absent on the extension's own pages.
+- "Check source of this post" on sites that build posts as web components found nothing in 1.0.2.
+- The chip no longer comes back a moment after it is clicked; a triple-clicked paragraph followed by a comment, script or empty block gets its chip.
+- AI-generator hints: tool names written with a version or underscore ("Imagen3", "sdxl_turbo") are recognised again, and a Stable Diffusion parameters block is found even after a long prompt.
+- A reply that is only a local model's reasoning is reported as empty instead of being turned into a verdict.
+- A different model typed after Verify no longer inherits the previous model's "text only" flag.
+- Outlet ratings appear with the result instead of waiting up to six seconds for the Wayback Machine. A slow claim-listing pass (a local model) is stopped after ten seconds and no longer drops the fact-check lookup.
+- Provider settings fields no longer run off the edge of a 320-pixel panel; the History footer wraps.
+- The backup pages through history instead of holding it all in memory.
+
+### Changed
+- The popup no longer loads every provider's code to show a label; the History view loads on first use.
+- Store screenshots are plain captures of the panel (three side by side, no scene, no captions); the promo tiles are the icon and the name. The old images and the scene that produced them are removed.
+- Store and privacy documents describe the chosen question.
+
 ## [1.0.2] - 2026-11-15
 
 Five audits (in-page script, background, providers and network, panel and history, release readiness); the ledger entry is in `docs/SWEEPS.md`.

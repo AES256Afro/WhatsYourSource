@@ -4,7 +4,15 @@ import { browser, type Browser } from 'wxt/browser';
 import { enqueueJob } from '@/lib/jobs';
 import { openPanelSync } from '@/lib/panel';
 import { clampSelection, LIMITS, MessageSchema, PostInputSchema, SelectionInfoSchema, type CheckInput, type SelectionInfo } from '@/lib/messaging/protocol';
-import { DEFAULT_SETTINGS, loadSettingsWithoutSecrets, mergeSettings, pageTriggerTarget, SETTINGS_KEY, type Settings } from '@/lib/storage/settings';
+import {
+  DEFAULT_SETTINGS,
+  defaultAsk,
+  loadSettingsWithoutSecrets,
+  mergeSettings,
+  pageTriggerTarget,
+  SETTINGS_KEY,
+  type Settings,
+} from '@/lib/storage/settings';
 import { SHORTCUT_KEY } from '@/lib/storage/publicSettings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
 
@@ -43,9 +51,6 @@ export default defineBackground(() => {
   // second removeAll must wait for the first chain or the creates interleave into duplicate ids.
   let menus: Promise<void> = Promise.resolve();
   function createMenus() {
-    // Web pages and local files only: on the extension's own pages (a result in the side panel, the
-    // options tab) a check would open a second panel and queue a chrome-extension:// address.
-    const documentUrlPatterns = ['http://*/*', 'https://*/*', 'file:///*'];
     const items: Browser.contextMenus.CreateProperties[] = [
       { id: MENU.selection, title: 'Check source of selection', contexts: ['selection'] },
       { id: MENU.selectionWeb, title: 'Open selection in Google AI Mode', contexts: ['selection'] },
@@ -62,7 +67,7 @@ export default defineBackground(() => {
         // Each create takes a callback that reads lastError: a duplicate id (two registrations in one
         // worker start) is then a handled condition, not an "Unchecked runtime.lastError" entry.
         for (const item of items)
-          browser.contextMenus.create({ ...item, documentUrlPatterns }, () => {
+          browser.contextMenus.create(item, () => {
             // Reading it is what marks the error handled; a duplicate id means the other chain already made the item.
             if (browser.runtime.lastError) return;
           });
@@ -75,7 +80,12 @@ export default defineBackground(() => {
   const publishShortcut = () =>
     void browser.commands
       .getAll()
-      .then((all) => browser.storage.local.set({ [SHORTCUT_KEY]: all.find((c) => c.name === COMMAND_ID)?.shortcut ?? '' }))
+      .then(async (all) => {
+        // Only when it changed: a write wakes the storage listener in every open tab's content script.
+        const shortcut = all.find((c) => c.name === COMMAND_ID)?.shortcut ?? '';
+        const stored = await browser.storage.local.get(SHORTCUT_KEY);
+        if (stored[SHORTCUT_KEY] !== shortcut) await browser.storage.local.set({ [SHORTCUT_KEY]: shortcut });
+      })
       .catch(() => undefined);
   publishShortcut();
   browser.runtime.onInstalled.addListener(publishShortcut);
@@ -97,7 +107,7 @@ export default defineBackground(() => {
       adopt(await loadSettingsWithoutSecrets());
       const input = resolve ? await resolve() : quick;
       if (settings.defaultProvider === 'webmode') {
-        await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) });
+        await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant, defaultAsk(settings)) });
         return;
       }
       if (!panelOpened) openPanel(tab); // the stale copy said web mode; a late panel is better than a lost check
@@ -106,6 +116,12 @@ export default defineBackground(() => {
   }
 
   browser.contextMenus.onClicked.addListener((info, tab) => {
+    // Not on the extension's own pages (a result in the side panel, the options tab): a check there
+    // would open a second panel and queue a chrome-extension:// address. Decided here rather than with
+    // documentUrlPatterns, which would also hide the items inside about:srcdoc and blob: frames.
+    // (pageUrl as well as frameUrl: the saved-page frame inside our own pages is about:srcdoc.)
+    const own = browser.runtime.getURL('');
+    if ((info.pageUrl ?? '').startsWith(own) || (info.frameUrl ?? '').startsWith(own)) return;
     const pageUrl = info.pageUrl ?? tab?.url ?? '';
     const pageTitle = tab?.title ?? '';
     switch (info.menuItemId) {
@@ -125,7 +141,7 @@ export default defineBackground(() => {
         // Re-read first: right after the worker wakes, the in-memory copy may still be the defaults.
         void loadSettingsWithoutSecrets()
           .then(adopt, () => undefined)
-          .then(() => browser.tabs.create({ url: googleAiModeUrl({ kind: 'text', text, pageUrl, pageTitle }, settings.webmodeVariant) }))
+          .then(() => browser.tabs.create({ url: googleAiModeUrl({ kind: 'text', text, pageUrl, pageTitle }, settings.webmodeVariant, defaultAsk(settings)) }))
           .catch((e: unknown) => console.warn('[wys] could not open Google AI Mode', e));
         return;
       }
@@ -141,7 +157,8 @@ export default defineBackground(() => {
           try {
             const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:extract-post' });
             const parsed = PostInputSchema.safeParse(reply);
-            return parsed.success ? parsed.data : page;
+            // The question is the user's, never the page's: drop anything a page-side script put there.
+            return parsed.success ? { ...parsed.data, ask: undefined } : page;
           } catch {
             return page; // no content script on this page
           }
@@ -170,7 +187,7 @@ export default defineBackground(() => {
     void (async () => {
       adopt(await loadSettingsWithoutSecrets());
       if (settings.defaultProvider === 'webmode') {
-        await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) });
+        await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant, defaultAsk(settings)) });
         return;
       }
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -202,7 +219,7 @@ export default defineBackground(() => {
         ? { kind: 'text', text: sel.text, pageUrl: sel.pageUrl, pageTitle: sel.pageTitle, surrounding: sel.surrounding }
         : { kind: 'page', url: pageUrl, title: sel.pageTitle || activeTab?.title || '' };
       if (target === 'webmode') {
-        await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant) });
+        await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant, defaultAsk(settings)) });
       } else {
         await enqueueJob(input, activeTab?.id, activeTab?.windowId);
       }
@@ -226,6 +243,8 @@ export default defineBackground(() => {
     const parsed = MessageSchema.safeParse(raw);
     if (!parsed.success) return false;
     const msg = parsed.data;
+    // The question is the user's, never the page's: a content script cannot choose it.
+    if ('input' in msg) msg.input = { ...msg.input, ask: undefined };
     switch (msg.type) {
       case 'wys:check': {
         if (!fromChip(sender)) return false;
@@ -241,7 +260,7 @@ export default defineBackground(() => {
         void loadSettingsWithoutSecrets()
           .then((fresh) => {
             adopt(fresh);
-            return browser.tabs.create({ url: googleAiModeUrl(msg.input, settings.webmodeVariant) });
+            return browser.tabs.create({ url: googleAiModeUrl(msg.input, settings.webmodeVariant, defaultAsk(settings)) });
           })
           .then(
             () => sendResponse({ ok: true }),

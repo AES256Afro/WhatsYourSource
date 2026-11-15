@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { PROVIDER_LABELS } from '@/lib/providers/registry';
 import { searchFactChecks } from '@/lib/lookups/factcheck';
 import type { ProviderId, Settings } from '@/lib/storage/settings';
+import { AskPicker } from './AskPicker';
 import { Label } from './common';
 import { Globe, Shield } from './Icons';
 import { AnthropicCard } from './settings/AnthropicCard';
@@ -64,7 +65,11 @@ export function SettingsView({
               aria-labelledby={id}
               className="wys-input h-8 w-auto text-[12px]"
               value={settings.webmodeVariant}
-              onChange={(e) => update((s) => ({ ...s, webmodeVariant: e.target.value as Settings['webmodeVariant'] }))}
+              onChange={(e) => {
+                // Read now: by the time the updater runs, React has put the old value back in the control.
+                const variant = e.target.value as Settings['webmodeVariant'];
+                void update((s) => ({ ...s, webmodeVariant: variant }));
+              }}
             >
               <option value="ai-mode">AI Mode</option>
               <option value="overview">Search with AI Overview</option>
@@ -107,6 +112,22 @@ export function SettingsView({
       </div>
 
       <div className="flex flex-col gap-1.5">
+        <Label>Question</Label>
+        <p className="m-0 text-[12px] leading-4 text-ink-2">
+          What highlighting, the shortcut, right-click and the address bar ask. In the side panel you can pick a different one for the checks you start there,
+          and a finished result lets you ask something else about the same content.
+        </p>
+        <div className="wys-card px-3 py-2.5">
+          <AskPicker
+            selected={settings.ask.default}
+            custom={settings.ask.custom}
+            onSelect={(id) => update((s) => ({ ...s, ask: { ...s.ask, default: id } }))}
+            onCustom={(text) => update((s) => ({ ...s, ask: { ...s.ask, custom: text } }))}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <Label>Behaviour</Label>
         <div className="wys-card flex flex-col px-3">
           <Row
@@ -128,7 +149,10 @@ export function SettingsView({
                 aria-labelledby={id}
                 className="wys-input h-8 w-auto text-[12px]"
                 value={settings.shortcutAction}
-                onChange={(e) => update((s) => ({ ...s, shortcutAction: e.target.value as Settings['shortcutAction'] }))}
+                onChange={(e) => {
+                  const action = e.target.value as Settings['shortcutAction'];
+                  void update((s) => ({ ...s, shortcutAction: action }));
+                }}
               >
                 <option value="panel">Check in the side panel</option>
                 <option value="webmode">Open Google AI Mode</option>

@@ -41,8 +41,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
     verify: test,
   } = useProviderVerify(
     () => new OpenAICompatProvider({ baseUrl: o.baseUrl, apiKey: o.apiKey, model: o.model, search: createSearchBackend(o) }),
-    // Not the model: a successful Test fills in the first model itself, which must not discard its own result.
-    `${o.baseUrl} ${o.apiKey}`,
+    `${o.baseUrl} ${o.apiKey} ${o.model}`,
     async (ids) => {
       const described = await describeLocalModels(o.baseUrl, ids);
       setInfo(described);
@@ -50,7 +49,11 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
       const me = described.find((m) => m.id === chosen);
       const loaded = described.filter((m) => m.loaded).length;
       await set({ model: chosen, modelVision: me?.vision ?? null, modelTools: me?.tools ?? null, modelContext: me?.contextLength ?? null });
-      return `Connected · ${ids.length} model${ids.length === 1 ? '' : 's'}${loaded ? ` · ${loaded} loaded` : ''}${me?.vision === false ? ' · text only' : me?.vision ? ' · can see images' : ''}`;
+      // The outcome belongs to the configuration as it is now: Test may have filled in the model itself.
+      return {
+        text: `Connected · ${ids.length} model${ids.length === 1 ? '' : 's'}${loaded ? ` · ${loaded} loaded` : ''}${me?.vision === false ? ' · text only' : me?.vision ? ' · can see images' : ''}`,
+        key: `${o.baseUrl} ${o.apiKey} ${chosen}`,
+      };
     },
   );
   // What Verify learned about the chosen model, or what an earlier Verify stored in settings.
@@ -140,7 +143,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
           </select>
         )}
       </Row>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-[359px]:flex-wrap">
         <label htmlFor="wys-ocurl" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
           Endpoint
         </label>
@@ -165,7 +168,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         </div>
       )}
       {needsPermission && <PermissionNote text="The model server is on another host" host={hostOf(o.baseUrl) || o.baseUrl} onAllow={allow} />}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-[359px]:flex-wrap">
         <label htmlFor="wys-ockey" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
           API key
         </label>
@@ -173,7 +176,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
           <SecretInput id="wys-ockey" value={o.apiKey} onCommit={(v) => set({ apiKey: v })} placeholder={isLocal ? 'Usually not needed locally' : 'sk-…'} />
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-[359px]:flex-wrap">
         <label htmlFor="wys-ocmodel" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
           Model
         </label>
@@ -181,7 +184,11 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
           id="wys-ocmodel"
           list="wys-ocmodels"
           value={o.model}
-          onCommit={(v) => set({ model: v })}
+          onCommit={(v) => {
+            // What the server said about the previous model does not apply to this one.
+            const known = info.find((m) => m.id === v);
+            void set({ model: v, modelVision: known?.vision ?? null, modelTools: known?.tools ?? null, modelContext: known?.contextLength ?? null });
+          }}
           placeholder={isLocal ? 'e.g. qwen3.5:9b' : 'e.g. gpt-5-mini'}
           className="h-8 min-w-0 grow text-[12px]"
         />
@@ -247,7 +254,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
       )}
       {o.searchTool === 'searxng' && (
         <>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-[359px]:flex-wrap">
             <label htmlFor="wys-searx" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
               SearXNG URL
             </label>
@@ -269,7 +276,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         </>
       )}
       {o.searchTool === 'brave' && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 max-[359px]:flex-wrap">
           <label htmlFor="wys-brave" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
             Brave key
           </label>
@@ -279,7 +286,7 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         </div>
       )}
       {o.searchTool === 'tavily' && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 max-[359px]:flex-wrap">
           <label htmlFor="wys-tavily" className="w-[70px] shrink-0 text-[13px] max-[359px]:basis-full">
             Tavily key
           </label>

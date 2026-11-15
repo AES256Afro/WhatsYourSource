@@ -34,8 +34,8 @@ function userText(input: CheckInput): string {
 }
 
 describe('the question put to the model', () => {
-  it('is the user’s question: is it true first, then where the source is', () => {
-    expect(QUESTION).toBe('Is this true, and where can I find the source of this topic?');
+  it('is the user’s question: is it accurate, what is missing, then where the source is', () => {
+    expect(QUESTION).toBe('Is this accurate, what context is it missing, and where can I find the original source?');
     expect(SYSTEM_PROMPT).toContain(`"${QUESTION}"`);
   });
 
@@ -47,9 +47,9 @@ describe('the question put to the model', () => {
   });
 
   it('is asked in the same shape for images, pages and posts', () => {
-    expect(userText(image)).toContain('Is this image real, and where can I find its original source?');
-    expect(userText(page)).toContain('Is what this page says true, and where can I find the source of this topic?');
-    expect(userText(post)).toContain('Is this post true, and where can I find the source of what it claims?');
+    expect(userText(image)).toContain('Is this image real, edited or AI-made, is it shown in its true context, and where can I find its original source?');
+    expect(userText(page)).toContain('Is what this page says accurate, what context is it missing, and where can I find the original source?');
+    expect(userText(post)).toContain('Is this post accurate, what context is it missing, and where can I find the source of what it claims?');
   });
 });
 
@@ -58,17 +58,19 @@ describe('the question put to the search engine', () => {
     expect(searchHintFor(text)).toBe(`${QUESTION} The definition of insanity is doing the same thing over and over and expecting`);
     expect(searchHintFor(post)).toBe(`${QUESTION} BREAKING: the moon is made of cheese`);
     expect(searchHintFor(page)).toBe(`${QUESTION} Big story (example.com)`);
-    expect(searchHintFor(image)).toBe('Is this image real, and where can I find its original source? Shark on a highway');
+    expect(searchHintFor(image)).toBe(
+      'Is this image real, edited or AI-made, is it shown in its true context, and where can I find its original source? Shark on a highway',
+    );
     expect(buildRequest(text).searchHint).toBe(searchHintFor(text));
   });
 
   it('is what Google AI Mode receives', () => {
     for (const input of [text, image, page, post]) {
       const q = decodeURIComponent(googleAiModeUrl(input, 'ai-mode').split('&q=')[1] ?? '');
-      expect(q).toMatch(/^Is .*(true|real), and where can I find/);
+      expect(q).toMatch(/^Is .*(accurate|real).*, and where can I find/);
     }
     expect(decodeURIComponent(googleAiModeUrl(text, 'ai-mode'))).toContain(`${QUESTION} "The definition of insanity`);
-    expect(decodeURIComponent(googleAiModeUrl(post, 'ai-mode'))).toContain('Is this x.com post true');
+    expect(decodeURIComponent(googleAiModeUrl(post, 'ai-mode'))).toContain('Is this x.com post accurate');
   });
 });
 

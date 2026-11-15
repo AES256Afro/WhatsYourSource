@@ -16,7 +16,7 @@ export interface PreRunLookups {
 }
 
 /** How long each lookup may hold things up. The model waits only for fact-checks; archive dates arrive whenever. */
-export const LOOKUP_BUDGET_MS = { forPrompt: 2500, forPromptTwoPass: 4000, archive: 6000, factChecks: 8000 } as const;
+export const LOOKUP_BUDGET_MS = { forPrompt: 2500, forPromptTwoPass: 4000, archive: 6000, factChecks: 8000, claims: 3000 } as const;
 
 function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
@@ -54,9 +54,9 @@ export function startLookups(
 ): { forPrompt: Promise<string>; all: Promise<PreRunLookups> } {
   const l = settings.lookups;
   // One query from the content itself, plus one per extracted claim (first three) when a first pass ran.
-  const queries: Promise<string[]> = claims
-    ? claims.then((cs) => [factCheckQuery(textOf(input)), ...cs.slice(0, 3)])
-    : Promise.resolve([factCheckQuery(textOf(input))]);
+  // The claims are a bonus: if listing them is slow, the content's own query goes out without them.
+  const own = factCheckQuery(textOf(input));
+  const queries: Promise<string[]> = claims ? withTimeout(claims, LOOKUP_BUDGET_MS.claims, []).then((cs) => [own, ...cs.slice(0, 3)]) : Promise.resolve([own]);
   const factChecks: Promise<Pick<PreRunLookups, 'factChecks'>> =
     l.factChecks && l.factCheckKey
       ? queries
@@ -98,18 +98,33 @@ export async function sourceLookups(
   settings: Settings,
   signal: AbortSignal,
 ): Promise<SourceLookups> {
-  const l = settings.lookups;
+  const [ratings, originalCapture] = await Promise.all([
+    sourceRatings(sourceHostsOrUrls, originalUrl, settings),
+    originalSourceCapture(originalUrl, settings, signal),
+  ]);
+  return { ...ratings, originalCapture };
+}
+
+/** Outlet reputation from the list shipped with the extension: no network, so it is ready almost at once. */
+export async function sourceRatings(
+  sourceHostsOrUrls: string[],
+  originalUrl: string | undefined,
+  settings: Settings,
+): Promise<Pick<SourceLookups, 'credibility' | 'mixNotes'>> {
+  if (!settings.lookups.credibility) return { credibility: {}, mixNotes: [] };
   const domains = sourceHostsOrUrls.map(domainOf).filter(Boolean);
-  const credibility = l.credibility ? await rateDomains([...domains, ...(originalUrl ? [originalUrl] : [])]).catch(() => ({})) : {};
-  const originalCapture =
-    l.archive && originalUrl && isPublicHttpUrl(originalUrl)
-      ? await withTimeout(
-          firstCapture(originalUrl, signal).catch(() => undefined),
-          LOOKUP_BUDGET_MS.archive,
-          undefined,
-        )
-      : undefined;
-  return { credibility, mixNotes: l.credibility ? sourceMixNotes(domains, credibility) : [], originalCapture };
+  const credibility = await rateDomains([...domains, ...(originalUrl ? [originalUrl] : [])]).catch(() => ({}));
+  return { credibility, mixNotes: sourceMixNotes(domains, credibility) };
+}
+
+/** When the Wayback Machine first saw the original source: a network call that can take seconds. */
+export function originalSourceCapture(originalUrl: string | undefined, settings: Settings, signal: AbortSignal): Promise<FirstCapture | undefined> {
+  if (!settings.lookups.archive || !originalUrl || !isPublicHttpUrl(originalUrl)) return Promise.resolve(undefined);
+  return withTimeout(
+    firstCapture(originalUrl, signal).catch(() => undefined),
+    LOOKUP_BUDGET_MS.archive,
+    undefined,
+  );
 }
 
 /** The deterministic facts the model should see, framed as data it did not produce. */

@@ -45,6 +45,8 @@ export function toneForVerdict(kind: VerdictKind): Tone {
 export const ConfidenceSchema = z.enum(['high', 'medium', 'low']);
 
 const nullableStr = z.string().nullish();
+/** An optional detail (a date, a title): a number becomes text, anything else unusable becomes nothing. It can never fail the answer. */
+const looseStr = z.preprocess((v) => (typeof v === 'number' ? String(v) : typeof v === 'string' ? v : undefined), z.string().nullish());
 /** A list of non-empty strings, tolerant of nulls, numbers and a missing field. */
 const stringList = z.preprocess(
   (v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((x) => typeof x === 'string' && x.trim()) : []),
@@ -54,6 +56,9 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 
 /** What we ask the model to put in its ```json block. Lenient on purpose; the UI copes with gaps. */
 export const ModelResultSchema = z.object({
+  /** A headline and a broad topic for the user's own records (history, exports). */
+  title: looseStr,
+  topic: looseStr,
   verdict: z.object({
     label: z
       .string()
@@ -101,7 +106,7 @@ export const ModelResultSchema = z.object({
           .nullish()
           .transform((v) => v ?? ''),
         url: z.string().min(1),
-        date: nullableStr,
+        date: looseStr,
       }),
     ),
   ),
@@ -111,6 +116,10 @@ export const ModelResultSchema = z.object({
       against: stringList,
     })
     .nullish(),
+  timeline: z.preprocess(
+    (v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((t) => isRecord(t) && typeof t.event === 'string' && t.event.trim()) : []),
+    z.array(z.object({ date: looseStr, event: z.string().min(1), sourceUrl: looseStr })),
+  ),
   missingContext: nullableStr,
   wouldChange: nullableStr,
   notes: nullableStr,
@@ -133,6 +142,17 @@ export interface Claim {
   note: string;
   sourceIds: number[];
 }
+
+/** One dated step in the story behind the content. */
+export interface TimelineEvent {
+  date?: string;
+  event: string;
+  sourceId?: number;
+}
+
+/** Broad subjects a check is filed under, for the user's own records. */
+export const TOPICS = ['politics', 'health', 'science', 'technology', 'business', 'world', 'society', 'history', 'entertainment', 'sports', 'other'] as const;
+export type Topic = (typeof TOPICS)[number];
 
 export interface OriginalSource {
   title: string;
@@ -170,6 +190,11 @@ export interface CheckResult {
   usage?: Usage;
   notes?: string;
   provenance?: LocalProvenance;
+  /** A headline and topic the model gave the check, for history and exports. */
+  title?: string;
+  topic?: Topic;
+  /** Dated events, earliest first, when the question asked for them or the order matters. */
+  timeline?: TimelineEvent[];
   /** The strongest points each way, so the reader sees the case, not just the verdict. */
   evidence?: { for: string[]; against: string[] };
   missingContext?: string;

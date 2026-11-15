@@ -102,7 +102,10 @@ export function Onboarding({
       <div className="flex grow flex-col gap-3.5 overflow-y-auto px-4 pt-4 pb-3">
         <div className="flex flex-col gap-1">
           <h1 className="m-0 text-[18px] leading-[22px] font-bold tracking-tight">Check the source of anything you read</h1>
-          <p className="m-0 text-[13px] leading-[18px] text-ink-2">You decide which AI does the checking. Change it any time.</p>
+          <p className="m-0 text-[13px] leading-[18px] text-ink-2">
+            Highlight text or right-click an image, post or link, then choose what to ask: fact-check it, explain it, build a timeline, find the flaws, or ask
+            your own question. You decide which AI answers.
+          </p>
         </div>
 
         <fieldset className="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0">
@@ -138,7 +141,7 @@ export function Onboarding({
                     {c.tag}
                   </span>
                 </span>
-                <span className="line-clamp-2 text-[12px] leading-4 text-ink-2">{c.blurb}</span>
+                <span className="line-clamp-2 text-[12px] leading-4 text-ink-2 max-[359px]:line-clamp-3">{c.blurb}</span>
               </span>
             </label>
           ))}

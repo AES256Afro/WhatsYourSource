@@ -1,6 +1,6 @@
 /**
  * Dev-only harness: runs the side panel / popup outside the browser extension runtime.
- * `?scenario=` picks the seeded state: fresh (onboarding), home, result, history, popup, local.
+ * `?scenario=` picks the seeded state: fresh (onboarding), home, nosel, result, history, popup, local, image.
  * Never shipped — only used by `npm run preview`.
  */
 import { fakeBrowser } from 'wxt/testing/fake-browser';
@@ -19,6 +19,13 @@ const CANNED_ANSWER = `No: there is no evidence Einstein ever said this. The lin
     { "title": "Insanity Is Doing the Same Thing Over and Over Again and Expecting Different Results", "url": "https://quoteinvestigator.com/2017/03/23/same/", "date": "2017" },
     { "title": "Albert Einstein — Misattributed", "url": "https://en.wikiquote.org/wiki/Albert_Einstein", "date": null },
     { "title": "Narcotics Anonymous Basic Text, 1981 (scan)", "url": "https://archive.org/details/na-basic-text-1981", "date": "1981" }
+  ],
+  "title": "Einstein insanity quote",
+  "topic": "history",
+  "timeline": [
+    { "date": "1981", "event": "The line appears in Narcotics Anonymous literature, without Einstein's name.", "sourceUrl": "https://archive.org/details/na-basic-text-1981" },
+    { "date": "1983", "event": "Rita Mae Brown uses it in the novel Sudden Death.", "sourceUrl": "https://quoteinvestigator.com/2017/03/23/same/" },
+    { "date": "1990s onward", "event": "It starts to circulate with Einstein's name attached.", "sourceUrl": "https://en.wikiquote.org/wiki/Albert_Einstein" }
   ],
   "notes": null
 }

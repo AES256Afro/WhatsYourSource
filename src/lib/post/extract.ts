@@ -104,6 +104,13 @@ export function extractPost(target: Element | null, doc: Document = document): P
   };
 }
 
+/** The parent element, stepping out of an open shadow root to its host (web-component posts). */
+function parentAcrossShadow(el: Element): Element | null {
+  if (el.parentElement) return el.parentElement;
+  const root = el.getRootNode();
+  return root instanceof ShadowRoot ? root.host : null;
+}
+
 function findContainer(target: Element | null, doc: Document): Element | null {
   let el: Element | null = target;
   // Walk up: the first ancestor matching a post-like selector that is not absurdly large.
@@ -113,7 +120,7 @@ function findContainer(target: Element | null, doc: Document): Element | null {
       if (len >= 10 && len <= 20000) return el;
       if (len > 20000) break; // every ancestor is at least as long
     }
-    el = el.parentElement;
+    el = parentAcrossShadow(el);
   }
   // Fallback: the nearest ancestor block with a reasonable amount of text.
   el = target;
@@ -123,7 +130,7 @@ function findContainer(target: Element | null, doc: Document): Element | null {
     const len = raw.replace(/\s+/g, ' ').trim().length;
     if (len >= 80 && len <= 6000) return el;
     if (len > 6000) break;
-    el = el.parentElement;
+    el = parentAcrossShadow(el);
   }
   return null;
 }

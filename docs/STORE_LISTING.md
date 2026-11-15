@@ -4,56 +4,21 @@ Copy and assets for the Chrome Web Store, Firefox Add-ons (AMO) and Microsoft Ed
 
 ## Name
 
-**WhatsYourSource** — Is this true, and where's the source?
+**WhatsYourSource**
 
 ## One-line description
 
 Chrome (≤132 characters), also used for Edge:
 
-> Highlight any text, image or post and ask "Is this true, and where's the source?" — with Google AI, your own key or a local model.
+> Fact-check, explain or build a timeline for highlighted text, images and posts, with sources. Your AI key or a local model.
 
 AMO summary (≤250 characters):
 
-> Highlight text, right-click an image or a post and get a sourced answer to "Is this true, and where can I find the source?" Uses Google AI with your own free key, Google AI Mode with no key, Claude/GPT, or a local model (Ollama, LM Studio). Nothing leaves your browser until you press Check.
+> Highlight text, right-click an image or a post, and choose what to ask: fact-check it, explain it, build a timeline, find the flaws, or your own question. Answers come with the sources that were read. Uses Google AI with your own free key, Google AI Mode with no key, Claude/GPT, or a local model. Nothing is sent until you press Check.
 
 ## Detailed description
 
-WhatsYourSource answers one question about anything you read online: **is this true, and where can I find the source?**
-
-**How it works**
-1. Highlight a sentence, a quote or a statistic. A small "Check source" chip appears (or press Alt+Shift+S, or right-click).
-2. The side panel opens and the AI you chose searches the web, reads the sources and writes a short assessment.
-3. You get a verdict with its confidence, the likely original source (who said it first, where, when), each claim marked supported / disputed / misleading / unverified, and the actual links that were read. Only links the search engine returned are clickable; anything the model merely "remembers" is labelled as unverified.
-
-**Check more than text**
-- **Images**: right-click → Check source of this image. Metadata (EXIF, Content Credentials, AI-generator hints) is read on your device first, then the image is checked for its earliest appearance. One-click reverse image search on Google Lens, TinEye, Bing and Yandex.
-- **Posts**: right-click anywhere in a social post → Check source of this post. The post's text, links and images are checked together.
-- **Pages**: check the whole page you are on, or paste any text or link into the panel.
-
-**Evidence that does not depend on the AI**
-- Already fact-checked? Published fact-checks from PolitiFact, Snopes, AFP, Full Fact and hundreds more appear above the verdict (free Google Fact Check Tools key).
-- When was it first seen? Wayback Machine dates for the page and the original source.
-- Who is the outlet? Reputation ratings from Wikipedia's perennial-sources list, shipped inside the extension.
-- The case on each side: the strongest evidence for and against, what the post leaves out, and what would change the verdict.
-
-**You choose the AI**
-- **Google AI (Gemini) with your own free key** — Google Search grounding; answers and sources appear in the panel. Default.
-- **Google AI Mode on the web** — no key, no setup: your selection opens on google.com.
-- **Your own frontier model** — Claude, GPT or any OpenAI-compatible API key.
-- **A local model on your device** — Ollama or LM Studio, paired with a search tool (SearXNG, Brave, Tavily) so it can find sources. Nothing leaves your machine except the searches you allow.
-
-You can set a default and a fallback, and switch any time.
-
-**Your history, on your device**
-Every check is saved locally. Checks started from the right-click menu or the keyboard shortcut also keep a copy of the page as it was when you checked it, with your highlight marked. Search your history, add notes, re-check when sources change, export a check as a self-contained HTML file.
-
-**Privacy**
-- Nothing is sent anywhere until you press Check. Then only the selection (or image, or page URL) goes to the one provider you configured, with your own key.
-- No accounts, no servers of our own, no analytics, no telemetry.
-- API keys are stored locally, never synced, and never read by the script that runs on web pages.
-- The chip can be turned off globally or per site.
-
-Open source (MIT): https://github.com/AES256Afro/WhatsYourSource
+The text for every store is the block in `docs/CHROME_WEB_STORE_FORM.md` ("Description — paste exactly this"); AMO takes the same text.
 
 ## Category and tags
 
@@ -93,23 +58,21 @@ Data-use disclosures: the extension does not collect or transmit user data to th
 
 ## Screenshots (store/)
 
-Generated at 1280×800 (Chrome, Edge) and reused for AMO. Each shows a realistic article on the left and the side panel on the right (the panel is laid out at its real 400 px width and shown at 1.3× so the store's 440 px thumbnails stay legible).
+Generated at 1280×800 (Chrome, Edge) and reused for AMO by `npm run screenshots`. Each is three captures of the panel side by side, as it runs, on a plain background: no scene, no captions, no slogans.
 
-1. `01-result.png` — the result card: verdict, original source, claims, sources.
-2. `02-chip.png` — highlighted text on a page with the "Check source" chip.
-3. `03-image.png` — an image check: provenance facts and reverse-image buttons.
-4. `04-saved-page.png` — a saved check with its page snapshot open (history → detail).
-5. `05-providers.png` — settings: the four ways to check, local model card with LM Studio / Ollama.
-6. `06-onboarding.png` — first-run screen.
-7. `07-result-dark.png` — the result card in dark mode.
+1. `01-fact-check.png` — the home screen with the question picker, a fact-check result, its claims and sources.
+2. `02-timeline.png` — Timeline picked, the check while it runs, the timeline answer.
+3. `03-your-question.png` — a question typed in the user's words, its answer, the history list.
+4. `04-image-and-saved-page.png` — an image check, what was read from the file on the device, a saved page.
+5. `05-settings.png` — the ways to check, the default question, the first-run screen.
 
-Promo images (Chrome): small tile 440×280 (`promo-440x280.png`), marquee 1400×560 (`promo-1400x560.png`).
+Promo images (Chrome): small tile 440×280 (`promo-440x280.png`), marquee 1400×560 (`promo-1400x560.png`): the icon and the name, nothing else.
 
-## Submission checklist (1.0.2)
+## Submission checklist (1.1.0)
 
-Everything below is done in the store dashboards, signed in as the developer; the files are on the [v1.0.2 GitHub release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.0.2).
+Everything below is done in the store dashboards, signed in as the developer; the files are on the [v1.1.0 GitHub release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.1.0).
 
-1. **Chrome Web Store** (https://chrome.google.com/webstore/devconsole, one-time $5 registration): New item → upload `whatsyoursource-1.0.2-chrome.zip`. Store listing: name, the one-line description, the detailed description, category Productivity → Tools, `store/01`–`07` screenshots (1280×800), `promo-440x280.png` small tile, `promo-1400x560.png` marquee. Privacy practices: the single-purpose statement, the permission justifications above, data-use disclosures (collects website content only as described; not sold; not for unrelated purposes), privacy policy URL. Distribution: unlisted first if a beta is wanted, then public.
-2. **Firefox Add-ons** (https://addons.mozilla.org/developers/): Submit a New Add-on → "On this site" → upload `whatsyoursource-1.0.2-firefox.zip`; when asked for source code, upload `whatsyoursource-1.0.2-sources.zip` with the build instructions from the README (Node 22, `npm ci`, `npm run build:firefox`). Fill the AMO summary, description, categories Search Tools + Social & Communication, tags, license MIT, privacy policy and support URLs; the data-collection disclosure is already in the manifest. The reviewer notes above explain the nine linter warnings.
+1. **Chrome Web Store** (https://chrome.google.com/webstore/devconsole, one-time $5 registration): New item → upload `whatsyoursource-1.1.0-chrome.zip`. Store listing: name, the one-line description, the detailed description, category Productivity → Tools, the five `store/0*.png` screenshots (1280×800), `promo-440x280.png` small tile, `promo-1400x560.png` marquee. Privacy practices: the single-purpose statement, the permission justifications above, data-use disclosures (collects website content only as described; not sold; not for unrelated purposes), privacy policy URL. Distribution: unlisted first if a beta is wanted, then public.
+2. **Firefox Add-ons** (https://addons.mozilla.org/developers/): Submit a New Add-on → "On this site" → upload `whatsyoursource-1.1.0-firefox.zip`; when asked for source code, upload `whatsyoursource-1.1.0-sources.zip` with the build instructions from the README (Node 22, `npm ci`, `npm run build:firefox`). Fill the AMO summary, description, categories Search Tools + Social & Communication, tags, license MIT, privacy policy and support URLs; the data-collection disclosure is already in the manifest. The reviewer notes above explain the nine linter warnings.
 3. **Edge Add-ons** (https://partner.microsoft.com/dashboard/microsoftedge): upload the same Chrome zip; copy the Chrome listing; category Productivity.
 4. After approval: add the store links to the README install section and tag the next version from `package.json`.

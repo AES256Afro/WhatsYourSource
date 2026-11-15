@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { clearHistory, exportAll, listChecks, storageStats, type StoredCheck } from '@/lib/history/db';
-import { downloadBlob } from '@/lib/history/export';
+import { clearHistory, eachCheck, exportAll, listChecks, storageStats, type StoredCheck } from '@/lib/history/db';
+import { CSV_HEAD, csvLine, downloadBlob } from '@/lib/history/export';
 import { useActionError } from '../hooks/useActionError';
 import type { CheckInput } from '@/lib/messaging/protocol';
-import { Label, Pill, toneForVerdict } from './common';
-import { Camera, Globe, Image, Lines, Post } from './Icons';
+import { Label } from './common';
+import { HistoryRow } from './HistoryRow';
+import { Camera } from './Icons';
 
 type KindFilter = CheckInput['kind'] | 'all';
 const PAGE = 100;
@@ -70,10 +71,39 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
   const groups = useMemo(() => groupByDay(items ?? []), [items]);
 
   const { error: actionError, guard } = useActionError();
+  const [exported, setExported] = useState<string | null>(null);
   const clearAll = guard('Clear all', async () => {
     if (!confirm('Delete all saved checks and page snapshots? This cannot be undone.')) return;
     await clearHistory();
     setTick((t) => t + 1);
+  });
+  // The table follows the search box and the filter, so "everything about X" is one export away.
+  const exportCsv = guard('Export', async () => {
+    // A page at a time, 200 lines to a Blob: the heap never holds the whole history, and a few
+    // dozen parts build faster than one per line.
+    const parts: BlobPart[] = [CSV_HEAD];
+    let n = 0;
+    let batch = '';
+    for await (const c of eachCheck({ query: debouncedQuery, kind, withSnapshot })) {
+      batch += csvLine(c);
+      if (++n % 200 === 0) {
+        parts.push(new Blob([batch]));
+        batch = '';
+      }
+    }
+    if (batch) parts.push(new Blob([batch]));
+    // Say so when the search or a filter narrowed it: the file looks the same either way.
+    const filtered = !!debouncedQuery.trim() || kind !== 'all' || withSnapshot;
+    downloadBlob(
+      new Blob(parts, { type: 'text/csv;charset=utf-8' }),
+      `whatsyoursource-checks${filtered ? '-filtered' : ''}-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+    setExported(
+      filtered && stats
+        ? `Exported ${n} matching check${n === 1 ? '' : 's'} (of ${stats.checks})`
+        : `Exported ${n} check${n === 1 ? '' : 's'} as a spreadsheet`,
+    );
+    setTimeout(() => setExported(null), 4000);
   });
   const exportJson = guard('Export', async () => {
     downloadBlob(await exportAll(), `whatsyoursource-history-${new Date().toISOString().slice(0, 10)}.json`);
@@ -147,54 +177,34 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
           </button>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-2.5 border-t border-line bg-paper px-3.5 py-2.5 text-[11px] text-ink-2">
-        <span role="status" className={`min-w-0 truncate ${actionError ? 'text-bad' : ''}`}>
-          {actionError ?? (stats ? `${fmtBytes(stats.snapshotBytes)} of saved pages` : '')}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-t border-line bg-paper px-3.5 py-2.5 text-[11px] text-ink-2">
+        <span role="status" className={`min-w-0 basis-full truncate ${actionError ? 'text-bad' : ''}`}>
+          {actionError ?? exported ?? (stats ? `${fmtBytes(stats.snapshotBytes)} of saved pages` : '')}
         </span>
         <span className="grow" />
         <button
           className="wys-btn h-8 px-3 text-[12px]"
+          onClick={exportCsv}
+          disabled={!items?.length}
+          title="One row per check, for Excel, Google Sheets or Numbers. Exports the checks that match the search and filter above."
+          aria-label="Export the matching checks as a spreadsheet (CSV)"
+        >
+          Spreadsheet
+        </button>
+        <button
+          className="wys-btn h-8 px-3 text-[12px]"
           onClick={exportJson}
           disabled={!(stats?.checks ?? items?.length)}
-          aria-label="Export all checks as JSON"
+          title="Everything, with saved pages, as one JSON file."
+          aria-label="Backup: all checks as JSON"
         >
-          Export all (JSON)
+          Backup
         </button>
         <button className="wys-btn h-8 px-3 text-[12px] text-bad" onClick={clearAll} disabled={!(stats?.checks ?? items?.length)}>
           Clear all
         </button>
       </div>
     </div>
-  );
-}
-
-export function HistoryRow({ check: c, onOpen, compact }: { check: StoredCheck; onOpen: () => void; compact?: boolean }) {
-  const Icon = c.kind === 'text' ? Lines : c.kind === 'image' ? Image : c.kind === 'post' ? Post : Globe;
-  const time = new Date(c.createdAt);
-  return (
-    <button className={`wys-card flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-surface ${compact ? 'border-0 px-2' : ''}`} onClick={onOpen}>
-      {!compact && (
-        <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-surface-2 text-ink-2">
-          <Icon size={15} />
-        </span>
-      )}
-      <span className="flex min-w-0 grow flex-col gap-[3px]">
-        <span className="truncate text-[13px] leading-[18px] font-medium">{c.kind === 'text' ? `“${c.title}”` : c.title}</span>
-        {!compact && c.result.verdict.summary && <span className="line-clamp-1 text-[12px] leading-4 text-ink-2">{c.result.verdict.summary}</span>}
-        <span className="flex items-center gap-1.5 text-[11px] text-ink-2">
-          <Pill tone={toneForVerdict(c.verdictKind)} className="px-[7px] py-px">
-            {c.verdictLabel}
-          </Pill>
-          <span className="truncate">{[c.site, time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })].filter(Boolean).join(' · ')}</span>
-          {c.hasSnapshot && (
-            <>
-              <Camera size={12} className="shrink-0" />
-              <span className="wys-sr-only">Has a saved page</span>
-            </>
-          )}
-        </span>
-      </span>
-    </button>
   );
 }
 

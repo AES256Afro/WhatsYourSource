@@ -36,13 +36,19 @@ export async function readProvenance(bytes: Uint8Array, mime: string): Promise<L
   } catch {
     /* no metadata, or a format exifr doesn't read */
   }
+  const pngHints = new Set<string>();
   if (mime === 'image/png') {
     for (const [k, v] of pngTextChunks(bytes)) {
-      if (/^(parameters|prompt|comment|software|description|title|author|copyright|source)$/i.test(k)) fields[k] = v.slice(0, 300);
+      if (/^(parameters|prompt|comment|software|description|title|author|copyright|source)$/i.test(k)) {
+        fields[k] = v.slice(0, 300);
+        // Hints from the whole chunk: a Stable Diffusion "parameters" block puts its Steps/Sampler line
+        // after the prompt and negative prompt, usually past the 300 characters kept for display.
+        for (const h of aiHints({ [k]: v.slice(0, 20_000) })) pngHints.add(h);
+      }
     }
   }
   if (Object.keys(fields).length) out.exif = fields;
-  out.aiHints = aiHints(fields);
+  out.aiHints = Array.from(new Set([...aiHints(fields), ...pngHints]));
   return out;
 }
 
@@ -87,14 +93,16 @@ function pick(out: Record<string, string>, src: Record<string, unknown>, key: st
 
 const AI_PATTERNS: [RegExp, string][] = [
   [/trainedAlgorithmicMedia/i, 'IPTC digital source type = trained algorithmic media'],
-  [/\bfirefly\b/i, 'Adobe Firefly'],
-  [/\bdall[- ]?e\b/i, 'DALL·E'],
-  [/\bmidjourney\b/i, 'Midjourney'],
-  [/\b(stable ?diffusion|sdxl|comfyui|automatic1111|invokeai|novelai)\b/i, 'Stable Diffusion tooling'],
-  [/\b(imagen|gemini|nano banana|synthid)\b/i, 'Google image model'],
-  [/\bflux\.?1|\bblack forest\b/i, 'FLUX'],
-  [/\b(ideogram|leonardo\.ai|runway|pika|kling)\b/i, 'AI image service'],
-  [/^(Steps|Sampler|CFG scale|Seed):/im, 'Stable Diffusion parameters block'],
+  // Whole names, judged by letters only: "Imagen3", "sdxl_turbo" and "ComfyUI_0.3" are the tool,
+  // "fireflies" and "Klingler" are not.
+  [/(?<![a-z])firefly(?![a-z])/i, 'Adobe Firefly'],
+  [/(?<![a-z])dall[-· ]?e(?![a-z])/i, 'DALL·E'],
+  [/(?<![a-z])midjourney(?![a-z])/i, 'Midjourney'],
+  [/(?<![a-z])(stable[- ]?diffusion|sdxl|comfyui|automatic1111|invokeai|novelai)(?![a-z])/i, 'Stable Diffusion tooling'],
+  [/(?<![a-z])(imagen|gemini|nano banana|synthid)(?![a-z])/i, 'Google image model'],
+  [/(?<![a-z])flux\.?1|(?<![a-z])black forest(?![a-z])/i, 'FLUX'],
+  [/(?<![a-z])(ideogram|leonardo\.ai|runway|pika|kling)(?![a-z])/i, 'AI image service'],
+  [/(^|\n|: )(Steps|Sampler|CFG scale|Seed):/i, 'Stable Diffusion parameters block'],
 ];
 
 const TOOL_FIELDS = /^(software|creator tool|digital source type|parameters|prompt|comment)$/i;

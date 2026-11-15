@@ -1,8 +1,10 @@
+import { normalizeAsk } from '@/lib/pipeline/question';
+import { defaultAsk } from '@/lib/storage/settings';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { enforceSnapshotCap, saveCheck, updateCheckResult } from '@/lib/history/db';
 import { captureFromTab } from '@/lib/history/snapshot';
 import { prepareImageForCheck, type PreparedImage } from '@/lib/image/prepare';
-import { attachLookups, LOOKUP_BUDGET_MS, sourceLookups, startLookups, type PreRunLookups } from '@/lib/lookups';
+import { attachLookups, LOOKUP_BUDGET_MS, originalSourceCapture, sourceRatings, startLookups, type PreRunLookups } from '@/lib/lookups';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { claimsForPrompt, extractClaims } from '@/lib/pipeline/claims';
 import { emptyRunState, reduceProgress, type RunState } from '@/lib/pipeline/progress';
@@ -13,7 +15,7 @@ import { decideTarget } from '@/lib/pipeline/target';
 import { cheapestModel, createProvider, providerRunLabel } from '@/lib/providers/registry';
 import type { ProviderId, Settings } from '@/lib/storage/settings';
 
-/** The result a second opinion is answering, so the new one can point back at it. */
+/** The earlier result a new one follows (a second opinion, or another question about the same content), so the new one can point back at it. */
 export interface PreviousResult {
   id: string;
   label: string;
@@ -47,6 +49,9 @@ export interface CheckRunDeps {
  * provider loop with fallback, lookups folded into the result, history save. Every state write is
  * guarded by a run token so a superseded run can never overwrite the current one.
  */
+/** How long the claim-listing pass may take before the check goes ahead without it. */
+const CLAIMS_BUDGET_MS = 10_000;
+
 export function useCheckRun(deps: CheckRunDeps) {
   const [phase, setPhaseState] = useState<Phase>({ phase: 'idle', seq: 0 });
   const seq = useRef(0);
@@ -58,10 +63,13 @@ export function useCheckRun(deps: CheckRunDeps) {
     depsRef.current = deps;
   });
 
-  const start = useCallback(async (input: CheckInput, opts: { tabId?: number; only?: ProviderId; previous?: PreviousResult } = {}) => {
+  const start = useCallback(async (raw: CheckInput, opts: { tabId?: number; only?: ProviderId; previous?: PreviousResult } = {}) => {
     const { tabId, only, previous } = opts;
     const s = depsRef.current.settings();
     if (!s) return;
+    // The question travels with the input from here on (prompt, Google AI Mode, history, re-checks):
+    // the one picked for this check, else the default from Settings.
+    const input: CheckInput = { ...raw, ask: normalizeAsk(raw.ask ?? defaultAsk(s)) };
     const myRun = ++runSeq.current;
     const stale = () => runSeq.current !== myRun;
     const setPhase = (p: PhasePayload, opts: { quiet?: boolean } = {}) => {
@@ -100,7 +108,11 @@ export function useCheckRun(deps: CheckRunDeps) {
     const twoPass = s.twoPass && input.kind !== 'image';
     // The listing pass needs no tools or search, so the cheapest model of the same provider does it.
     const lister = twoPass ? (createProvider(order[0]!, s, { model: cheapestModel(order[0]!) }) ?? first) : first;
-    const claimsPromise = twoPass ? extractClaims(input, lister, controller.signal) : Promise.resolve([] as string[]);
+    // Its own controller, so a lister that runs out of time is stopped rather than left generating
+    // (on a local server the main pass would queue behind it).
+    const listing = new AbortController();
+    controller.signal.addEventListener('abort', () => listing.abort(), { once: true });
+    const claimsPromise = twoPass ? extractClaims(input, lister, listing.signal) : Promise.resolve([] as string[]);
     const lookups = startLookups(input, s, controller.signal, twoPass ? claimsPromise : undefined);
     let preReady: PreRunLookups | null = null;
     void lookups.all.then((v) => (preReady = v)).catch(() => undefined);
@@ -108,13 +120,32 @@ export function useCheckRun(deps: CheckRunDeps) {
     // Before the first await, always: a single-pass or image check otherwise sat on Home for the
     // length of the fact-check lookup, looking as if the click had done nothing.
     setPhase({ phase: 'checking', run });
-    const claims = await claimsPromise;
+    // Listing is a convenience: a slow or hung lister (a local model doing a whole extra generation)
+    // must not hold up the check itself. No claims is already a normal outcome.
+    let listingTimedOut = false;
+    const claims = await Promise.race([
+      claimsPromise,
+      new Promise<string[]>((r) =>
+        setTimeout(() => {
+          listingTimedOut = true;
+          r([]);
+        }, CLAIMS_BUDGET_MS),
+      ),
+    ]);
+    if (listingTimedOut) listing.abort();
     if (stale()) return;
     if (twoPass) {
       run = {
         ...run,
         claims,
-        statuses: [...run.statuses, claims.length ? `Checking ${claims.length} claim${claims.length === 1 ? '' : 's'}` : 'No separate claims found'],
+        statuses: [
+          ...run.statuses,
+          claims.length
+            ? `Checking ${claims.length} claim${claims.length === 1 ? '' : 's'}`
+            : listingTimedOut
+              ? 'Listing took too long; checking it as a whole'
+              : 'No separate claims found',
+        ],
       };
       setPhase({ phase: 'checking', run });
     }
@@ -212,14 +243,20 @@ export function useCheckRun(deps: CheckRunDeps) {
       return;
     }
     try {
-      const pre = await lookups.all;
-      const extra = await sourceLookups(
+      // Outlet ratings come from a list inside the extension, so they go on screen now instead of
+      // waiting for the Wayback Machine (1–6 seconds) with everything else.
+      const originalUrl = finished.originalSource?.url;
+      const rated = await sourceRatings(
         finished.sources.map((x) => x.domain || x.url),
-        finished.originalSource?.url,
+        originalUrl,
         s,
-        controller.signal,
       );
-      finished = attachLookups(finished, pre, extra);
+      if (Object.keys(rated.credibility).length || rated.mixNotes.length) {
+        finished = { ...finished, credibility: rated.credibility, mixNotes: rated.mixNotes.length ? rated.mixNotes : undefined };
+        setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous }, { quiet: true });
+      }
+      const [pre, originalCapture] = await Promise.all([lookups.all, originalSourceCapture(originalUrl, s, controller.signal)]);
+      finished = attachLookups(finished, pre, { ...rated, originalCapture });
       // The row exists; attach the evidence to it even if a newer run has taken the view. An update,
       // not a second save: a note typed meanwhile is kept and a deleted check stays deleted.
       await updateCheckResult(finished);

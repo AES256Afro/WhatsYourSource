@@ -5,6 +5,7 @@ import { deleteCheck, getCheck, getSnapshot, setNote, type StoredCheck, type Sto
 import { checkToStandaloneHtml, downloadText, safeFilename } from '@/lib/history/export';
 import { buildSnapshotSrcdoc } from '@/lib/history/snapshot';
 import type { CheckInput } from '@/lib/messaging/protocol';
+import type { Ask } from '@/lib/pipeline/question';
 import { Label, Pill, toneForVerdict } from './common';
 import { Camera, Download, External, Refresh, Trash } from './Icons';
 import { ResultView } from './ResultView';
@@ -20,11 +21,14 @@ const TABS: { id: Tab; label: string; icon?: React.ReactNode }[] = [
 export function DetailView({
   id,
   onRecheck,
+  otherAsks,
   onDeleted,
   webmodeVariant,
 }: {
   id: string;
   onRecheck: (input: CheckInput) => void;
+  /** The other questions this check's content could be asked. */
+  otherAsks?: (input: CheckInput) => Ask[];
   onDeleted: () => void;
   webmodeVariant: GoogleAiModeVariant;
 }) {
@@ -131,6 +135,9 @@ export function DetailView({
               result={check.result}
               webmodeVariant={webmodeVariant}
               onRecheck={() => onRecheck(check.result.input)}
+              otherAsks={otherAsks?.(check.result.input)}
+              note={note}
+              onAsk={(ask) => onRecheck({ ...check.result.input, ask })}
               saved
               snapshotNote={check.hasSnapshot ? 'Saved with page snapshot' : 'Saved'}
               embedded
@@ -213,13 +220,18 @@ export function DetailView({
         </p>
       )}
       <div className="flex shrink-0 gap-2 border-t border-line bg-paper px-3.5 py-2.5">
-        <button className="wys-btn wys-btn-narrow grow" onClick={() => void exportHtml()} aria-label="Export this check as an HTML file">
+        <button
+          className="wys-btn wys-btn-narrow grow"
+          onClick={() => void exportHtml()}
+          aria-label="Export this check as an HTML file"
+          title="Export this check as an HTML file"
+        >
           <Download size={15} /> <span className="wys-btn-label">Export HTML</span>
         </button>
-        <button className="wys-btn wys-btn-narrow grow" onClick={() => onRecheck(check.result.input)} aria-label="Re-check">
+        <button className="wys-btn wys-btn-narrow grow" onClick={() => onRecheck(check.result.input)} aria-label="Re-check" title="Re-check">
           <Refresh size={15} /> <span className="wys-btn-label">Re-check</span>
         </button>
-        <button className="wys-btn w-11 shrink-0 px-0 text-bad" aria-label="Delete this check" onClick={() => void remove()}>
+        <button className="wys-btn w-11 shrink-0 px-0 text-bad" aria-label="Delete this check" title="Delete this check" onClick={() => void remove()}>
           <Trash size={16} />
         </button>
       </div>

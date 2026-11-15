@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CheckResult } from '@/lib/pipeline/schema';
+import type { CheckResult, TimelineEvent } from '@/lib/pipeline/schema';
+import { resultToTsvRow, TABLE_HEADINGS_TSV } from '@/lib/history/row';
 import type { ProviderId } from '@/lib/storage/settings';
 import { googleAiModeUrl, type GoogleAiModeVariant } from '@/lib/googleAiMode';
 import { ClaimList } from './ClaimList';
 import { EvidencePanel, FactCheckBanner, localeDate, WhatWasSent } from './EvidencePanel';
 import { savePageUrl } from '@/lib/lookups/wayback';
-import { Cite, Label, ProviderBadge, TextAction, formatUsd, timeAgo } from './common';
+import { Cite, Count, Label, ProviderBadge, TextAction, formatUsd, timeAgo } from './common';
+import { askLabel, normalizeAsk, questionFor, type Ask } from '@/lib/pipeline/question';
 import { Check, Copy, External, Logo, Refresh } from './Icons';
 import { InputCard } from './InputCard';
 import { Narrative } from './Narrative';
@@ -18,8 +20,9 @@ import { SourceList } from './SourceList';
 import { VerdictBanner } from './VerdictBanner';
 
 /**
- * Reading order answers the product's two questions in order: is it true (verdict), where is the
- * source (original-source card), then the reasoning, the claims and the full source list.
+ * Reading order follows the question that was asked. A fact-check: verdict, original source,
+ * reasoning, claims, sources. Any other question: verdict, then the answer (the timeline first when
+ * one was asked for), then the original source and the rest.
  */
 export function ResultView({
   result,
@@ -33,6 +36,9 @@ export function ResultView({
   searchTool,
   secondOpinions,
   onSecondOpinion,
+  otherAsks,
+  onAsk,
+  note,
   previous,
   onOpenDetail,
 }: {
@@ -52,7 +58,12 @@ export function ResultView({
   /** Other configured providers that could give a second opinion on the same input. */
   secondOpinions?: { id: ProviderId; label: string }[];
   onSecondOpinion?: (id: ProviderId) => void;
-  /** The result this second opinion answers. */
+  /** The user's note on the saved check, for the spreadsheet row. */
+  note?: string;
+  /** Other questions the same content could be asked, and the way to ask one. */
+  otherAsks?: Ask[];
+  onAsk?: (ask: Ask) => void;
+  /** The earlier result this one follows: the answer a second opinion responds to, or the answer to the question asked before. */
   previous?: PreviousResult;
   /** Opens a saved check (the previous result, an earlier check of the same image). */
   onOpenDetail?: (id: string) => void;
@@ -60,22 +71,38 @@ export function ResultView({
   const seenBefore = useSeenBefore(result);
   // Copy outcome goes into the footer's live region, so it is announced and survives a failed clipboard write.
   const [copyNote, setCopyNote] = useState<{ ok: boolean; text: string } | null>(null);
-  const copy = async () => {
+  const copyText = async (text: string, done: string, failed: string, ms = 3500) => {
     try {
-      // Plain text only, and no NUL characters (some applications stop reading a paste at the first one).
-      await navigator.clipboard.writeText(toMarkdown(result).replaceAll('\0', ''));
-      setCopyNote({ ok: true, text: 'Copied as Markdown' });
+      await navigator.clipboard.writeText(text);
+      setCopyNote({ ok: true, text: done });
     } catch {
-      setCopyNote({ ok: false, text: 'Couldn’t copy — select the text instead' });
+      setCopyNote({ ok: false, text: failed });
     }
-    setTimeout(() => setCopyNote(null), 2500);
+    setTimeout(() => setCopyNote(null), ms);
   };
+  // Plain text only, and no NUL characters (some applications stop reading a paste at the first one).
+  const copy = () => copyText(toMarkdown(result).replaceAll('\0', ''), 'Copied as Markdown', 'Couldn’t copy — select the text instead', 2500);
+  // One tab-separated row, in the columns of the History export: paste it under the last row of a
+  // sheet in Excel, Google Sheets or Numbers to add this check to a log you already keep.
+  const copyRow = () => copyText(resultToTsvRow(result, note ?? ''), 'Row copied — paste it under the last row of your sheet', 'Couldn’t copy the row');
+  const copyHeadings = () => copyText(TABLE_HEADINGS_TSV, 'Headings copied — paste them into row 1 of a new sheet', 'Couldn’t copy the headings');
   const usd = formatUsd(result.usage?.estUsd);
   const verdictRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!embedded) verdictRef.current?.focus();
   }, [embedded, result.id]);
   const o = result.originalSource;
+  const askId = normalizeAsk(result.input.ask).id;
+  // A fact-check reads verdict, source, reasoning. Any other question was not "is it true?", so its answer leads.
+  const answerFirst = askId !== 'factcheck';
+  const answer = (
+    <div className="flex flex-col gap-1.5">
+      <Label>{answerFirst ? 'Answer' : 'Assessment'}</Label>
+      <Narrative text={result.narrative} />
+    </div>
+  );
+  // Retrieved by the provider's search, not merely written by the model.
+  const originalRetrieved = !!o?.sourceId && result.sources.some((s) => s.id === o.sourceId && s.verified);
   const compare = (
     <TextAction href={googleAiModeUrl(result.input, webmodeVariant)}>
       Compare in Google AI Mode <span aria-hidden="true">↗</span>
@@ -86,11 +113,35 @@ export function ResultView({
     <div className={embedded ? 'flex flex-col' : 'flex h-full flex-col'}>
       <div className={`flex grow flex-col gap-3.5 p-3.5 ${embedded ? '' : 'overflow-y-auto'}`}>
         {!embedded && <InputCard input={result.input} when={timeAgo(result.createdAt)} clamp />}
-        {result.factChecks && <FactCheckBanner checks={result.factChecks} />}
+        <div className="flex flex-col gap-1.5">
+          <p className="m-0 text-[12px] leading-4 text-ink-2">
+            <span className="font-semibold text-ink">{askLabel(result.input.ask)}:</span> “{questionFor(result.input.ask, result.input.kind)}”
+          </p>
+          {otherAsks && otherAsks.length > 0 && onAsk && (
+            <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2" role="group" aria-label="Ask instead">
+              <span aria-hidden="true">Ask instead:</span>
+              {otherAsks.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className="wys-btn h-7 px-2 text-[12px]"
+                  title={questionFor(a, result.input.kind)}
+                  aria-label={`Ask instead: ${questionFor(a, result.input.kind)}`}
+                  onClick={() => onAsk(a)}
+                >
+                  {askLabel(a)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Published fact-checks lead a fact-check; for any other question they follow the answer. */}
+        {!answerFirst && result.factChecks && <FactCheckBanner checks={result.factChecks} />}
+        {answerFirst && <Label>How far to trust it</Label>}
         <VerdictBanner ref={verdictRef} verdict={result.verdict} />
         {previous && (
           <p className="m-0 text-[12px] leading-4 text-ink-2">
-            {previous.label} said: <span className="font-semibold text-ink">{previous.verdict}</span>
+            {previous.label}: <span className="font-semibold text-ink">{previous.verdict}</span>
             {onOpenDetail && (
               <>
                 {' '}
@@ -107,6 +158,10 @@ export function ResultView({
           </div>
         )}
 
+        {/* The answer to the question that was asked comes straight after the verdict. */}
+        {askId === 'timeline' && <Timeline events={result.timeline} />}
+        {answerFirst && answer}
+        {answerFirst && result.factChecks && <FactCheckBanner checks={result.factChecks} />}
         {o && (
           <div className="flex flex-col gap-1.5">
             <Label>{result.input.kind === 'image' ? 'Earliest match found' : 'Likely original source'}</Label>
@@ -132,12 +187,12 @@ export function ResultView({
                 {o.how && <span className="text-[12px] leading-4 text-ink-2">{o.how}</span>}
                 <div className="mt-1 flex items-center gap-3.5">
                   {/* A live link only for an address the provider actually retrieved; one the model merely wrote is shown as text. */}
-                  {o.url && o.sourceId && (
+                  {o.url && originalRetrieved && (
                     <a href={o.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] font-semibold no-underline">
                       Open source <External size={12} />
                     </a>
                   )}
-                  {o.url && !o.sourceId && <span className="text-[12px] break-all text-ink-2">Not retrieved: {o.url}</span>}
+                  {o.url && !originalRetrieved && <span className="text-[12px] break-all text-ink-2">Not retrieved: {o.url}</span>}
                   {o.sourceId && (
                     <span className="text-[12px] text-ink-2">
                       Source <Cite id={o.sourceId} />
@@ -149,10 +204,8 @@ export function ResultView({
           </div>
         )}
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Assessment</Label>
-          <Narrative text={result.narrative} />
-        </div>
+        {!answerFirst && answer}
+        {askId !== 'timeline' && <Timeline events={result.timeline} />}
         <EvidencePanel result={result} />
 
         {result.input.kind === 'image' && result.provenance && <ProvenancePanel provenance={result.provenance} srcUrl={result.input.srcUrl} />}
@@ -233,7 +286,11 @@ export function ResultView({
           </span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] text-ink-2">
-          {compare}
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {compare}
+            <TextAction onClick={() => void copyRow()}>Copy as spreadsheet row</TextAction>
+            <TextAction onClick={() => void copyHeadings()}>Copy column headings</TextAction>
+          </span>
           <span role="status" aria-live="polite">
             {copyNote && <span className={copyNote.ok ? 'font-medium' : 'font-semibold text-bad'}>{copyNote.text}</span>}
             {!copyNote && saved && (
@@ -251,10 +308,11 @@ export function ResultView({
       </div>
       {!embedded && (
         <div className="flex shrink-0 gap-2 border-t border-line bg-paper px-3.5 py-2.5">
-          <button className="wys-btn wys-btn-narrow" onClick={() => void copy()} aria-label="Copy as Markdown">
-            <Copy size={15} /> <span className="wys-btn-label">Copy</span>
+          {/* The outcome shows on the button itself: the status line is far down the scrolled result. */}
+          <button className="wys-btn wys-btn-narrow" onClick={() => void copy()} aria-label="Copy as Markdown" title="Copy as Markdown">
+            {copyNote?.ok ? <Check size={15} /> : <Copy size={15} />} <span className="wys-btn-label">{copyNote?.ok ? 'Copied' : 'Copy'}</span>
           </button>
-          <button className="wys-btn wys-btn-narrow" onClick={onRecheck} aria-label="Re-check">
+          <button className="wys-btn wys-btn-narrow" onClick={onRecheck} aria-label="Re-check" title="Re-check">
             <Refresh size={15} /> <span className="wys-btn-label">Re-check</span>
           </button>
           {onNewCheck && (
@@ -264,6 +322,28 @@ export function ResultView({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Dated events, earliest first, as the model ordered them. */
+function Timeline({ events }: { events?: TimelineEvent[] }) {
+  if (!events?.length) return null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>
+        Timeline <Count n={events.length} />
+      </Label>
+      <ol className="wys-card m-0 flex list-none flex-col gap-2 px-3 py-2.5">
+        {events.map((t, i) => (
+          <li key={i} className="flex flex-col gap-0.5 border-l-2 border-accent-line pl-2.5">
+            {t.date && <span className="text-[12px] font-semibold">{t.date}</span>}
+            <span className="text-[12px] leading-[17px] text-ink-2">
+              {t.event} {t.sourceId && <Cite id={t.sourceId} />}
+            </span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
@@ -293,7 +373,13 @@ function toMarkdown(r: CheckResult): string {
         : r.input.kind === 'post'
           ? `Post on ${r.input.site}${r.input.author ? ` by ${r.input.author}` : ''}${r.input.permalink ? ` (${r.input.permalink})` : ''}:\n> ${r.input.text.replace(/\n/g, '\n> ')}`
           : `Page: ${r.input.url}`;
-  lines.push(`**${r.verdict.label}** (${r.verdict.confidence} confidence) — ${r.verdict.summary}`, '', subject, '', r.narrative, '');
+  lines.push(`**${r.verdict.label}** (${r.verdict.confidence} confidence) — ${r.verdict.summary}`, '', subject, '');
+  lines.push(`Question: ${questionFor(r.input.ask, r.input.kind)}`, '', r.narrative, '');
+  if (r.timeline?.length) {
+    lines.push('Timeline:');
+    for (const t of r.timeline) lines.push(`- ${t.date ? `${t.date}: ` : ''}${t.event}${t.sourceId ? ` [${t.sourceId}]` : ''}`);
+    lines.push('');
+  }
   if (r.factChecks?.length) {
     lines.push('**Already fact-checked**');
     for (const f of r.factChecks.slice(0, 4)) lines.push(`- ${f.publisher}: ${f.rating}${f.reviewDate ? ` (${f.reviewDate.slice(0, 10)})` : ''} — ${f.url}`);

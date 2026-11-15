@@ -100,3 +100,16 @@ describe('late evidence update', () => {
     expect(await getCheck('b')).toBeUndefined();
   });
 });
+
+describe('bug sweep 1 (after 1.0.2)', () => {
+  it('names AI tools written with a version or underscore, and long parameter blocks', () => {
+    expect(aiHints({ Software: 'Google Imagen3' })).toContain('Google image model');
+    expect(aiHints({ Software: 'sdxl_turbo' })).toContain('Stable Diffusion tooling');
+    expect(aiHints({ parameters: 'Steps: 20, Sampler: Euler' })).toContain('Stable Diffusion parameters block');
+    expect(aiHints({ Description: 'fireflies', Artist: 'Erika Klingler' })).toEqual([]);
+  });
+  it('compares percent-escapes case-insensitively and keeps a real replacement character', () => {
+    expect(normalizeUrl('https://ko.example.org/wiki/%ed%95%9c')).toBe(normalizeUrl('https://ko.example.org/wiki/%ED%95%9C'));
+    expect(truncate('ab�cd', 4)).toBe('ab�…');
+  });
+});

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RunState } from '@/lib/pipeline/progress';
 import { stripThinking } from '@/lib/pipeline/schema';
+import { askLabel, normalizeAsk, questionFor } from '@/lib/pipeline/question';
 import { InputCard } from './InputCard';
 import { Label, ProviderBadge } from './common';
 import { Check, Close, Search } from './Icons';
@@ -19,6 +20,9 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
     <div className="flex h-full flex-col">
       <div className="flex grow flex-col gap-3.5 overflow-y-auto p-3.5">
         <InputCard input={run.input} clamp />
+        <p className="m-0 text-[12px] leading-4 text-ink-2">
+          <span className="font-semibold text-ink">{askLabel(run.input.ask)}:</span> “{questionFor(run.input.ask, run.input.kind)}”
+        </p>
 
         <div
           ref={steps}
@@ -64,14 +68,14 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
         <div className="wys-card flex min-h-[88px] flex-col gap-2 p-3" aria-hidden="true">
           <div className="flex items-center gap-2">
             <span className="h-4 w-4 animate-pulse rounded-full bg-line-2" />
-            <span className="wys-label">Verdict · pending</span>
+            <span className="wys-label">{normalizeAsk(run.input.ask).id === 'factcheck' ? 'Verdict' : 'How far to trust it'} · pending</span>
           </div>
           <div className="h-3 w-[70%] animate-pulse rounded-md bg-line-2" />
           <div className="h-3 w-[90%] animate-pulse rounded-md bg-line-2" />
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label>Assessment · streaming</Label>
+          <Label>{normalizeAsk(run.input.ask).id === 'factcheck' ? 'Assessment' : 'Answer'} · streaming</Label>
           <Narrative text={stripThinking(run.text).split('```')[0] ?? ''} streaming />
           {!run.text && (
             <div className="mt-1 flex flex-col gap-2" aria-hidden="true">

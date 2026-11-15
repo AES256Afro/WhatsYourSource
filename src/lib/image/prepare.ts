@@ -40,8 +40,7 @@ async function prepareImage(input: ImageInput, tabId: number | undefined, status
   }
 
   status('Reading metadata on your device…');
-  const provenance = await readProvenance(img.bytes, img.mime);
-  const model = await prepareForModel(img);
+  const [provenance, model] = await Promise.all([readProvenance(img.bytes, img.mime), prepareForModel(img)]);
   // The decoded size, always: a width/height tag inside the file is a claim, not a measurement.
   provenance.width = model.width;
   provenance.height = model.height;

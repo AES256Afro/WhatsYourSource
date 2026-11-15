@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export { clampInput, clampSelection, INLINE_IMAGE_SENTINEL, LIMITS, MAX_INLINE_IMAGE_URL } from './limits';
 import { LIMITS, MAX_INLINE_IMAGE_URL } from './limits';
+import { ASK_IDS, MAX_CUSTOM_QUESTION } from '../pipeline/question';
 
 /**
  * Everything that crosses a process boundary (content script ↔ background ↔ side panel)
@@ -11,6 +12,14 @@ import { LIMITS, MAX_INLINE_IMAGE_URL } from './limits';
 const url = z.string().max(LIMITS.url);
 const httpUrl = url.refine((u) => /^https?:\/\//i.test(u), 'http(s) only');
 
+/**
+ * Which question the check asks (a preset, or the user's own words). Set by the extension's own
+ * pages from the user's choice; never accepted from a web page (the background removes it from
+ * anything a content script sends).
+ */
+export const AskSchema = z.object({ id: z.enum(ASK_IDS), custom: z.string().max(MAX_CUSTOM_QUESTION).optional() });
+const ask = AskSchema.optional();
+
 export const TextInputSchema = z.object({
   kind: z.literal('text'),
   text: z.string().min(1).max(LIMITS.text),
@@ -18,6 +27,7 @@ export const TextInputSchema = z.object({
   pageTitle: z.string().max(LIMITS.title),
   /** A little context around the selection (same paragraph), to help disambiguate. */
   surrounding: z.string().max(LIMITS.surrounding).optional(),
+  ask,
 });
 
 export const ImageInputSchema = z.object({
@@ -28,6 +38,7 @@ export const ImageInputSchema = z.object({
   pageTitle: z.string().max(LIMITS.title),
   alt: z.string().max(LIMITS.alt).optional(),
   nearbyText: z.string().max(LIMITS.nearby).optional(),
+  ask,
 });
 
 export const PageInputSchema = z.object({
@@ -35,6 +46,7 @@ export const PageInputSchema = z.object({
   url,
   title: z.string().max(LIMITS.title),
   excerpt: z.string().max(LIMITS.excerpt).optional(),
+  ask,
 });
 
 /** A social post (or any article-like block) extracted from under the cursor. */
@@ -49,6 +61,7 @@ export const PostInputSchema = z.object({
   text: z.string().min(1).max(LIMITS.text),
   images: z.array(httpUrl).max(6),
   links: z.array(httpUrl).max(12),
+  ask,
 });
 
 export const CheckInputSchema = z.discriminatedUnion('kind', [TextInputSchema, ImageInputSchema, PageInputSchema, PostInputSchema]);

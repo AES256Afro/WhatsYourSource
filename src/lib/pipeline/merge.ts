@@ -1,6 +1,6 @@
 import type { RawSource } from '../providers/types';
 import { domainOf, isHttpUrl, normalizeUrl } from '../util/url';
-import type { Claim, ModelResult, OriginalSource, Source } from './schema';
+import type { Claim, ModelResult, OriginalSource, Source, TimelineEvent } from './schema';
 
 /**
  * Sources shown to the user = what the search machinery actually touched (verified) + what the
@@ -73,6 +73,15 @@ export function resolveClaims(model: ModelResult | null, sources: Source[]): Cla
     note: c.note,
     sourceIds: uniq(c.sourceUrls.map((u) => findSource(sources, u)?.id).filter((x): x is number => typeof x === 'number')),
   }));
+}
+
+export function resolveTimeline(model: ModelResult | null, sources: Source[]): TimelineEvent[] | undefined {
+  const events = (model?.timeline ?? []).slice(0, 20).map((t) => ({
+    date: t.date?.trim().slice(0, 60) || undefined,
+    event: t.event.trim().slice(0, 400),
+    sourceId: t.sourceUrl ? findSource(sources, t.sourceUrl)?.id : undefined,
+  }));
+  return events.length ? events : undefined;
 }
 
 export function resolveOriginal(model: ModelResult | null, sources: Source[]): OriginalSource | undefined {

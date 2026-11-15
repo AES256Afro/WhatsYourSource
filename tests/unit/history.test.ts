@@ -4,7 +4,9 @@ import { IDBFactory } from 'fake-indexeddb';
 import {
   clearHistory,
   deleteCheck,
+  eachCheck,
   enforceSnapshotCap,
+  exportAll,
   getCheck,
   getSnapshot,
   listChecks,
@@ -61,6 +63,38 @@ describe('history db', () => {
     expect(await getSnapshot(a.id)).toBeUndefined();
     await clearHistory();
     expect(await listChecks()).toHaveLength(0);
+  });
+
+  it('search does not match every fact-check on the word "fact", but finds other questions by name', async () => {
+    const plain = await saveCheck(fakeResult({ createdAt: 1000 }));
+    const tl = await saveCheck(fakeResult({ createdAt: 2000, input: { kind: 'page', url: 'https://example.com', title: 'Example', ask: { id: 'timeline' } } }));
+    expect((await listChecks({ query: 'fact-check' })).map((c) => c.id)).not.toContain(plain.id);
+    expect((await listChecks({ query: 'timeline' })).map((c) => c.id)).toEqual([tl.id]);
+  });
+
+  it('backs up every check, including ones that share a timestamp at a page boundary', async () => {
+    for (let i = 0; i < 199; i++) await saveCheck(fakeResult({ createdAt: 5000 + i }));
+    for (let i = 0; i < 3; i++) await saveCheck(fakeResult({ createdAt: 4000 }));
+    const blob = await exportAll();
+    const text = await new Promise<string>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result));
+      fr.onerror = () => reject(fr.error ?? new Error('read failed'));
+      fr.readAsText(blob);
+    });
+    const parsed = JSON.parse(text) as { checks: { id: string }[] };
+    expect(new Set(parsed.checks.map((c) => c.id)).size).toBe(202);
+    expect(parsed.checks).toHaveLength(202);
+  });
+
+  it('pages exactly once through checks that share a timestamp, however many', async () => {
+    for (let i = 0; i < 10; i++) await saveCheck(fakeResult({ createdAt: 1000 }));
+    for (const t of [3000, 2000, 500, 400]) await saveCheck(fakeResult({ createdAt: t }));
+    const ids: string[] = [];
+    for await (const c of eachCheck({}, 3)) ids.push(c.id);
+    expect(ids).toHaveLength(14);
+    expect(new Set(ids).size).toBe(14);
+    expect(ids).toEqual((await listChecks()).map((c) => c.id));
   });
 
   it('evicts the oldest snapshots first when over the cap, keeping the results', async () => {

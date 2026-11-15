@@ -9,6 +9,8 @@ export interface PublicSettings {
   disabledSites: string[];
   shortcutAction: Settings['shortcutAction'];
   defaultProvider: ProviderId;
+  /** Short name of the default question when it is not the ordinary fact-check ('' otherwise), for the chip. */
+  askName: string;
 }
 
 /** Mirrors settings.ts; a type-only import keeps zod out of this module. */
@@ -17,17 +19,24 @@ export const SETTINGS_KEY = 'settings';
 export const SHORTCUT_KEY = 'shortcut';
 const d = { chip: true, disabledSites: [] as string[], shortcutAction: 'panel' as const, defaultProvider: 'gemini' as const };
 
+/** Mirrors the labels in pipeline/question.ts (importing it would put every preset's text into each page); a unit test keeps them equal. */
+export const PUBLIC_ASK_NAMES: Record<string, string> = { explain: 'Explain it', timeline: 'Timeline', flaws: 'Find the flaws', custom: 'Your question' };
+
 /** Mirrors `PROVIDER_IDS` in settings.ts (a value import would pull zod in); a unit test keeps them equal. */
 export const PUBLIC_PROVIDER_IDS: ProviderId[] = ['gemini', 'openai-compat', 'anthropic', 'webmode'];
 
 export function readPublicSettings(raw: unknown): PublicSettings {
   const o = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
   const privacy = (typeof o.privacy === 'object' && o.privacy !== null ? o.privacy : {}) as Record<string, unknown>;
+  const ask = (typeof o.ask === 'object' && o.ask !== null ? o.ask : {}) as Record<string, unknown>;
+  // "Ask your own" with nothing written falls back to the fact-check, as everywhere else.
+  const askId = typeof ask.default === 'string' && (ask.default !== 'custom' || (typeof ask.custom === 'string' && ask.custom.trim())) ? ask.default : '';
   return {
     chip: typeof privacy.chip === 'boolean' ? privacy.chip : d.chip,
     disabledSites: Array.isArray(privacy.disabledSites) ? privacy.disabledSites.filter((x): x is string => typeof x === 'string') : d.disabledSites,
     shortcutAction: o.shortcutAction === 'webmode' || o.shortcutAction === 'panel' ? o.shortcutAction : d.shortcutAction,
     defaultProvider: PUBLIC_PROVIDER_IDS.includes(o.defaultProvider as ProviderId) ? (o.defaultProvider as ProviderId) : d.defaultProvider,
+    askName: PUBLIC_ASK_NAMES[askId] ?? '',
   };
 }
 

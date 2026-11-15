@@ -130,7 +130,19 @@ function useDraft(value: string): [string, (v: string) => void] {
   return [v, setV];
 }
 
-export function DebouncedTextarea({ id, value, onCommit, placeholder }: { id: string; value: string; onCommit: (v: string) => void; placeholder?: string }) {
+export function DebouncedTextarea({
+  id,
+  value,
+  onCommit,
+  placeholder,
+  maxLength,
+}: {
+  id: string;
+  value: string;
+  onCommit: (v: string) => void;
+  placeholder?: string;
+  maxLength?: number;
+}) {
   const [v, setV] = useDraft(value);
   return (
     <textarea
@@ -140,6 +152,7 @@ export function DebouncedTextarea({ id, value, onCommit, placeholder }: { id: st
       onChange={(e) => setV(e.target.value)}
       onBlur={() => v !== value && onCommit(v)}
       placeholder={placeholder}
+      maxLength={maxLength}
     />
   );
 }
