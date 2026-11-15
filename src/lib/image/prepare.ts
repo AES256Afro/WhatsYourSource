@@ -42,8 +42,9 @@ async function prepareImage(input: ImageInput, tabId: number | undefined, status
   status('Reading metadata on your device…');
   const provenance = await readProvenance(img.bytes, img.mime);
   const model = await prepareForModel(img);
-  provenance.width ??= model.width;
-  provenance.height ??= model.height;
+  // The decoded size, always: a width/height tag inside the file is a claim, not a measurement.
+  provenance.width = model.width;
+  provenance.height = model.height;
   try {
     provenance.phash = phashFromBitmap(model.bitmap);
   } catch {

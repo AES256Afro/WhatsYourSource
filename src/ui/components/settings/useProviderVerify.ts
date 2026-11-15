@@ -18,13 +18,18 @@ export function useProviderVerify(
   const verify = async () => {
     const forKey = key;
     setVerified({ kind: 'checking', forKey });
-    const r = await makeProvider().validate();
-    if (r.ok) {
-      const list = r.models ?? [];
-      setModels(list);
-      const text = await onOk?.(list);
-      setVerified({ kind: 'ok', text: text ?? `Works · ${list.length} model${list.length === 1 ? '' : 's'}`, forKey });
-    } else setVerified({ kind: 'bad', text: r.error, forKey });
+    try {
+      const r = await makeProvider().validate();
+      if (r.ok) {
+        const list = r.models ?? [];
+        setModels(list);
+        const text = await onOk?.(list);
+        setVerified({ kind: 'ok', text: text ?? `Works · ${list.length} model${list.length === 1 ? '' : 's'}`, forKey });
+      } else setVerified({ kind: 'bad', text: r.error, forKey });
+    } catch (e) {
+      // Never leave the button stuck on "Connecting…".
+      setVerified({ kind: 'bad', text: e instanceof Error ? e.message : String(e), forKey });
+    }
   };
   return { status, models, verify };
 }

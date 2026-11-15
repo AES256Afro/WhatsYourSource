@@ -1,7 +1,7 @@
 import type { CheckInput } from '../messaging/protocol';
 import type { CheckResult } from '../pipeline/schema';
 import type { Settings } from '../storage/settings';
-import { domainOf, isHttpUrl } from '../util/url';
+import { domainOf, isPublicHttpUrl } from '../util/url';
 import { rateDomains, sourceMixNotes, type Credibility } from './credibility';
 import { factCheckQuery, searchFactChecks, type FactCheck } from './factcheck';
 import { firstCapture, type FirstCapture } from './wayback';
@@ -72,7 +72,7 @@ export function startLookups(
   const factChecksBounded = withTimeout(factChecks, LOOKUP_BUDGET_MS.factChecks, { factChecks: [] });
   const page = pageUrlOf(input);
   const pageCapture: Promise<FirstCapture | undefined> =
-    l.archive && isHttpUrl(page)
+    l.archive && isPublicHttpUrl(page)
       ? withTimeout(
           firstCapture(page, signal).catch(() => undefined),
           LOOKUP_BUDGET_MS.archive,
@@ -102,7 +102,7 @@ export async function sourceLookups(
   const domains = sourceHostsOrUrls.map(domainOf).filter(Boolean);
   const credibility = l.credibility ? await rateDomains([...domains, ...(originalUrl ? [originalUrl] : [])]).catch(() => ({})) : {};
   const originalCapture =
-    l.archive && originalUrl && isHttpUrl(originalUrl)
+    l.archive && originalUrl && isPublicHttpUrl(originalUrl)
       ? await withTimeout(
           firstCapture(originalUrl, signal).catch(() => undefined),
           LOOKUP_BUDGET_MS.archive,

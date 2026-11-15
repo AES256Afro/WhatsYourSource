@@ -61,7 +61,8 @@ export function DetailView({
     };
   }, [id]);
 
-  const srcdoc = useMemo(() => (snapshot ? buildSnapshotSrcdoc(snapshot, { loadImages }) : ''), [snapshot, loadImages]);
+  // Only when the Saved page tab is open: parsing up to 1.5 MB of HTML is not free on the Result tab.
+  const srcdoc = useMemo(() => (snapshot && tab === 'page' ? buildSnapshotSrcdoc(snapshot, { loadImages }) : ''), [snapshot, loadImages, tab]);
   // Focus the title once the loaded view (which contains it) has rendered, so keyboard users don't land on <body>.
   useEffect(() => {
     if (check) title.current?.focus();

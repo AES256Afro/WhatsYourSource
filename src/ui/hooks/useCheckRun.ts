@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { enforceSnapshotCap, saveCheck } from '@/lib/history/db';
+import { enforceSnapshotCap, saveCheck, updateCheckResult } from '@/lib/history/db';
 import { captureFromTab } from '@/lib/history/snapshot';
 import { prepareImageForCheck, type PreparedImage } from '@/lib/image/prepare';
 import { attachLookups, LOOKUP_BUDGET_MS, sourceLookups, startLookups, type PreRunLookups } from '@/lib/lookups';
@@ -105,7 +105,9 @@ export function useCheckRun(deps: CheckRunDeps) {
     let preReady: PreRunLookups | null = null;
     void lookups.all.then((v) => (preReady = v)).catch(() => undefined);
     let run = emptyRunState(input, firstLabel, twoPass ? ['Listing the claims to check…'] : []);
-    if (twoPass) setPhase({ phase: 'checking', run });
+    // Before the first await, always: a single-pass or image check otherwise sat on Home for the
+    // length of the fact-check lookup, looking as if the click had done nothing.
+    setPhase({ phase: 'checking', run });
     const claims = await claimsPromise;
     if (stale()) return;
     if (twoPass) {
@@ -195,7 +197,8 @@ export function useCheckRun(deps: CheckRunDeps) {
     // next check (a second opinion, say) while the slow lookups are still running.
     let snap: Awaited<typeof snapshotPromise> = null;
     try {
-      snap = await snapshotPromise;
+      // A tab that never finishes loading never answers; the result is saved without a page copy then.
+      snap = await Promise.race([snapshotPromise, new Promise<null>((r) => setTimeout(() => r(null), 4000))]);
       await saveCheck(finished, snap);
       depsRef.current.onSaved();
       void enforceSnapshotCap(s.history.maxMb * 1024 * 1024);
@@ -217,8 +220,9 @@ export function useCheckRun(deps: CheckRunDeps) {
         controller.signal,
       );
       finished = attachLookups(finished, pre, extra);
-      // The row exists; re-put it with the evidence attached even if a newer run has taken the view.
-      await saveCheck(finished, snap);
+      // The row exists; attach the evidence to it even if a newer run has taken the view. An update,
+      // not a second save: a note typed meanwhile is kept and a deleted check stays deleted.
+      await updateCheckResult(finished);
       if (stale()) return;
       setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous }, { quiet: true });
     } catch (e) {

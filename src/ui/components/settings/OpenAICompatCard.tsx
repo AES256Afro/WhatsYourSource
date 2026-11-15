@@ -41,7 +41,8 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
     verify: test,
   } = useProviderVerify(
     () => new OpenAICompatProvider({ baseUrl: o.baseUrl, apiKey: o.apiKey, model: o.model, search: createSearchBackend(o) }),
-    `${o.baseUrl} ${o.apiKey} ${o.model}`,
+    // Not the model: a successful Test fills in the first model itself, which must not discard its own result.
+    `${o.baseUrl} ${o.apiKey}`,
     async (ids) => {
       const described = await describeLocalModels(o.baseUrl, ids);
       setInfo(described);
@@ -126,7 +127,8 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
                 modelVision: null,
                 modelTools: null,
                 modelContext: null,
-                ...(p.local !== wasLocal ? { apiKey: '' } : {}),
+                // ...and a key for one hosted API must not be sent to another.
+                ...(p.local !== wasLocal || hostOf(p.baseUrl) !== hostOf(o.baseUrl) ? { apiKey: '' } : {}),
               });
             }}
           >
@@ -145,7 +147,11 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         <CommitInput
           id="wys-ocurl"
           value={o.baseUrl}
-          onCommit={(v) => set({ baseUrl: v.replace(/\/+$/, '') })}
+          onCommit={(v) => {
+            const baseUrl = v.replace(/\/+$/, '');
+            // A key belongs to the host it was entered for; a different host starts without one.
+            void set(hostOf(baseUrl) !== hostOf(o.baseUrl) ? { baseUrl, apiKey: '' } : { baseUrl });
+          }}
           placeholder="http://localhost:11434/v1"
           className="h-8 min-w-0 grow text-[12px]"
         />

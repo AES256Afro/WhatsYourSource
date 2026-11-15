@@ -62,7 +62,8 @@ export function ResultView({
   const [copyNote, setCopyNote] = useState<{ ok: boolean; text: string } | null>(null);
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(toMarkdown(result));
+      // Plain text only, and no NUL characters (some applications stop reading a paste at the first one).
+      await navigator.clipboard.writeText(toMarkdown(result).replaceAll('\0', ''));
       setCopyNote({ ok: true, text: 'Copied as Markdown' });
     } catch {
       setCopyNote({ ok: false, text: 'Couldn’t copy — select the text instead' });
@@ -130,11 +131,13 @@ export function ResultView({
                 )}
                 {o.how && <span className="text-[12px] leading-4 text-ink-2">{o.how}</span>}
                 <div className="mt-1 flex items-center gap-3.5">
-                  {o.url && (
+                  {/* A live link only for an address the provider actually retrieved; one the model merely wrote is shown as text. */}
+                  {o.url && o.sourceId && (
                     <a href={o.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] font-semibold no-underline">
                       Open source <External size={12} />
                     </a>
                   )}
+                  {o.url && !o.sourceId && <span className="text-[12px] break-all text-ink-2">Not retrieved: {o.url}</span>}
                   {o.sourceId && (
                     <span className="text-[12px] text-ink-2">
                       Source <Cite id={o.sourceId} />
@@ -283,9 +286,10 @@ function toMarkdown(r: CheckResult): string {
   const lines: string[] = [];
   const subject =
     r.input.kind === 'text'
-      ? `> ${r.input.text}`
+      ? `> ${r.input.text.replace(/\n/g, '\n> ')}`
       : r.input.kind === 'image'
-        ? `Image: ${r.input.srcUrl}`
+        ? // An inline image can be over a megabyte of base64: name it, never put it on the clipboard.
+          `Image: ${/^https?:/i.test(r.input.srcUrl) ? r.input.srcUrl : `inline image on ${r.input.pageUrl}`}`
         : r.input.kind === 'post'
           ? `Post on ${r.input.site}${r.input.author ? ` by ${r.input.author}` : ''}${r.input.permalink ? ` (${r.input.permalink})` : ''}:\n> ${r.input.text.replace(/\n/g, '\n> ')}`
           : `Page: ${r.input.url}`;

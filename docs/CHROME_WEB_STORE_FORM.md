@@ -1,6 +1,6 @@
-# Chrome Web Store developer dashboard — every field, ready to paste (1.0.0)
+# Chrome Web Store developer dashboard — every field, ready to paste (1.0.2)
 
-Dashboard: https://chrome.google.com/webstore/devconsole → **New item**. Files come from the [v1.0.0 release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.0.0) and the `store/` folder of this repo. Work through the tabs in the order below; the dashboard will not let you submit until every tab shows a tick.
+Dashboard: https://chrome.google.com/webstore/devconsole → **New item**. Files come from the [v1.0.2 release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.0.2) and the `store/` folder of this repo. Work through the tabs in the order below; the dashboard will not let you submit until every tab shows a tick.
 
 ---
 
@@ -8,9 +8,9 @@ Dashboard: https://chrome.google.com/webstore/devconsole → **New item**. Files
 
 | Field | Entry |
 |---|---|
-| Upload | `whatsyoursource-1.0.0-chrome.zip` (from the GitHub release, or `npm run zip`) |
+| Upload | `whatsyoursource-1.0.2-chrome.zip` (from the GitHub release, or `npm run zip`) |
 
-The dashboard reads the name, version (1.0.0), description and icon from the manifest inside the zip.
+The dashboard reads the name, version (1.0.2), description and icon from the manifest inside the zip.
 
 ---
 
@@ -55,7 +55,7 @@ YOU CHOOSE THE AI
 You can set a default and a fallback, ask a second provider for a second opinion, and switch any time.
 
 YOUR HISTORY, ON YOUR DEVICE
-Every check is saved locally with a copy of the page as it was when you checked it, with your highlight marked. Search your history, add notes, re-check when sources change, export a check as a self-contained HTML file.
+Every check is saved locally. Checks started from the right-click menu or the keyboard shortcut also keep a copy of the page as it was when you checked it, with your highlight marked. Search your history, add notes, re-check when sources change, export a check as a self-contained HTML file.
 
 PRIVACY
 • Nothing is sent anywhere until you press Check. Then only the selection (or image, or page URL) goes to the one provider you configured, with your own key. Every result shows exactly what was sent, and to whom.

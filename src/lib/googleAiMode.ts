@@ -19,16 +19,21 @@ export function googleAiModeUrl(input: CheckInput, variant: GoogleAiModeVariant)
       break;
     case 'image':
       q = /^https?:/i.test(input.srcUrl)
-        ? `${IMAGE_QUESTION} Image: ${truncate(input.srcUrl, 500)} (seen on ${input.pageUrl})`
-        : `Is the image on this page real, and where can I find its original source? ${input.pageUrl}`;
+        ? `${IMAGE_QUESTION} Image: ${truncate(input.srcUrl, 500)} (seen on ${webOnly(input.pageUrl)})`
+        : `Is the image on this page real, and where can I find its original source? ${webOnly(input.pageUrl)}`;
       break;
     case 'page':
-      q = `${PAGE_QUESTION} ${input.url}`;
+      q = `${PAGE_QUESTION} ${webOnly(input.url)}`;
       break;
     case 'post':
       q = `${POST_QUESTION.replace('this post', `this ${input.site} post`)} "${truncate(input.text.replace(/\s+/g, ' ').trim(), 800)}"`;
       break;
   }
   // udm=50 is AI Mode; a plain search shows the AI Overview above the results.
-  return `https://www.google.com/search?${variant === 'ai-mode' ? 'udm=50&' : ''}q=${encodeURIComponent(q)}`;
+  return `https://www.google.com/search?${variant === 'ai-mode' ? 'udm=50&' : ''}q=${encodeURIComponent(q.toWellFormed())}`;
+}
+
+/** Only web addresses go into a Google query: never a `file:` path or an extension page. */
+function webOnly(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : '';
 }

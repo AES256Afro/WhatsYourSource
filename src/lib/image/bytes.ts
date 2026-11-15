@@ -94,7 +94,10 @@ export async function screenshotImage(tabId: number, srcUrl: string): Promise<Im
   const sy = Math.round(y0 * dpr);
   const sw = Math.min(full.width - sx, Math.round((x1 - x0) * dpr));
   const sh = Math.min(full.height - sy, Math.round((y1 - y0) * dpr));
-  if (sw < 8 || sh < 8) throw new ImageFetchError('unknown', 'The image is not visible on screen.');
+  if (sw < 8 || sh < 8) {
+    full.close();
+    throw new ImageFetchError('unknown', 'The image is not visible on screen.');
+  }
   const canvas = new OffscreenCanvas(sw, sh);
   canvas.getContext('2d')!.drawImage(full, sx, sy, sw, sh, 0, 0, sw, sh);
   full.close(); // the whole-tab bitmap (tens of MB at DPR 2) is not needed once cropped
@@ -118,8 +121,14 @@ export async function prepareForModel(img: ImageBytes, maxSide = 1536): Promise<
   const w = Math.max(1, Math.round(bitmap.width * scale));
   const h = Math.max(1, Math.round(bitmap.height * scale));
   const canvas = new OffscreenCanvas(w, h);
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
   const keepPng = img.mime === 'image/png' && img.bytes.length < 400_000 && scale === 1;
+  const g = canvas.getContext('2d')!;
+  if (!keepPng) {
+    // JPEG has no transparency: without a backdrop, a transparent chart becomes dark ink on black.
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, w, h);
+  }
+  g.drawImage(bitmap, 0, 0, w, h);
   const out = await canvas.convertToBlob(keepPng ? { type: 'image/png' } : { type: 'image/jpeg', quality: 0.86 });
   return { base64: bytesToBase64(new Uint8Array(await out.arrayBuffer())), mime: out.type, width: bitmap.width, height: bitmap.height, bitmap };
 }

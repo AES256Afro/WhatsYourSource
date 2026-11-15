@@ -85,7 +85,7 @@ export function extractPost(target: Element | null, doc: Document = document): P
       continue;
     }
     if (host === site || host.endsWith(`.${site}`)) continue; // internal navigation
-    if (/t\.co|redd\.it|fb\.me|bit\.ly/i.test(host) && links.length > 0) continue;
+    if (/^(t\.co|redd\.it|fb\.me|bit\.ly)$/i.test(host) && links.length > 0) continue;
     if (!links.includes(href)) links.push(href);
     if (links.length >= 12) break;
   }
@@ -93,7 +93,7 @@ export function extractPost(target: Element | null, doc: Document = document): P
   return {
     kind: 'post',
     pageUrl: location.href.slice(0, LIMITS.url),
-    pageTitle: doc.title.slice(0, LIMITS.title),
+    pageTitle: (typeof doc.title === 'string' ? doc.title : '').slice(0, LIMITS.title),
     site: site.slice(0, LIMITS.short),
     permalink,
     author: author || undefined,
@@ -111,14 +111,18 @@ function findContainer(target: Element | null, doc: Document): Element | null {
     if (el.matches(CONTAINER_SELECTOR)) {
       const len = (el.textContent ?? '').length;
       if (len >= 10 && len <= 20000) return el;
+      if (len > 20000) break; // every ancestor is at least as long
     }
     el = el.parentElement;
   }
   // Fallback: the nearest ancestor block with a reasonable amount of text.
   el = target;
   while (el && el !== doc.body) {
-    const len = (el.textContent ?? '').replace(/\s+/g, ' ').trim().length;
+    const raw = el.textContent ?? '';
+    if (raw.length > 60_000) break; // text only grows going up; do not serialise the whole page per ancestor
+    const len = raw.replace(/\s+/g, ' ').trim().length;
     if (len >= 80 && len <= 6000) return el;
+    if (len > 6000) break;
     el = el.parentElement;
   }
   return null;

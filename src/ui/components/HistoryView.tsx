@@ -152,10 +152,15 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
           {actionError ?? (stats ? `${fmtBytes(stats.snapshotBytes)} of saved pages` : '')}
         </span>
         <span className="grow" />
-        <button className="wys-btn h-8 px-3 text-[12px]" onClick={exportJson} disabled={!items?.length} aria-label="Export all checks as JSON">
+        <button
+          className="wys-btn h-8 px-3 text-[12px]"
+          onClick={exportJson}
+          disabled={!(stats?.checks ?? items?.length)}
+          aria-label="Export all checks as JSON"
+        >
           Export all (JSON)
         </button>
-        <button className="wys-btn h-8 px-3 text-[12px] text-bad" onClick={clearAll} disabled={!items?.length}>
+        <button className="wys-btn h-8 px-3 text-[12px] text-bad" onClick={clearAll} disabled={!(stats?.checks ?? items?.length)}>
           Clear all
         </button>
       </div>

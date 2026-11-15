@@ -31,7 +31,8 @@ export async function captureFromTab(tabId: number | undefined, highlight?: stri
   let payload;
   try {
     // The capture script is injected on demand (it carries Readability + DOMPurify); needs activeTab
-    // or a host permission for the page, which every user-initiated check has.
+    // (granted by the context menu, the shortcut and the toolbar button, not by a click on the chip)
+    // or a host permission for the page. Without either this throws and the check has no page copy.
     const [r] = await browser.scripting.executeScript({ target: { tabId: id }, files: ['/snapshot-capture.js'] });
     const parsed = SnapshotPayloadSchema.safeParse(r?.result);
     if (!parsed.success) return null;

@@ -18,6 +18,9 @@ import { pageTriggerTarget, readPublicSettings, SETTINGS_KEY, SHORTCUT_KEY, type
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
+  // WXT's default announces the script to the page with window.postMessage (extension id included):
+  // any site could read it. Nothing here needs it.
+  noScriptStartedPostMessage: true,
   main(ctx) {
     // XML, SVG and other non-HTML documents: no chip (attachShadow throws there) and nothing to snapshot.
     if (!(document instanceof HTMLDocument) || document.contentType === 'application/xml' || document.contentType === 'text/xml') return;
@@ -46,17 +49,33 @@ export default defineContentScript({
         chip.hide();
         if (!sel) return;
         const type = pageTriggerTarget(settings) === 'webmode' ? 'wys:open-webmode' : 'wys:check';
-        void browser.runtime
-          .sendMessage({ type, input: { kind: 'text', ...sel } })
-          .catch((e: unknown) => console.warn('[wys] could not reach the extension', e));
+        try {
+          void browser.runtime
+            .sendMessage({ type, input: { kind: 'text', ...sel } })
+            .catch((e: unknown) => console.warn('[wys] could not reach the extension', e));
+        } catch {
+          // The extension was updated or switched off while this page stayed open: this script is an
+          // orphan and can reach nothing. Take the chip away for good.
+          retire();
+        }
       },
     );
+
+    // After an update or a disable, Chrome leaves this script running in tabs that were already open.
+    // It must then do nothing at all: no chip, no timers, nothing of ours left in the page.
+    let retired = false;
+    const retire = () => {
+      retired = true;
+      window.clearTimeout(timer);
+      chip.destroy();
+    };
+    ctx.onInvalidated(retire);
 
     // A page can set a selection itself (getSelection().addRange) and park it under the pointer so a
     // click meant for the page lands on the chip. Only selections that follow real input count.
     let lastUserInput = 0;
     const noteInput = (e: Event) => {
-      if (!e.isTrusted) return;
+      if (!e.isTrusted || retired) return;
       lastUserInput = Date.now();
       // A slow drag-select ends with pointerup but no further selectionchange: re-evaluate now.
       // Keyboard selection already fires selectionchange per move, so no key (and never a copy or
@@ -73,8 +92,10 @@ export default defineContentScript({
     // per text fragment). Only the end of the selection is measured; the text is read on click.
     let timer: number | undefined;
     const schedule = () => {
+      if (retired) return;
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
+        if (ctx.isInvalid) return retire();
         if (!chipAllowed()) return chip.hide();
         if (Date.now() - lastUserInput > 1500) return chip.hide();
         const sel = window.getSelection();
@@ -84,7 +105,7 @@ export default defineContentScript({
         const range = sel.getRangeAt(0);
         // A select-all is a page, not a highlight: the panel's "This page" covers it, and the chip
         // would sit at the bottom of the document anyway.
-        const top = range.commonAncestorContainer;
+        const top = selectionTop(range);
         if (top === document || top === document.documentElement || top === document.body) return chip.hide();
         if (!likelyLongEnough(range)) return chip.hide();
         chip.show(selectionEndRect(sel, range));
@@ -101,10 +122,19 @@ export default defineContentScript({
       if (!chip.contains(e.target as Node | null)) chip.hide();
     });
     // Remember what was under the cursor when the context menu opened, for "Check source of this post".
+    // Capture phase (a site that stops propagation must not leave a stale target), real clicks only,
+    // and the innermost element even when it sits inside a web component's open shadow root.
     let lastContextTarget: Element | null = null;
-    ctx.addEventListener(document, 'contextmenu', (e) => {
-      lastContextTarget = e.target instanceof Element ? e.target : null;
-    });
+    ctx.addEventListener(
+      document,
+      'contextmenu',
+      (e) => {
+        if (!e.isTrusted) return;
+        const inner = e.composedPath()[0] ?? e.target;
+        lastContextTarget = inner instanceof Element ? inner : inner instanceof Node ? inner.parentElement : null;
+      },
+      { capture: true, passive: true },
+    );
 
     browser.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
       // Only our own extension can message a content script; a plain shape check keeps zod out of every page.
@@ -112,7 +142,11 @@ export default defineContentScript({
       const type = msg && typeof msg.type === 'string' ? msg.type : '';
       switch (type) {
         case 'wys:get-selection':
-          sendResponse(currentSelection() ?? clampSelection({ text: '', pageUrl: location.href, pageTitle: document.title }));
+          try {
+            sendResponse(currentSelection() ?? clampSelection({ text: '', pageUrl: location.href, pageTitle: pageTitle() }));
+          } catch {
+            sendResponse(clampSelection({ text: '', pageUrl: location.href, pageTitle: '' }));
+          }
           return false;
         case 'wys:extract-post':
           try {
@@ -124,10 +158,15 @@ export default defineContentScript({
         case 'wys:locate-image': {
           const src = typeof msg?.srcUrl === 'string' ? msg.srcUrl : '';
           // An oversized inline image is referenced by a sentinel; the right-clicked element is the image.
+          // The right-clicked image first: the same address can appear twice on a page (a hidden
+          // preload, a carousel clone), and the first match is not always the one the user meant.
+          const clicked = lastContextTarget?.closest('img') ?? null;
           const img =
             src === INLINE_IMAGE_SENTINEL
-              ? (lastContextTarget?.closest('img') ?? lastContextTarget?.querySelector('img') ?? null)
-              : (Array.from(document.images).find((i) => i.currentSrc === src || i.src === src) ?? null);
+              ? (clicked ?? lastContextTarget?.querySelector('img') ?? null)
+              : clicked && (clicked.currentSrc === src || clicked.src === src)
+                ? clicked
+                : (Array.from(document.images).find((i) => i.currentSrc === src || i.src === src) ?? null);
           if (!img) {
             sendResponse(null);
             return false;
@@ -149,6 +188,32 @@ export default defineContentScript({
   },
 });
 
+/**
+ * The node that contains the whole selection. A triple-click ends at offset 0 of the *next* block, so
+ * the range's own common ancestor can be <body> for one paragraph; step the end back to where the
+ * selected content really stops before asking. Cost: the depth of the tree, never its size.
+ */
+function selectionTop(range: Range): Node {
+  if (range.endOffset !== 0 || range.endContainer === range.startContainer) return range.commonAncestorContainer;
+  // The last node before the end that holds something (not the line breaks between blocks); a few steps at most.
+  let last: Node | null = range.endContainer;
+  for (let i = 0; i < 8 && last; i++) {
+    let n: Node | null = last;
+    while (n && !n.previousSibling) n = n.parentNode;
+    last = n?.previousSibling ?? null;
+    while (last?.lastChild) last = last.lastChild;
+    if (last && !(last.nodeType === Node.TEXT_NODE && !(last as Text).data.trim())) break;
+  }
+  if (!last) return range.commonAncestorContainer;
+  try {
+    const r = range.cloneRange();
+    r.setEnd(last, last.nodeType === Node.TEXT_NODE ? (last as Text).length : last.childNodes.length);
+    return r.collapsed ? range.commonAncestorContainer : r.commonAncestorContainer;
+  } catch {
+    return range.commonAncestorContainer;
+  }
+}
+
 /** Three characters or more, judged without reading the selection: exact inside one text node, assumed otherwise. */
 function likelyLongEnough(range: Range): boolean {
   if (range.startContainer === range.endContainer && range.startContainer.nodeType === Node.TEXT_NODE) {
@@ -159,13 +224,20 @@ function likelyLongEnough(range: Range): boolean {
 
 /** Where the selection ends on screen, measured from one character, so the cost does not grow with the selection. */
 function selectionEndRect(sel: Selection, range: Range): DOMRect {
-  const node = sel.focusNode ?? range.endContainer;
-  const offset = sel.focusNode ? sel.focusOffset : range.endOffset;
+  let node = sel.focusNode ?? range.endContainer;
+  let offset = sel.focusNode ? sel.focusOffset : range.endOffset;
+  // A triple-click ends the selection at offset 0 of the *next* block; measuring there would put the
+  // chip over the following paragraph. Measure where the selection began instead.
+  if (offset === 0 && node === range.endContainer && node !== range.startContainer) {
+    node = range.startContainer;
+    offset = range.startOffset + 1;
+  }
   try {
+    offset = Math.min(offset, node.nodeType === Node.TEXT_NODE ? (node as Text).length : offset);
     const r = document.createRange();
     if (node.nodeType === Node.TEXT_NODE) {
       r.setStart(node, Math.max(0, offset - 1));
-      r.setEnd(node, offset);
+      r.setEnd(node, Math.max(offset, Math.min(1, (node as Text).length)));
     } else {
       r.selectNodeContents(node);
       r.collapse(false);
@@ -187,22 +259,49 @@ function isEditable(node: Node | null): boolean {
   return el.closest('[contenteditable]:not([contenteditable="false"])') !== null;
 }
 
+/** `document.title` can be shadowed by a page element named "title" (`<form name="title">`); never trust its type. */
+function pageTitle(): string {
+  const t: unknown = document.title;
+  return typeof t === 'string' ? t : '';
+}
+
+/** Blocks larger than this (a layout table cell holding the whole page) are not read for context. */
+const MAX_CONTEXT_BLOCK = 20_000;
+
 function currentSelection(): SelectionInfo | null {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed) return null;
-  const text = sel.toString().replace(/\s+\n/g, '\n').trim();
+  // Cut to the limit first, and only collapse horizontal whitespace before a newline: `\s+\n` on an
+  // unbounded string is quadratic on long runs of spaces (padded <pre> blocks).
+  const text = sel
+    .toString()
+    .slice(0, LIMITS.text * 2)
+    .replace(/[^\S\n]+\n/g, '\n')
+    .trim();
   if (text.length < 3) return null;
   const node = sel.anchorNode;
   const el = node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement;
   // Small blocks only: `article`/`section` would mean serialising a whole page for 1,200 characters of context.
   const block = el?.closest('p, li, blockquote, td, h1, h2, h3, h4, figcaption') ?? null;
-  const surrounding = block?.textContent?.replace(/\s+/g, ' ').trim().slice(0, LIMITS.surroundingForPrompt);
   return clampSelection({
     text,
     pageUrl: location.href,
-    pageTitle: document.title,
-    surrounding: surrounding && surrounding.length > text.length ? surrounding : undefined,
+    pageTitle: pageTitle(),
+    surrounding: surroundingText(block, text),
   });
+}
+
+/** The part of the block around the selection (not simply its first characters), or nothing when the block adds nothing. */
+function surroundingText(block: Element | null, text: string): string | undefined {
+  const raw = block?.textContent ?? '';
+  if (!raw || raw.length > MAX_CONTEXT_BLOCK) return undefined;
+  const flat = raw.replace(/\s+/g, ' ').trim();
+  if (flat.length <= text.length) return undefined;
+  const max = LIMITS.surroundingForPrompt;
+  if (flat.length <= max) return flat;
+  const at = flat.indexOf(text.replace(/\s+/g, ' ').slice(0, 60));
+  const start = at < 0 ? 0 : Math.max(0, Math.min(at - Math.floor(max / 4), flat.length - max));
+  return flat.slice(start, start + max);
 }
 
 function textSpan(text: string, className?: string): HTMLSpanElement {
@@ -246,7 +345,10 @@ function createChip(binding: () => string | null, onClick: () => void) {
   const build = () => {
     const host = document.createElement('div');
     host.setAttribute('data-wys', 'chip');
-    host.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none;';
+    // Every declaration is !important: a page stylesheet must not be able to restyle the host (a
+    // transform or opacity on it would stretch an invisible chip over the page).
+    host.style.cssText =
+      'all:initial!important;position:fixed!important;top:0!important;left:0!important;width:0!important;height:0!important;z-index:2147483647!important;pointer-events:none!important;opacity:1!important;transform:none!important;filter:none!important;user-select:none!important;-webkit-user-select:none!important;';
     const root = host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = `
@@ -273,11 +375,20 @@ function createChip(binding: () => string | null, onClick: () => void) {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      // Only a real click on a chip that looks like one: not a scripted click, and not a chip the
+      // page has managed to stretch or hide.
+      if (!e.isTrusted) return;
+      const r = btn.getBoundingClientRect();
+      if (r.width > 420 || r.height > 80 || getComputedStyle(host).opacity !== '1') return;
       onClick();
     });
     root.append(style, btn);
-    (document.documentElement || document.body).appendChild(host);
     return built;
+  };
+  // The host is in the page only while the chip is visible. Hidden, nothing of ours is in the DOM,
+  // so nothing of ours can end up inside a selection, a copy, or a page's own DOM walk.
+  const attach = (host: HTMLDivElement) => {
+    if (!host.isConnected) (document.documentElement || document.body).appendChild(host);
   };
   /** '' = the user unbound the command (no hint); null = not known yet (show the default). */
   const setKbd = (b: string | null) => {
@@ -288,7 +399,8 @@ function createChip(binding: () => string | null, onClick: () => void) {
 
   return {
     show(rect: DOMRect) {
-      const { btn } = built ?? build();
+      const { btn, host } = built ?? build();
+      attach(host);
       shown = true;
       btn.classList.add('on');
       const w = btn.offsetWidth || 180;
@@ -306,6 +418,12 @@ function createChip(binding: () => string | null, onClick: () => void) {
       if (!shown || !built) return; // scroll fires constantly; nothing to do while hidden
       shown = false;
       built.btn.classList.remove('on');
+      built.host.remove();
+    },
+    destroy() {
+      shown = false;
+      built?.host.remove();
+      built = null;
     },
     setShortcut(b: string | null) {
       setKbd(b);

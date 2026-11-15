@@ -10,7 +10,9 @@ export function checkToStandaloneHtml(check: StoredCheck, snapshot?: StoredSnaps
     r.input.kind === 'text'
       ? `<blockquote>${e(r.input.text)}</blockquote>`
       : r.input.kind === 'image'
-        ? `<p>Image: <a href="${e(r.input.srcUrl)}">${e(r.input.srcUrl)}</a></p>`
+        ? /^https?:/i.test(r.input.srcUrl)
+          ? `<p>Image: <a href="${e(r.input.srcUrl)}">${e(r.input.srcUrl)}</a></p>`
+          : `<p>Image: inline image on ${e(r.input.pageUrl)}</p>`
         : r.input.kind === 'post'
           ? `<p><small>Post on ${e(r.input.site)}${r.input.author ? ` by ${e(r.input.author)}` : ''}${r.input.permalink ? ` · <a href="${e(r.input.permalink)}">permalink</a>` : ''}</small></p><blockquote style="white-space:pre-line">${e(r.input.text)}</blockquote>`
           : `<p>Page: <a href="${e(r.input.url)}">${e(r.input.url)}</a></p>`;

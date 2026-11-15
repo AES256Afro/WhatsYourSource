@@ -101,7 +101,7 @@ export function InputCard({ input, when, clamp, deferImages }: { input: CheckInp
         </button>
       )}
       {input.kind === 'image' &&
-        /^(https?:|data:image\/|blob:)/i.test(input.srcUrl) &&
+        /^(https?:|data:image\/)/i.test(input.srcUrl) &&
         (showImage || !isHttpUrl(input.srcUrl) ? (
           <ImageFrame href={isHttpUrl(input.srcUrl) ? input.srcUrl : undefined}>
             <img src={input.srcUrl} alt={input.alt ?? 'The checked image'} className="block max-h-[120px] w-full object-contain" loading="lazy" />

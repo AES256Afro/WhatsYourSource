@@ -17,10 +17,15 @@ export default defineUnlistedScript((): SnapshotPayload => captureSnapshot());
  * check is saved without one, rather than freezing the page the user is reading.
  */
 const MAX_ELEMENTS = 25_000;
+/** A huge log or text file is one <pre>: few elements, megabytes of text. */
+const MAX_TEXT = 3_000_000;
+/** `document.title` can be shadowed by a page element named "title". */
+const docTitle = (): string => (typeof document.title === 'string' ? document.title : '');
 
 function captureSnapshot(): SnapshotPayload {
-  const base = { url: location.href.slice(0, LIMITS.url), title: document.title.slice(0, LIMITS.title), capturedAt: Date.now() };
-  if (document.getElementsByTagName('*').length > MAX_ELEMENTS) return { ...base, html: '', textLength: 0 };
+  const base = { url: location.href.slice(0, LIMITS.url), title: docTitle().slice(0, LIMITS.title), capturedAt: Date.now() };
+  if (document.getElementsByTagName('*').length > MAX_ELEMENTS || (document.body?.textContent?.length ?? 0) > MAX_TEXT)
+    return { ...base, html: '', textLength: 0 };
   const clone = document.cloneNode(true) as Document;
   let article: ReturnType<Readability['parse']> = null;
   try {
@@ -54,16 +59,22 @@ function captureSnapshot(): SnapshotPayload {
         'svg',
         'canvas',
         'math',
+        // Image maps: an <area href> would navigate the saved-page frame itself to a live page.
+        'map',
+        'area',
       ],
       FORBID_ATTR: ['style', 'srcset', 'sizes', 'loading', 'onerror', 'onload', 'class', 'id', 'ping'],
-      ALLOWED_URI_REGEXP: /^(?:https?|data):/i,
+      // DOMPurify tests nearly every attribute value against this, not only links: the second and third
+      // alternatives (its own defaults) let plain values through (dir="rtl", colspan="2", start="5"),
+      // which a bare scheme list silently stripped. Schemes are still limited to http(s) and data.
+      ALLOWED_URI_REGEXP: /^(?:(?:https?|data):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
     });
   } finally {
     DOMPurify.removeHook('uponSanitizeAttribute', dropDataLinks);
   }
   return {
     ...base,
-    title: (article?.title || document.title).slice(0, LIMITS.title),
+    title: (article?.title || docTitle()).slice(0, LIMITS.title),
     html: html.slice(0, 1_500_000),
     textLength: article?.textContent?.length ?? 0,
   };

@@ -32,10 +32,6 @@ export async function readProvenance(bytes: Uint8Array, mime: string): Promise<L
       pick(fields, parsed, 'DigitalSourceType', 'Digital source type');
       pick(fields, parsed, 'digitalSourceType', 'Digital source type');
       if (parsed.latitude != null && parsed.longitude != null) fields.GPS = `${Number(parsed.latitude).toFixed(4)}, ${Number(parsed.longitude).toFixed(4)}`;
-      if (typeof parsed.ImageWidth === 'number' && typeof parsed.ImageHeight === 'number') {
-        out.width = parsed.ImageWidth;
-        out.height = parsed.ImageHeight;
-      }
     }
   } catch {
     /* no metadata, or a format exifr doesn't read */
@@ -91,19 +87,24 @@ function pick(out: Record<string, string>, src: Record<string, unknown>, key: st
 
 const AI_PATTERNS: [RegExp, string][] = [
   [/trainedAlgorithmicMedia/i, 'IPTC digital source type = trained algorithmic media'],
-  [/firefly/i, 'Adobe Firefly'],
-  [/dall[- ]?e/i, 'DALL·E'],
-  [/midjourney/i, 'Midjourney'],
-  [/stable ?diffusion|sdxl|comfyui|automatic1111|invokeai|novelai/i, 'Stable Diffusion tooling'],
-  [/imagen|gemini|nano banana|synthid/i, 'Google image model'],
-  [/flux\.?1|black forest/i, 'FLUX'],
-  [/ideogram|leonardo\.ai|runway|pika|kling/i, 'AI image service'],
+  [/\bfirefly\b/i, 'Adobe Firefly'],
+  [/\bdall[- ]?e\b/i, 'DALL·E'],
+  [/\bmidjourney\b/i, 'Midjourney'],
+  [/\b(stable ?diffusion|sdxl|comfyui|automatic1111|invokeai|novelai)\b/i, 'Stable Diffusion tooling'],
+  [/\b(imagen|gemini|nano banana|synthid)\b/i, 'Google image model'],
+  [/\bflux\.?1|\bblack forest\b/i, 'FLUX'],
+  [/\b(ideogram|leonardo\.ai|runway|pika|kling)\b/i, 'AI image service'],
   [/^(Steps|Sampler|CFG scale|Seed):/im, 'Stable Diffusion parameters block'],
 ];
+
+const TOOL_FIELDS = /^(software|creator tool|digital source type|parameters|prompt|comment)$/i;
 
 export function aiHints(fields: Record<string, string>): string[] {
   const hits = new Set<string>();
   for (const [k, v] of Object.entries(fields)) {
+    // Only the fields a tool writes about itself. Captions, credits and names are free text: a photo
+    // of fireflies or "Imagen de archivo" is not an AI generator.
+    if (!TOOL_FIELDS.test(k)) continue;
     const hay = `${k}: ${v}`;
     for (const [re, label] of AI_PATTERNS) if (re.test(hay)) hits.add(label);
   }

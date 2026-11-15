@@ -66,8 +66,9 @@ export function factCheckQuery(text: string): string {
 
 export async function searchFactChecks(query: string, apiKey: string, signal?: AbortSignal, language = 'en'): Promise<FactCheck[]> {
   if (!apiKey.trim() || !query.trim()) return [];
-  const u = `${ENDPOINT}?query=${encodeURIComponent(query)}&languageCode=${encodeURIComponent(language)}&pageSize=8&key=${encodeURIComponent(apiKey.trim())}`;
-  const res = await fetch(u, { signal });
+  const u = `${ENDPOINT}?query=${encodeURIComponent(query)}&languageCode=${encodeURIComponent(language)}&pageSize=8`;
+  // The key goes in a header like every other key here, not in the address (addresses get logged).
+  const res = await fetch(u, { signal, headers: { 'X-Goog-Api-Key': apiKey.trim() } });
   if (!res.ok) throw new Error(`Fact Check Tools: HTTP ${res.status}`);
   return parseFactChecks(await res.json());
 }

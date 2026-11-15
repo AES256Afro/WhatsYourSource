@@ -28,6 +28,9 @@ export async function* parseSse(body: ReadableStream<Uint8Array>): AsyncGenerato
       if (evt) yield evt;
     }
   } finally {
+    // Cancel, not just release: when the consumer stops early (an error mid-stream, a cancel), the
+    // connection must close now rather than whenever the body is garbage-collected.
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }

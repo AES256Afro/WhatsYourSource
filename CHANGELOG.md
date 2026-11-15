@@ -4,6 +4,36 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-15
+
+Five audits (in-page script, background, providers and network, panel and history, release readiness); the ledger entry is in `docs/SWEEPS.md`.
+
+### Fixed
+- Nothing of the extension stays in a page while the chip is hidden: the chip's element is added when it shows and removed when it goes, so it can never be part of a selection or a copy. Measured: what Chrome puts on the clipboard is byte-for-byte the same with and without the extension.
+- After an update or after switching the extension off, tabs that were already open no longer keep a dead chip that does nothing when clicked; the old script retires itself.
+- Text cut in the middle of an emoji no longer breaks "Open in Google AI Mode", the shortcut, or a finished result (which could land on "Something went wrong").
+- Reading a selection is bounded: a selection with very long runs of spaces could block the tab for seconds; the context paragraph is the text around the selection, not the first 1,200 characters of its block, and a table cell holding the whole page is skipped.
+- Saved pages keep `dir`, `lang`, `colspan`, `rowspan`, list numbering and image sizes (right-to-left pages rendered left-to-right, tables lost their spans).
+- Evidence that arrives after a result is saved no longer wipes a note typed in the meantime or brings back a check you deleted.
+- A check shows "Checking…" at once in single-pass mode and for images (it could sit on the home screen for up to 2.5 seconds).
+- The first Test on a local server shows its result; Verify can no longer stay stuck on "Connecting…".
+- "Check source of this post" uses the element you right-clicked even on sites that swallow the event or build posts as web components; links to sites whose name contains "t.co" (washingtonpost.com, reddit.com) are no longer dropped.
+- A crashed view no longer survives navigation; a failed history open is retried instead of leaving "Loading…".
+- Transparent images are sent on white, not black; the image size reported is the decoded one, not a tag inside the file.
+- Copy as Markdown quotes every line of a multi-line selection and never puts a megabyte of inline image data on the clipboard.
+
+### Security
+- The chip cannot be restyled by a page (stretched or made invisible to catch clicks), ignores scripted clicks, and the background accepts its messages only from a tab's top frame, at most one per 800 ms.
+- "Likely original source" is a live link only when the provider actually retrieved that address; one the model merely wrote is shown as text.
+- An API key no longer follows the endpoint to another host when you switch the OpenAI-style preset or edit the address.
+- The Fact Check Tools key is sent in a header, not in the address. Local and private addresses are never sent to the Wayback Machine or into a Google AI Mode query.
+- AI-generator hints are read only from the fields a tool writes about itself, with whole-word matches ("Imagen de archivo", a photo of fireflies).
+- The content script no longer announces the extension's id to every page.
+- The right-click items appear on web pages and local files only, not on the extension's own pages.
+
+### Changed
+- Store documents say 1.0.2 and describe what is sent, and when a page copy is kept, as the code does it. CI runs lint and the format check.
+
 ## [1.0.1] - 2026-11-12
 
 ### Fixed

@@ -114,6 +114,11 @@ test('content script leaves the page alone until a real selection, then shows th
   await page.locator('#p').dblclick();
   await expect(page.locator('[data-wys="chip"]')).toHaveCount(1);
 
+  // Nothing of ours stays in the page once the chip is dismissed: a later select-all or copy must
+  // never be able to pick up an element the extension added.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-wys="chip"]')).toHaveCount(0);
+
   await page.evaluate(() => {
     // Select only the quote, so the surrounding paragraph is distinct from the selection.
     const textNode = document.getElementById('p')!.firstChild as Text;

@@ -22,7 +22,8 @@ export function normalizeUrl(input: string): string {
     }
     let s = u.toString();
     if (s.endsWith('/')) s = s.slice(0, -1);
-    return s.replace(/^https?:\/\/www\./, 'https://').toLowerCase();
+    // One scheme and no www for comparison; only the host is case-insensitive (video ids and short links are not).
+    return s.replace(/^https?:\/\/(www\.)?[^/?#]*/i, (m) => m.toLowerCase().replace(/^https?:\/\/(www\.)?/, 'https://'));
   } catch {
     return input.trim().toLowerCase();
   }
@@ -43,7 +44,14 @@ export function isHttpUrl(s: string): boolean {
 
 export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
-  return s.slice(0, max - 1).trimEnd() + '…';
+  // toWellFormed: a cut through an emoji leaves half a surrogate pair, which encodeURIComponent rejects.
+  return (
+    s
+      .slice(0, max - 1)
+      .toWellFormed()
+      .replace(/\uFFFD$/, '')
+      .trimEnd() + '…'
+  );
 }
 
 /**
@@ -61,7 +69,13 @@ export function isPublicHttpUrl(input: string): boolean {
   if (u.username || u.password) return false;
   const host = u.hostname.toLowerCase().replace(/\.$/, '');
   if (!host) return false;
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.home.arpa')) return false;
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    /\.(internal|home\.arpa|lan|home|corp|intranet|localdomain)$/.test(host)
+  )
+    return false;
   if (!host.includes('.') && !host.startsWith('[')) return false; // bare intranet names
   if (host.startsWith('[') || host.includes(':')) return !isPrivateIpv6(host.replace(/^\[|\]$/g, ''));
   const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);

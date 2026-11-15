@@ -62,6 +62,10 @@ function getDb(): Promise<IDBPDatabase<WysDB>> {
         tx.objectStore('snapshots').createIndex('by-bytes', 'bytes');
       }
     },
+  }).catch((e: unknown) => {
+    // A failed open (disk full, a transient backing-store error) must not be cached for the page's life.
+    dbPromise = null;
+    throw e;
   });
   return dbPromise;
 }
@@ -192,9 +196,24 @@ export async function getSnapshot(checkId: string): Promise<StoredSnapshot | und
 
 export async function setNote(id: string, note: string): Promise<void> {
   const db = await getDb();
-  const c = await db.get('checks', id);
-  if (!c) return;
-  await db.put('checks', { ...c, note });
+  // One transaction: a read and a write in two would let a concurrent update be lost.
+  const tx = db.transaction('checks', 'readwrite');
+  const c = await tx.store.get(id);
+  if (c) await tx.store.put({ ...c, note });
+  await tx.done;
+}
+
+/**
+ * Replace the result of a check that is already saved (evidence that arrived after the first save).
+ * The note and the snapshot flag are kept, and a row the user has deleted meanwhile stays deleted.
+ */
+export async function updateCheckResult(result: CheckResult): Promise<boolean> {
+  const db = await getDb();
+  const tx = db.transaction('checks', 'readwrite');
+  const c = await tx.store.get(result.id);
+  if (c) await tx.store.put({ ...c, result });
+  await tx.done;
+  return !!c;
 }
 
 export async function deleteCheck(id: string): Promise<void> {

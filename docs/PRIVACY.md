@@ -6,8 +6,9 @@
 
 When you check something, the extension sends to your chosen provider:
 
-- the highlighted text (plus the surrounding paragraph for context), **or** the image bytes (downscaled), **or** the page URL and title;
+- the highlighted text (plus the surrounding paragraph for context), **or** the image bytes (downscaled), **or** the page URL and title, **or** a post's text with its links and image addresses;
 - the address and title of the page it came from;
+- if the first provider fails and you configured a second one, the same content goes to that one instead; "Second opinion" sends it to the provider you pick;
 - a fixed instruction prompt that asks "Is this true, and where can I find the source of this topic?".
 
 Providers you can choose:
@@ -23,12 +24,12 @@ Two optional lookups run beside the AI during a check and can be turned off in S
 
 | Lookup | Where data goes | What is sent |
 |---|---|---|
-| Published fact-checks | `factchecktools.googleapis.com`, with your own Google Cloud key | The first sentence (up to ~24 words) of the checked text |
+| Published fact-checks | `factchecktools.googleapis.com`, with your own Google Cloud key | A short query: the first sentence (up to ~24 words) of the checked text, the page title or the image's caption, and, with two-pass checking on, up to three of the claims found in it |
 | Wayback Machine dates | `web.archive.org` | The address of the page the content came from, and of the original source the AI found |
 
 Outlet reputation ratings are shipped inside the extension (Wikipedia's perennial-sources list, CC BY-SA) and involve no network request.
 
-The extension never sends data to any other party.
+The extension never sends data to any other party on its own. Links you click in a result are ordinary browsing: the reverse-image buttons open Google Lens, TinEye, Bing or Yandex with the image's address, and "Archive it now" opens `web.archive.org` with the page's address.
 
 ## What is stored, and where
 
@@ -40,7 +41,7 @@ The extension never sends data to any other party.
 
 - The content script runs on pages to show the *Check source* chip and read your selection when asked. It does not read or transmit pages on its own.
 - Host access to arbitrary sites (`<all_urls>`) is **optional** and requested only when needed: to download an image a site blocks, or so a local model can read pages it finds. You can decline; a screenshot of the visible image is used instead.
-- `activeTab` lets the extension take a screenshot of the current tab for snapshots, and only after you clicked the extension's own menu or shortcut on that tab.
+- `activeTab` lets the extension take a screenshot of the current tab for snapshots, and only after you used the extension's right-click menu, shortcut or toolbar button on that tab. A check started from the on-page chip is saved without a page copy unless you have granted access to that site.
 
 ## Firefox data-collection disclosure
 

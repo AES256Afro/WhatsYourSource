@@ -43,6 +43,9 @@ export default defineBackground(() => {
   // second removeAll must wait for the first chain or the creates interleave into duplicate ids.
   let menus: Promise<void> = Promise.resolve();
   function createMenus() {
+    // Web pages and local files only: on the extension's own pages (a result in the side panel, the
+    // options tab) a check would open a second panel and queue a chrome-extension:// address.
+    const documentUrlPatterns = ['http://*/*', 'https://*/*', 'file:///*'];
     const items: Browser.contextMenus.CreateProperties[] = [
       { id: MENU.selection, title: 'Check source of selection', contexts: ['selection'] },
       { id: MENU.selectionWeb, title: 'Open selection in Google AI Mode', contexts: ['selection'] },
@@ -59,7 +62,7 @@ export default defineBackground(() => {
         // Each create takes a callback that reads lastError: a duplicate id (two registrations in one
         // worker start) is then a handled condition, not an "Unchecked runtime.lastError" entry.
         for (const item of items)
-          browser.contextMenus.create(item, () => {
+          browser.contextMenus.create({ ...item, documentUrlPatterns }, () => {
             // Reading it is what marks the error handled; a duplicate id means the other chain already made the item.
             if (browser.runtime.lastError) return;
           });
@@ -119,7 +122,11 @@ export default defineBackground(() => {
       case MENU.selectionWeb: {
         const text = (info.selectionText ?? '').trim();
         if (!text) return;
-        void browser.tabs.create({ url: googleAiModeUrl({ kind: 'text', text, pageUrl, pageTitle }, settings.webmodeVariant) });
+        // Re-read first: right after the worker wakes, the in-memory copy may still be the defaults.
+        void loadSettingsWithoutSecrets()
+          .then(adopt, () => undefined)
+          .then(() => browser.tabs.create({ url: googleAiModeUrl({ kind: 'text', text, pageUrl, pageTitle }, settings.webmodeVariant) }))
+          .catch((e: unknown) => console.warn('[wys] could not open Google AI Mode', e));
         return;
       }
       case MENU.image: {
@@ -199,8 +206,21 @@ export default defineBackground(() => {
       } else {
         await enqueueJob(input, activeTab?.id, activeTab?.windowId);
       }
-    })();
+    })().catch((e: unknown) => console.warn('[wys] shortcut check failed', e));
   });
+
+  // Page-triggered messages come from the chip in a tab's top frame, at human speed. Anything else
+  // (no tab, a sub-frame, a burst) is not a click on the chip.
+  const lastPageTrigger = new Map<number, number>();
+  const fromChip = (sender: Browser.runtime.MessageSender): boolean => {
+    const id = sender.tab?.id;
+    if (id == null || (sender.frameId ?? 0) !== 0) return false;
+    const now = Date.now();
+    if (now - (lastPageTrigger.get(id) ?? 0) < 800) return false;
+    lastPageTrigger.set(id, now);
+    if (lastPageTrigger.size > 200) lastPageTrigger.clear();
+    return true;
+  };
 
   browser.runtime.onMessage.addListener((raw, sender, sendResponse) => {
     const parsed = MessageSchema.safeParse(raw);
@@ -208,6 +228,7 @@ export default defineBackground(() => {
     const msg = parsed.data;
     switch (msg.type) {
       case 'wys:check': {
+        if (!fromChip(sender)) return false;
         openPanel(sender.tab);
         void enqueueJob(msg.input, sender.tab?.id, sender.tab?.windowId).then(
           () => sendResponse({ ok: true }),
@@ -216,6 +237,7 @@ export default defineBackground(() => {
         return true;
       }
       case 'wys:open-webmode': {
+        if (!fromChip(sender)) return false;
         void loadSettingsWithoutSecrets()
           .then((fresh) => {
             adopt(fresh);
@@ -252,8 +274,9 @@ export default defineBackground(() => {
     try {
       if (frameId) {
         // Right-clicked inside an iframe: read that frame, nothing else.
+        // The page is still the tab's page, not the frame's own address (about:srcdoc, an embed URL).
         const inFrame = await readSelectionFromFrames(tab.id, { frameIds: [frameId] }, fallbackText);
-        if (inFrame) return inFrame;
+        if (inFrame) return { ...inFrame, pageUrl: base.pageUrl || inFrame.pageUrl, pageTitle: base.pageTitle || inFrame.pageTitle };
       }
       const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:get-selection' });
       const parsed = SelectionInfoSchema.safeParse(reply);
@@ -271,7 +294,7 @@ export default defineBackground(() => {
       // No content script on this page (loaded before install, or a restricted URL). Try injecting a one-off reader.
       try {
         const r = await readSelectionFromFrames(tab.id, frameId ? { frameIds: [frameId] } : { allFrames: false }, fallbackText);
-        if (r) return r;
+        if (r) return frameId ? { ...r, pageUrl: base.pageUrl || r.pageUrl, pageTitle: base.pageTitle || r.pageTitle } : r;
       } catch {
         /* restricted page */
       }
@@ -292,7 +315,7 @@ export default defineBackground(() => {
         return {
           text: sel ? sel.toString().trim().slice(0, limits.text) : '',
           pageUrl: location.href.slice(0, limits.url),
-          pageTitle: document.title.slice(0, limits.title),
+          pageTitle: (typeof document.title === 'string' ? document.title : '').slice(0, limits.title),
         };
       },
       args: [{ text: LIMITS.text, url: LIMITS.url, title: LIMITS.title }],

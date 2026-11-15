@@ -9,7 +9,7 @@ const scenario = params.get('scenario') ?? 'home';
 if (params.get('dark')) document.getElementById('scene')!.classList.add('dark');
 // Tall screens (first run) fit at a smaller zoom; everything else uses the stylesheet's 1.3.
 const zoom = params.get('zoom');
-if (zoom) (document.querySelector('.panel') as HTMLElement).style.zoom = zoom;
+if (zoom) document.querySelector<HTMLElement>('.panel')!.style.zoom = zoom;
 const chip = document.getElementById('chip')!;
 if (params.get('chip') !== '1') chip.hidden = true;
 else {

@@ -243,7 +243,7 @@ export function App() {
         checking={running}
       />
       <div className="min-h-0 grow overflow-y-auto">
-        <ErrorBoundary onReset={() => setView('home')}>
+        <ErrorBoundary key={view} onReset={() => setView('home')}>
           <Suspense fallback={loading}>{body}</Suspense>
         </ErrorBoundary>
       </div>
