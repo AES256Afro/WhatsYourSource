@@ -49,7 +49,7 @@
     "globals": "^17.14.0",
     "jsdom": "^27.0.0",
     "prettier": "^3.9.10",
-    "sharp": "^0.34.0",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.0",
     "typescript-eslint": "^8.72.1",
