@@ -6,6 +6,7 @@ import { checkToStandaloneHtml, downloadText, safeFilename } from '@/lib/history
 import { buildSnapshotSrcdoc } from '@/lib/history/snapshot';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import type { Ask } from '@/lib/pipeline/question';
+import type { Settings } from '@/lib/storage/settings';
 import { Label, Pill, toneForVerdict } from './common';
 import { Camera, Download, External, Refresh, Trash } from './Icons';
 import { ResultView } from './ResultView';
@@ -24,6 +25,8 @@ export function DetailView({
   otherAsks,
   onDeleted,
   webmodeVariant,
+  settings,
+  onSettings,
 }: {
   id: string;
   onRecheck: (input: CheckInput) => void;
@@ -31,6 +34,9 @@ export function DetailView({
   otherAsks?: (input: CheckInput) => Ask[];
   onDeleted: () => void;
   webmodeVariant: GoogleAiModeVariant;
+  /** With settings, the saved check takes follow-up questions. */
+  settings?: Settings;
+  onSettings?: () => void;
 }) {
   const [check, setCheck] = useState<StoredCheck | null | undefined>(undefined);
   const [snapshot, setSnapshot] = useState<StoredSnapshot | null>(null);
@@ -140,6 +146,8 @@ export function DetailView({
               onAsk={(ask) => onRecheck({ ...check.result.input, ask })}
               saved
               snapshotNote={check.hasSnapshot ? 'Saved with page snapshot' : 'Saved'}
+              settings={settings}
+              onSettings={onSettings}
               embedded
             />
             <div className="flex flex-col gap-1.5 px-3.5 pb-3.5">

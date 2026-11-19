@@ -205,3 +205,33 @@ describe('the chip names a non-default question', () => {
     expect(readPublicSettings({}).askName).toBe('');
   });
 });
+
+describe('the right-click menu offers every question', () => {
+  it('lists each preset for each target, with unique ids that parse back', async () => {
+    const { menuItems, parseMenuId, MENU_TARGETS } = await import('@/lib/menus');
+    const items = menuItems('');
+    expect(new Set(items.map((i) => i.id)).size).toBe(items.length);
+    for (const target of MENU_TARGETS)
+      for (const askId of ['factcheck', 'explain', 'timeline', 'flaws'] as const) expect(parseMenuId(`wys-${target}:${askId}`)).toEqual({ target, askId });
+    expect(items.filter((i) => i.contexts[0] === 'selection').map((i) => i.title)).toEqual([
+      'Fact-check selection',
+      'Explain selection',
+      'Timeline behind selection',
+      'Find flaws and inaccuracies in selection',
+      'Open selection in Google AI Mode',
+    ]);
+    expect(items.some((i) => i.id.endsWith(':custom'))).toBe(false);
+    expect(parseMenuId('wys-page:nope')).toBeNull();
+    expect(parseMenuId('wys-selection-web')).toBeNull();
+  });
+
+  it('adds the user’s own question when there is one, and reads its words from settings at click time', async () => {
+    const { menuItems, askForMenu } = await import('@/lib/menus');
+    const own = menuItems('Who pays for this?').filter((i) => i.id.endsWith(':custom'));
+    expect(own).toHaveLength(5);
+    expect(own[0]?.title).toBe('Ask about selection: “Who pays for this?”');
+    expect(askForMenu('custom', 'Who pays for this?')).toEqual({ id: 'custom', custom: 'Who pays for this?' });
+    expect(askForMenu('custom', '')).toEqual({ id: 'factcheck' });
+    expect(askForMenu('flaws', 'ignored')).toEqual({ id: 'flaws' });
+  });
+});

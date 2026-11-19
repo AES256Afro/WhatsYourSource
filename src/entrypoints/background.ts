@@ -15,21 +15,14 @@ import {
 } from '@/lib/storage/settings';
 import { SHORTCUT_KEY } from '@/lib/storage/publicSettings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
+import { askForMenu, MENU_SELECTION_WEB, menuItems, parseMenuId } from '@/lib/menus';
+import { cleanCustomQuestion, type AskId } from '@/lib/pipeline/question';
 
 /**
  * The background is a router only: it owns the context menus and the keyboard command,
  * opens the side panel while the user gesture is still fresh, and hands the job over
  * through storage.session. All AI work happens in the side panel page.
  */
-const MENU = {
-  selection: 'wys-selection',
-  selectionWeb: 'wys-selection-web',
-  image: 'wys-image',
-  post: 'wys-post',
-  page: 'wys-page',
-  link: 'wys-link',
-} as const;
-
 type MaybeTab = Browser.tabs.Tab | undefined;
 
 export default defineBackground(() => {
@@ -44,26 +37,24 @@ export default defineBackground(() => {
   };
   void loadSettingsWithoutSecrets().then(adopt, (e: unknown) => console.warn('[wys] settings unreadable', e));
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes[SETTINGS_KEY]) adopt(mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue));
+    if (area !== 'local' || !changes[SETTINGS_KEY]) return;
+    const before = cleanCustomQuestion(settings.ask.custom);
+    adopt(mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue));
+    // The menu offers the user's own question by its words; a new wording needs new items.
+    if (cleanCustomQuestion(settings.ask.custom) !== before) createMenus();
   });
 
   // onInstalled and onStartup can both fire in one worker start (an update applied at launch); the
   // second removeAll must wait for the first chain or the creates interleave into duplicate ids.
   let menus: Promise<void> = Promise.resolve();
   function createMenus() {
-    const items: Browser.contextMenus.CreateProperties[] = [
-      { id: MENU.selection, title: 'Check source of selection', contexts: ['selection'] },
-      { id: MENU.selectionWeb, title: 'Open selection in Google AI Mode', contexts: ['selection'] },
-      { id: MENU.image, title: 'Check source of this image', contexts: ['image'] },
-      // Post and page only when nothing more specific (a selection, an image) is under the cursor.
-      { id: MENU.post, title: 'Check source of this post', contexts: ['page'] },
-      { id: MENU.page, title: 'Check source of this page', contexts: ['page'] },
-      // A link is the canonical "where is the source?" target: check the page it points to.
-      { id: MENU.link, title: 'Check source of linked page', contexts: ['link'] },
-    ];
     menus = menus
+      // The items name the user's own question, so the settings are read first (the in-memory copy
+      // may still be the defaults when this runs at install or startup).
+      .then(() => loadSettingsWithoutSecrets().then(adopt, () => undefined))
       .then(() => browser.contextMenus.removeAll())
       .then(() => {
+        const items = menuItems(settings.ask.custom) as Browser.contextMenus.CreateProperties[];
         // Each create takes a callback that reads lastError: a duplicate id (two registrations in one
         // worker start) is then a handled condition, not an "Unchecked runtime.lastError" entry.
         for (const item of items)
@@ -97,15 +88,16 @@ export default defineBackground(() => {
    * Where a context-menu check goes: the web tab when Google AI Mode is the default provider,
    * otherwise the panel (opened synchronously here, while the gesture is fresh) plus a queued job.
    * `resolve` may be slow (asking the page); the panel decision cannot wait for it.
+   * `askId` is the question the clicked item names: the user's choice, so it goes on the input here.
    */
-  function route(tab: MaybeTab, quick: CheckInput, resolve?: () => Promise<CheckInput>): void {
+  function route(tab: MaybeTab, askId: AskId, quick: CheckInput, resolve?: () => Promise<CheckInput>): void {
     // The in-memory copy may still be the defaults right after the worker woke up: decide the panel
     // synchronously from it (the gesture cannot wait), then re-read before anything irreversible.
     const panelOpened = settings.defaultProvider !== 'webmode';
     if (panelOpened) openPanel(tab);
     void (async () => {
       adopt(await loadSettingsWithoutSecrets());
-      const input = resolve ? await resolve() : quick;
+      const input: CheckInput = { ...(resolve ? await resolve() : quick), ask: askForMenu(askId, settings.ask.custom) };
       if (settings.defaultProvider === 'webmode') {
         await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant, defaultAsk(settings)) });
         return;
@@ -124,35 +116,38 @@ export default defineBackground(() => {
     if ((info.pageUrl ?? '').startsWith(own) || (info.frameUrl ?? '').startsWith(own)) return;
     const pageUrl = info.pageUrl ?? tab?.url ?? '';
     const pageTitle = tab?.title ?? '';
-    switch (info.menuItemId) {
-      case MENU.selection: {
+    if (info.menuItemId === MENU_SELECTION_WEB) {
+      const text = (info.selectionText ?? '').trim();
+      if (!text) return;
+      // Re-read first: right after the worker wakes, the in-memory copy may still be the defaults.
+      void loadSettingsWithoutSecrets()
+        .then(adopt, () => undefined)
+        .then(() => browser.tabs.create({ url: googleAiModeUrl({ kind: 'text', text, pageUrl, pageTitle }, settings.webmodeVariant, defaultAsk(settings)) }))
+        .catch((e: unknown) => console.warn('[wys] could not open Google AI Mode', e));
+      return;
+    }
+    const item = parseMenuId(info.menuItemId);
+    if (!item) return;
+    const { askId } = item;
+    switch (item.target) {
+      case 'selection': {
         const text = (info.selectionText ?? '').trim();
         if (!text) return;
         const quick: CheckInput = { kind: 'text', text, pageUrl, pageTitle };
-        route(tab, quick, async () => {
+        route(tab, askId, quick, async () => {
           const sel = await resolveSelection(tab, text, info.frameId);
           return { kind: 'text', text: sel.text, pageUrl: sel.pageUrl || pageUrl, pageTitle: sel.pageTitle || pageTitle, surrounding: sel.surrounding };
         });
         return;
       }
-      case MENU.selectionWeb: {
-        const text = (info.selectionText ?? '').trim();
-        if (!text) return;
-        // Re-read first: right after the worker wakes, the in-memory copy may still be the defaults.
-        void loadSettingsWithoutSecrets()
-          .then(adopt, () => undefined)
-          .then(() => browser.tabs.create({ url: googleAiModeUrl({ kind: 'text', text, pageUrl, pageTitle }, settings.webmodeVariant, defaultAsk(settings)) }))
-          .catch((e: unknown) => console.warn('[wys] could not open Google AI Mode', e));
-        return;
-      }
-      case MENU.image: {
+      case 'image': {
         if (!info.srcUrl) return;
-        route(tab, { kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle });
+        route(tab, askId, { kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle });
         return;
       }
-      case MENU.post: {
+      case 'post': {
         const page: CheckInput = { kind: 'page', url: pageUrl, title: pageTitle };
-        route(tab, page, async () => {
+        route(tab, askId, page, async () => {
           if (tab?.id == null) return page;
           try {
             const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:extract-post' });
@@ -165,13 +160,13 @@ export default defineBackground(() => {
         });
         return;
       }
-      case MENU.page: {
-        route(tab, { kind: 'page', url: pageUrl, title: pageTitle });
+      case 'page': {
+        route(tab, askId, { kind: 'page', url: pageUrl, title: pageTitle });
         return;
       }
-      case MENU.link: {
+      case 'link': {
         if (!info.linkUrl || !/^https?:/i.test(info.linkUrl)) return;
-        route(tab, { kind: 'page', url: info.linkUrl, title: '' });
+        route(tab, askId, { kind: 'page', url: info.linkUrl, title: '' });
         return;
       }
     }

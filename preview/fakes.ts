@@ -50,6 +50,10 @@ const IMAGE_ANSWER = `Older than claimed: this photo is real, but it is not from
 }
 \`\`\``;
 
+const FOLLOW_UP_ANSWER = `The earliest wording Quote Investigator found is from a 1981 Narcotics Anonymous draft, which has no named author. Rita Mae Brown used a near-identical line in her 1983 novel Sudden Death, which is why she is often credited.
+
+Einstein's name only becomes attached in the 1990s, decades after his death, so no primary source links him to it.`;
+
 const SELECTION = {
   text: 'As Einstein put it, "the definition of insanity is doing the same thing over and over again and expecting different results."',
   pageUrl: 'https://medium.com/@author/why-we-keep-repeating-ourselves',
@@ -145,7 +149,9 @@ export async function installFakes(scenario: string) {
   globalThis.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
     if (url.includes('generativelanguage.googleapis.com') && url.includes('streamGenerateContent')) {
-      return new Response(geminiStream(scenario === 'image' ? IMAGE_ANSWER : CANNED_ANSWER, scenario === 'image'), {
+      // A follow-up question gets prose, as the real model is asked to give.
+      const followUp = typeof init?.body === 'string' && init.body.includes('follow-up question');
+      return new Response(geminiStream(followUp ? FOLLOW_UP_ANSWER : scenario === 'image' ? IMAGE_ANSWER : CANNED_ANSWER, scenario === 'image'), {
         status: 200,
         headers: { 'Content-Type': 'text/event-stream' },
       });

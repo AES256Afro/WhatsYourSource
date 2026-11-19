@@ -4,7 +4,7 @@ Single purpose: check the origin and reliability of text, images and pages the u
 
 | Permission | Why it is needed | When it is used |
 |---|---|---|
-| `contextMenus` | "Check source of selection / image / page" items in the right-click menu | Menu creation at install; clicks are user-initiated |
+| `contextMenus` | "Fact-check / Explain / Timeline behind / Find flaws and inaccuracies in" items for the selection, image, post, page or link in the right-click menu | Menu creation at install; clicks are user-initiated |
 | `storage` | Settings, API keys (local only, never synced) and the pending-job handoff between background and side panel (`storage.session`) | Always |
 | `unlimitedStorage` | History keeps page snapshots in IndexedDB; a few hundred checks with snapshots exceed the default quota | When saving a check |
 | `activeTab` | Read the selection and take a visible-area screenshot of the tab the user acted on (image fallback, snapshot) | Only after a user gesture on that tab (menu, shortcut, toolbar) |
@@ -18,6 +18,6 @@ Single purpose: check the origin and reliability of text, images and pages the u
 | `omnibox` keyword `wys` | Type `wys <text or link>` in the address bar to check it | On Enter |
 | **Optional** host: `<all_urls>` | (1) Download an image the user right-clicked when its host blocks cross-origin reads; (2) let a local model fetch a page it found via its search tool; (3) a custom API endpoint or self-hosted SearXNG instance | Requested per origin, inside a click, with an explanation; declining falls back to a screenshot or search snippets |
 
-Content script (`<all_urls>`, `document_idle`): shows the floating *Check source* chip on text selection (can be disabled globally or per site), answers "what is selected?" when asked, and extracts the post under the cursor for "Check source of this post". It does not read or send page content on its own, does not modify pages, and injects nothing except its own chip inside a closed shadow root. The sanitized copy of a page kept in history is produced by a separate script (`snapshot-capture.js`) injected with `scripting.executeScript` only into the tab a check was started from, at the moment of the check.
+Content script (`<all_urls>`, `document_idle`): shows the floating *Check source* chip on text selection (can be disabled globally or per site), answers "what is selected?" when asked, and extracts the post under the cursor for the right-click "… this post" items. It does not read or send page content on its own, does not modify pages, and injects nothing except its own chip inside a closed shadow root. The sanitized copy of a page kept in history is produced by a separate script (`snapshot-capture.js`) injected with `scripting.executeScript` only into the tab a check was started from, at the moment of the check.
 
 No remote code is loaded. No analytics, no telemetry, no third-party scripts.

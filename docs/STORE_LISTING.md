@@ -34,7 +34,7 @@ WhatsYourSource has one purpose: to check the origin and reliability of content 
 
 See `docs/PERMISSIONS.md` for the full table. Short forms:
 
-- `contextMenus`: adds "Check source of selection / image / post / page" to the right-click menu.
+- `contextMenus`: adds "Fact-check / Explain / Timeline behind / Find flaws and inaccuracies in" items for the selection, image, post, page or link to the right-click menu.
 - `storage` + `unlimitedStorage`: settings and API keys (local only, never synced); the local history of checks with page snapshots can exceed the default quota.
 - `activeTab` + `scripting`: read the current selection (in the frame the user right-clicked, or on pages opened before the extension was installed) and, when a check starts from the menu or shortcut, inject the script that makes the saved copy of the page and take a visible-area screenshot of that tab.
 - `sidePanel`: the results UI.

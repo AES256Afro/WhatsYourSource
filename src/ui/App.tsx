@@ -171,6 +171,8 @@ export function App() {
             }
             previous={phase.previous}
             onOpenDetail={openDetail}
+            settings={settings}
+            onSettings={() => openSettings()}
             onNewCheck={() => setView('home')}
             webmodeVariant={settings.webmodeVariant}
             searchTool={settings.providers.openaiCompat.searchTool !== 'none' ? settings.providers.openaiCompat.searchTool : undefined}
@@ -243,6 +245,8 @@ export function App() {
             onRecheck={(input) => void start({ ...input, ask: input.ask ?? DEFAULT_ASK })}
             otherAsks={(input) => otherAsks(input.ask, settings)}
             webmodeVariant={settings.webmodeVariant}
+            settings={settings}
+            onSettings={() => openSettings()}
             onDeleted={() => {
               setHistoryTick((t) => t + 1);
               setView('history');

@@ -45,9 +45,9 @@ CHOOSE WHAT TO ASK
 Pick one in the side panel for the checks you start there, or set a default for highlighting, the shortcut and right-click. On any result, "Ask instead" puts a different question to the same content.
 
 CHECK MORE THAN TEXT
-• Images: right-click → Check source of this image. Metadata (EXIF, Content Credentials, AI-generator hints) is read on your device first, then the image is checked for its earliest appearance. Reverse image search on Google Lens, TinEye, Bing and Yandex. Images you have checked before are recognised.
-• Posts: right-click anywhere in a social post → Check source of this post. The post's text, links and images are checked together.
-• Links and pages: right-click a link → Check source of linked page; check the page you are on; or paste any text or link into the panel.
+• Images: right-click → Fact-check this image. Metadata (EXIF, Content Credentials, AI-generator hints) is read on your device first, then the image is checked for its earliest appearance. Reverse image search on Google Lens, TinEye, Bing and Yandex. Images you have checked before are recognised.
+• Posts: right-click anywhere in a social post → Fact-check this post. The post's text, links and images are checked together.
+• Links and pages: right-click a link → Fact-check linked page; check the page you are on; or paste any text or link into the panel.
 
 EVIDENCE THAT DOES NOT DEPEND ON THE AI
 • Published fact-checks from PolitiFact, Snopes, AFP, Full Fact and hundreds more (free Google Fact Check Tools key).
@@ -117,7 +117,7 @@ Paste one per box; the dashboard lists exactly the permissions in the manifest.
 | Permission | Justification |
 |---|---|
 | **activeTab** | Reads the current selection and takes a visible-area screenshot of the tab the user acted on, only after the user's own gesture (context menu, keyboard shortcut, toolbar button). The screenshot is used when an image cannot be downloaded (host blocks cross-origin reads) and for the local page copy saved to the user's history. |
-| **contextMenus** | Adds the right-click items "Check source of selection", "Check source of this image", "Check source of this post", "Check source of this page", "Check source of linked page" and "Open selection in Google AI Mode". |
+| **contextMenus** | Adds the right-click items "Fact-check", "Explain", "Timeline behind" and "Find flaws and inaccuracies in" for the selection, the image, the post, the page or the linked page (plus your own question when you have written one), and "Open selection in Google AI Mode". |
 | **scripting** | Injects a one-off script into the tab a check was started from, at the moment of the check, to produce the sanitised copy of the page that is saved locally with the result, and to read the selection on pages that were open before the extension was installed. Never runs without a user-initiated check on that tab. |
 | **sidePanel** | The results, settings and history live in the side panel. |
 | **storage** | Settings and the user's own API keys (stored locally, never synced) and the hand-off of a pending check between the background worker and the side panel (storage.session). |

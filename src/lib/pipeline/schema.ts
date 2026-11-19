@@ -174,6 +174,19 @@ export interface LocalProvenance {
   bytes?: number;
 }
 
+/** A further question about a finished check, and the model's answer in prose. */
+export interface FollowUp {
+  id: string;
+  createdAt: number;
+  question: string;
+  answer: string;
+  /** The model that answered this one (the check's own, unless that provider is no longer set up). */
+  provider: { id: ProviderId; label: string; model: string };
+  /** Pages the provider's search actually retrieved for this answer. */
+  sources: { title: string; url: string; domain: string }[];
+  usage?: Usage;
+}
+
 export interface CheckResult {
   id: string;
   createdAt: number;
@@ -208,6 +221,8 @@ export interface CheckResult {
   /** Set when the JSON block was missing or invalid; the narrative still shows. */
   degraded?: boolean;
   rawText: string;
+  /** Questions asked after the result, oldest first. */
+  followUps?: FollowUp[];
 }
 
 /** Split the model output into the narrative and the last ```json block (or a trailing bare object). */

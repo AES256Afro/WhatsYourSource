@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CheckResult, TimelineEvent } from '@/lib/pipeline/schema';
 import { resultToTsvRow, TABLE_HEADINGS_TSV } from '@/lib/history/row';
-import type { ProviderId } from '@/lib/storage/settings';
+import type { ProviderId, Settings } from '@/lib/storage/settings';
 import { googleAiModeUrl, type GoogleAiModeVariant } from '@/lib/googleAiMode';
 import { ClaimList } from './ClaimList';
 import { EvidencePanel, FactCheckBanner, localeDate, WhatWasSent } from './EvidencePanel';
@@ -15,6 +15,9 @@ import { ProvenancePanel } from './ProvenancePanel';
 import { PROVIDER_LABELS, providerShortName } from '@/lib/providers/registry';
 import { useSeenBefore } from '../hooks/useSeenBefore';
 import type { PreviousResult } from '../hooks/useCheckRun';
+import { useFollowUps } from '../hooks/useFollowUps';
+import { FollowUpBox, FollowUpList } from './FollowUps';
+import type { FollowUp } from '@/lib/pipeline/schema';
 import { SearchSuggestions } from './SearchSuggestions';
 import { SourceList } from './SourceList';
 import { VerdictBanner } from './VerdictBanner';
@@ -41,6 +44,8 @@ export function ResultView({
   note,
   previous,
   onOpenDetail,
+  settings,
+  onSettings,
 }: {
   result: CheckResult;
   onRecheck: () => void;
@@ -67,8 +72,12 @@ export function ResultView({
   previous?: PreviousResult;
   /** Opens a saved check (the previous result, an earlier check of the same image). */
   onOpenDetail?: (id: string) => void;
+  /** With settings, the result takes follow-up questions (they name the model that answers). */
+  settings?: Settings;
+  onSettings?: () => void;
 }) {
   const seenBefore = useSeenBefore(result);
+  const thread = useFollowUps(result, settings);
   // Copy outcome goes into the footer's live region, so it is announced and survives a failed clipboard write.
   const [copyNote, setCopyNote] = useState<{ ok: boolean; text: string } | null>(null);
   const copyText = async (text: string, done: string, failed: string, ms = 3500) => {
@@ -81,7 +90,7 @@ export function ResultView({
     setTimeout(() => setCopyNote(null), ms);
   };
   // Plain text only, and no NUL characters (some applications stop reading a paste at the first one).
-  const copy = () => copyText(toMarkdown(result).replaceAll('\0', ''), 'Copied as Markdown', 'Couldn’t copy — select the text instead', 2500);
+  const copy = () => copyText(toMarkdown(result, thread.items).replaceAll('\0', ''), 'Copied as Markdown', 'Couldn’t copy — select the text instead', 2500);
   // One tab-separated row, in the columns of the History export: paste it under the last row of a
   // sheet in Excel, Google Sheets or Numbers to add this check to a log you already keep.
   const copyRow = () => copyText(resultToTsvRow(result, note ?? ''), 'Row copied — paste it under the last row of your sheet', 'Couldn’t copy the row');
@@ -305,9 +314,17 @@ export function ResultView({
             )}
           </span>
         </div>
+        {/* Last in the scroll, so the thread sits just above the box it is asked from. */}
+        <FollowUpList thread={thread} />
+        {embedded && settings && <FollowUpBox thread={thread} onSettings={onSettings} />}
       </div>
+      {!embedded && settings && (
+        <div className="shrink-0 border-t border-line bg-paper px-3.5 pt-2.5">
+          <FollowUpBox thread={thread} onSettings={onSettings} />
+        </div>
+      )}
       {!embedded && (
-        <div className="flex shrink-0 gap-2 border-t border-line bg-paper px-3.5 py-2.5">
+        <div className={`flex shrink-0 gap-2 bg-paper px-3.5 py-2.5 ${settings ? '' : 'border-t border-line'}`}>
           {/* The outcome shows on the button itself: the status line is far down the scrolled result. */}
           <button className="wys-btn wys-btn-narrow" onClick={() => void copy()} aria-label="Copy as Markdown" title="Copy as Markdown">
             {copyNote?.ok ? <Check size={15} /> : <Copy size={15} />} <span className="wys-btn-label">{copyNote?.ok ? 'Copied' : 'Copy'}</span>
@@ -362,7 +379,7 @@ function fmtK(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
-function toMarkdown(r: CheckResult): string {
+function toMarkdown(r: CheckResult, followUps: FollowUp[] = r.followUps ?? []): string {
   const lines: string[] = [];
   const subject =
     r.input.kind === 'text'
@@ -413,6 +430,11 @@ function toMarkdown(r: CheckResult): string {
     if (r.missingContext) lines.push(`- What it leaves out: ${r.missingContext}`);
     if (r.wouldChange) lines.push(`- What would change this: ${r.wouldChange}`);
     lines.push('');
+  }
+  if (followUps.length) {
+    lines.push('**Follow-up questions**');
+    for (const f of followUps)
+      lines.push(`Q: ${f.question}`, '', f.answer, ...(f.sources.length ? ['', `Sources: ${f.sources.map((s) => s.url).join(' , ')}`] : []), '');
   }
   if (r.pageCapture?.firstCaptured) lines.push(`_Page first archived by the Wayback Machine on ${r.pageCapture.firstCaptured}._`, '');
   lines.push(`_Checked with ${r.provider.label} (${r.provider.model}) via WhatsYourSource, ${new Date(r.createdAt).toISOString()}_`);

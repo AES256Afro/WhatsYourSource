@@ -34,6 +34,14 @@ export function checkToStandaloneHtml(check: StoredCheck, snapshot?: StoredSnaps
     .split(/\n{2,}/)
     .map((p) => `<p>${e(p.trim())}</p>`)
     .join('');
+  const paras = (t: string) =>
+    t
+      .split(/\n{2,}/)
+      .map((p) => `<p>${e(p.trim())}</p>`)
+      .join('');
+  const followUps = r.followUps?.length
+    ? `<h3>Follow-up questions</h3>${r.followUps.map((f) => `<p><strong>${e(f.question)}</strong></p>${paras(f.answer)}${f.sources.length ? `<p><small>${f.sources.map((s) => `<a href="${e(s.url)}">${e(s.domain || s.title)}</a>`).join(' · ')}</small></p>` : ''}`).join('')}`
+    : '';
   const pageHtml = snapshot ? buildSnapshotSrcdoc(snapshot, { loadImages: false }) : '';
   const pageSection = snapshot
     ? `<h2>Saved page</h2><p><small>${e(snapshot.title)} · <a href="${e(snapshot.url)}">${e(snapshot.url)}</a> · captured ${e(new Date(snapshot.capturedAt).toLocaleString())}</small></p><iframe sandbox="allow-popups allow-popups-to-escape-sandbox" style="width:100%;height:80vh;border:1px solid #E3E6EA;border-radius:8px" srcdoc="${pageHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></iframe>`
@@ -55,6 +63,7 @@ ${timeline}
 ${original}
 ${claims}
 ${sources}
+${followUps}
 ${check.note ? `<h3>Your note</h3><p>${e(check.note)}</p>` : ''}
 ${pageSection}
 </body></html>`;

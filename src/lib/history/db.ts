@@ -2,7 +2,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { askLabel, normalizeAsk } from '../pipeline/question';
 import type { CheckInput } from '../messaging/protocol';
 import type { ProviderId } from '../storage/settings';
-import type { CheckResult, VerdictKind } from '../pipeline/schema';
+import type { CheckResult, FollowUp, VerdictKind } from '../pipeline/schema';
 import { domainOf, truncate } from '../util/url';
 
 /**
@@ -242,7 +242,18 @@ export async function updateCheckResult(result: CheckResult): Promise<boolean> {
   const db = await getDb();
   const tx = db.transaction('checks', 'readwrite');
   const c = await tx.store.get(result.id);
-  if (c) await tx.store.put({ ...c, result });
+  // Follow-ups are written by their own call; a result that does not carry them must not drop them.
+  if (c) await tx.store.put({ ...c, result: { ...result, followUps: result.followUps ?? c.result.followUps } });
+  await tx.done;
+  return !!c;
+}
+
+/** Add a follow-up to a saved check, keeping the newest `max`. False when the check is not in history. */
+export async function appendFollowUp(checkId: string, followUp: FollowUp, max = 30): Promise<boolean> {
+  const db = await getDb();
+  const tx = db.transaction('checks', 'readwrite');
+  const c = await tx.store.get(checkId);
+  if (c) await tx.store.put({ ...c, result: { ...c.result, followUps: [...(c.result.followUps ?? []), followUp].slice(-max) } });
   await tx.done;
   return !!c;
 }

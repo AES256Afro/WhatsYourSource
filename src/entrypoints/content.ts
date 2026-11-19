@@ -10,7 +10,7 @@ import { pageTriggerTarget, readPublicSettings, SETTINGS_KEY, SHORTCUT_KEY, type
  * Runs on every page, does three small things and nothing else:
  *  1. shows a floating "Check source" chip when text is selected (if enabled),
  *  2. answers "what is selected?" for the background/popup,
- *  3. extracts the post under the cursor for "Check source of this post".
+ *  3. extracts the post under the cursor for the right-click "… this post" items.
  * Page snapshots for history are a separate script (`snapshot-capture.ts`) injected only when a
  * check runs, so Readability and DOMPurify never load on pages that are merely being read.
  * Nothing is sent anywhere until the user clicks.
@@ -123,7 +123,7 @@ export default defineContentScript({
     ctx.addEventListener(document, 'pointerdown', (e) => {
       if (!chip.contains(e.target as Node | null)) chip.hide();
     });
-    // Remember what was under the cursor when the context menu opened, for "Check source of this post".
+    // Remember what was under the cursor when the context menu opened, for the "… this post" items.
     // Capture phase (a site that stops propagation must not leave a stale target), real clicks only,
     // and the innermost element even when it sits inside a web component's open shadow root.
     let lastContextTarget: Element | null = null;

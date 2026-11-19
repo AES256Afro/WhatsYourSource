@@ -215,7 +215,7 @@ export function HomeView({
         <p className="m-0 flex items-center gap-2 px-1 text-[12px] leading-4 text-ink-2">
           <Image size={14} className="shrink-0 text-ink-3" />
           <span>
-            An image: right-click it on the page → <strong className="font-medium text-ink">Check source of this image</strong>
+            An image: right-click it on the page → <strong className="font-medium text-ink">Fact-check this image</strong>
           </span>
         </p>
         <form
