@@ -6,10 +6,6 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 
 ## [1.2.0] - 2026-11-19
 
-The same extension as 1.1.1 under a minor version number: follow-up questions and the per-question right-click menu are new features, so they get 1.2.0. Nothing in the code changed between the two.
-
-## [1.1.1] - 2026-11-19
-
 ### Added
 - Follow-up questions. Every result and saved check has a box at the bottom: ask anything further and the model that answered the check (hosted or local) replies with the content, its earlier answer and the thread so far as context, searching again when it can. Answers stream in under the result, list the pages retrieved, are saved with the check, and go into Copy as Markdown and the HTML export.
 - The right-click menu offers every question for what is under the cursor: Fact-check, Explain, Timeline behind, Find flaws and inaccuracies in — for the selection, an image, the post, the page or a link — and your own question once you have written one in Settings.
