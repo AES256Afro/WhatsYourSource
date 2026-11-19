@@ -4,6 +4,10 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-19
+
+The same extension as 1.1.1 under a minor version number: follow-up questions and the per-question right-click menu are new features, so they get 1.2.0. Nothing in the code changed between the two.
+
 ## [1.1.1] - 2026-11-19
 
 ### Added
