@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { PROVIDER_LABELS } from '@/lib/providers/registry';
 import { searchFactChecks } from '@/lib/lookups/factcheck';
 import type { ProviderId, Settings } from '@/lib/storage/settings';
+import { normalizeSiteEntry } from '@/lib/storage/publicSettings';
 import { AskPicker } from './AskPicker';
 import { Label } from './common';
 import { Globe, Shield } from './Icons';
@@ -114,8 +115,8 @@ export function SettingsView({
       <div className="flex flex-col gap-1.5">
         <Label>Question</Label>
         <p className="m-0 text-[12px] leading-4 text-ink-2">
-          What highlighting, the shortcut, right-click and the address bar ask. In the side panel you can pick a different one for the checks you start there,
-          and a finished result lets you ask something else about the same content.
+          What highlighting, the shortcut and the address bar ask. Right-click lists every question, so you pick one there. In the side panel you can pick a
+          different one for the checks you start there, and a finished result lets you ask something else about the same content.
         </p>
         <div className="wys-card px-3 py-2.5">
           <AskPicker
@@ -211,17 +212,8 @@ export function SettingsView({
                   ...s,
                   privacy: {
                     ...s.privacy,
-                    disabledSites: v
-                      .split(/\n+/)
-                      .map(
-                        (x) =>
-                          x
-                            .trim()
-                            .replace(/^https?:\/\//, '')
-                            .replace(/^www\./, '')
-                            .split('/')[0] ?? '',
-                      )
-                      .filter(Boolean),
+                    // As the page reports its host: lower case, punycode, no port (compared that way in the content script).
+                    disabledSites: v.split(/\n+/).map(normalizeSiteEntry).filter(Boolean),
                   },
                 }))
               }

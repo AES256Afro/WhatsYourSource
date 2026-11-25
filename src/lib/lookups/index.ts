@@ -35,6 +35,28 @@ function textOf(input: CheckInput): string {
   }
 }
 
+const TRACKING_PARAM = /^(utm_|fbclid$|gclid$|dclid$|msclkid$|igshid$|mc_|ref$|ref_|_hs|mkt_tok$|yclid$|si$)/i;
+
+/**
+ * The address the Wayback Machine is asked about: scheme, host and path only. The query and fragment
+ * can carry webmail thread ids, share tokens or reset links, and archive.org is not the user's
+ * provider. Tracking parameters are dropped; when any other parameter remains, the query is what
+ * identifies the page (a video id, an article id), so the path alone would date a different page and
+ * nothing is sent.
+ */
+export function archiveLookupUrl(url: string | undefined): string | undefined {
+  if (!url || !isPublicHttpUrl(url)) return undefined;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return undefined;
+  }
+  const kept = [...u.searchParams.keys()].filter((k) => !TRACKING_PARAM.test(k));
+  if (kept.length) return undefined;
+  return `${u.protocol}//${u.host}${u.pathname}`;
+}
+
 function pageUrlOf(input: CheckInput): string {
   if (input.kind === 'page') return input.url;
   if (input.kind === 'post') return input.permalink ?? input.pageUrl;
@@ -70,9 +92,9 @@ export function startLookups(
       : Promise.resolve({ factChecks: [] });
   // A hanging fact-check request must not hold the result's evidence (or anything after it) forever.
   const factChecksBounded = withTimeout(factChecks, LOOKUP_BUDGET_MS.factChecks, { factChecks: [] });
-  const page = pageUrlOf(input);
+  const page = archiveLookupUrl(pageUrlOf(input));
   const pageCapture: Promise<FirstCapture | undefined> =
-    l.archive && isPublicHttpUrl(page)
+    l.archive && page
       ? withTimeout(
           firstCapture(page, signal).catch(() => undefined),
           LOOKUP_BUDGET_MS.archive,
@@ -113,15 +135,17 @@ export async function sourceRatings(
 ): Promise<Pick<SourceLookups, 'credibility' | 'mixNotes'>> {
   if (!settings.lookups.credibility) return { credibility: {}, mixNotes: [] };
   const domains = sourceHostsOrUrls.map(domainOf).filter(Boolean);
-  const credibility = await rateDomains([...domains, ...(originalUrl ? [originalUrl] : [])]).catch(() => ({}));
+  // Full URLs, not just domains: some ratings cover one section of a site (rollingstone.com/politics).
+  const credibility = await rateDomains([...sourceHostsOrUrls, ...(originalUrl ? [originalUrl] : [])]).catch(() => ({}));
   return { credibility, mixNotes: sourceMixNotes(domains, credibility) };
 }
 
 /** When the Wayback Machine first saw the original source: a network call that can take seconds. */
 export function originalSourceCapture(originalUrl: string | undefined, settings: Settings, signal: AbortSignal): Promise<FirstCapture | undefined> {
-  if (!settings.lookups.archive || !originalUrl || !isPublicHttpUrl(originalUrl)) return Promise.resolve(undefined);
+  const url = archiveLookupUrl(originalUrl);
+  if (!settings.lookups.archive || !url) return Promise.resolve(undefined);
   return withTimeout(
-    firstCapture(originalUrl, signal).catch(() => undefined),
+    firstCapture(url, signal).catch(() => undefined),
     LOOKUP_BUDGET_MS.archive,
     undefined,
   );

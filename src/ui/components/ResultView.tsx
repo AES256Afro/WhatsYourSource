@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CheckResult, TimelineEvent } from '@/lib/pipeline/schema';
-import { resultToTsvRow, TABLE_HEADINGS_TSV } from '@/lib/history/row';
+import { localStamp, resultToTsvRow, TABLE_HEADINGS_TSV } from '@/lib/history/row';
 import type { ProviderId, Settings } from '@/lib/storage/settings';
 import { googleAiModeUrl, type GoogleAiModeVariant } from '@/lib/googleAiMode';
 import { ClaimList } from './ClaimList';
@@ -33,6 +33,7 @@ export function ResultView({
   onNewCheck,
   saved,
   saveError,
+  notSaved,
   snapshotNote,
   embedded,
   webmodeVariant,
@@ -53,6 +54,8 @@ export function ResultView({
   saved?: boolean;
   /** Set when saving to history failed; shown where the "Saved" badge would be. */
   saveError?: string | null;
+  /** Set when the check was deliberately not saved (a private window); shown where the "Saved" badge would be. */
+  notSaved?: string;
   snapshotNote?: string;
   /** Inside the history detail view: no action bar, no own scroll container, the header already names the subject. */
   embedded?: boolean;
@@ -163,7 +166,9 @@ export function ResultView({
         )}
         {result.degraded && (
           <div className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-[12px] leading-4 text-warn-ink">
-            The model answered in prose only, so read the assessment below; claims and sources could not be extracted. Press Re-check below to try again.
+            {result.truncated
+              ? 'The answer stopped before it was finished, so parts may be missing. Press Re-check below to try again.'
+              : 'The model answered in prose only, so read the assessment below; claims and sources could not be extracted. Press Re-check below to try again.'}
           </div>
         )}
 
@@ -307,6 +312,7 @@ export function ResultView({
                 <Check size={12} /> {snapshotNote ?? 'Saved to history'}
               </span>
             )}
+            {!copyNote && notSaved && <span className="font-medium">{notSaved}</span>}
             {saveError && (
               <span className="font-semibold text-bad" title={saveError}>
                 Couldn’t save to history
@@ -437,6 +443,9 @@ function toMarkdown(r: CheckResult, followUps: FollowUp[] = r.followUps ?? []): 
       lines.push(`Q: ${f.question}`, '', f.answer, ...(f.sources.length ? ['', `Sources: ${f.sources.map((s) => s.url).join(' , ')}`] : []), '');
   }
   if (r.pageCapture?.firstCaptured) lines.push(`_Page first archived by the Wayback Machine on ${r.pageCapture.firstCaptured}._`, '');
-  lines.push(`_Checked with ${r.provider.label} (${r.provider.model}) via WhatsYourSource, ${new Date(r.createdAt).toISOString()}_`);
+  // Local time, as every other place the check's time is shown (an evening check is not dated tomorrow).
+  lines.push(`_Checked with ${r.provider.label} (${r.provider.model}) via WhatsYourSource, ${localStamp(r.createdAt)}_`);
   return lines.join('\n');
 }
+
+export { toMarkdown as resultToMarkdown };

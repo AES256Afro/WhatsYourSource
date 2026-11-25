@@ -58,18 +58,31 @@ export function DetailView({
     [],
   );
 
+  // A failed read shows a line with a retry instead of "Loading…" forever.
+  const [loadError, setLoadError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
-    void getCheck(id).then((c) => {
-      if (!alive) return;
-      setCheck(c ?? null);
-      setNoteText(c?.note ?? '');
-    });
-    void getSnapshot(id).then((s) => alive && setSnapshot(s ?? null));
+    getCheck(id).then(
+      (c) => {
+        if (!alive) return;
+        setLoadError(false);
+        setCheck(c ?? null);
+        setNoteText(c?.note ?? '');
+      },
+      (e: unknown) => {
+        console.warn('[wys] could not read the saved check', e);
+        if (alive) setLoadError(true);
+      },
+    );
+    getSnapshot(id).then(
+      (s) => alive && setSnapshot(s ?? null),
+      () => alive && setSnapshot(null), // the result still shows; the Saved page tab says there is none
+    );
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [id, attempt]);
 
   // Only when the Saved page tab is open: parsing up to 1.5 MB of HTML is not free on the Result tab.
   const srcdoc = useMemo(() => (snapshot && tab === 'page' ? buildSnapshotSrcdoc(snapshot, { loadImages }) : ''), [snapshot, loadImages, tab]);
@@ -78,15 +91,26 @@ export function DetailView({
     if (check) title.current?.focus();
   }, [check?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- once per loaded row, not on every note edit
 
+  if (check === undefined && loadError)
+    return (
+      <div role="alert" className="flex items-center gap-2 p-3.5 text-[13px] text-bad">
+        <span className="grow">Couldn’t read this check from your history.</span>
+        <button className="wys-btn h-8 px-3 text-[12px]" onClick={() => setAttempt((n) => n + 1)}>
+          Try again
+        </button>
+      </div>
+    );
   if (check === undefined) return <div className="p-3.5 text-[13px] text-ink-2">Loading…</div>;
   if (check === null) return <div className="p-3.5 text-[13px] text-ink-2">This check is no longer in your history.</div>;
 
   const openSnapshotTab = () => {
     void browser.tabs.create({ url: `${browser.runtime.getURL('/snapshot.html')}?id=${encodeURIComponent(check.id)}` });
   };
-  const exportHtml = guard('Export', () =>
-    downloadText(checkToStandaloneHtml(check, snapshot), `${safeFilename(check.verdictLabel + ' ' + check.title)}.html`),
-  );
+  const exportHtml = guard('Export', async () => {
+    // The row as stored now: follow-ups asked in this view since it opened are in history, not in `check`.
+    const fresh = (await getCheck(check.id)) ?? check;
+    downloadText(checkToStandaloneHtml({ ...fresh, note }, snapshot), `${safeFilename(fresh.verdictLabel + ' ' + fresh.title)}.html`);
+  });
   const remove = guard('Delete', async () => {
     if (!confirm('Delete this check and its saved page? This cannot be undone.')) return;
     await deleteCheck(check.id);

@@ -38,7 +38,7 @@ Then open the side panel from the toolbar icon, pick how to check sources (a fre
 
 ## Privacy
 
-Nothing leaves your browser until you press Check, and then only what you asked about goes to the one provider you configured, with your own key. No accounts, no servers of our own, no analytics. The full policy, including exactly what each provider and lookup receives, is at:
+Nothing leaves your browser until you start a check (or press Verify on a key in Settings), and then only what you asked about goes to the one provider you configured, with your own key. No accounts, no servers of our own, no analytics. The full policy, including exactly what each provider and lookup receives, is at:
 
 **https://github.com/AES256Afro/WhatsYourSource/blob/main/docs/PRIVACY.md**
 
@@ -56,7 +56,9 @@ npm run test:e2e       # loads .output/chrome-mv3 into Chromium/Edge with Playwr
 npm run preview        # side panel + popup in a plain browser tab against a fake browser API
                        # (?scenario=fresh|home|popup|local|image) — handy for UI work without reloading the extension
 npm run lint           # ESLint (type-aware) · npm run format — Prettier
-npm run screenshots    # replaces store/*.png with plain captures of the panel (needs `npm run preview` running)
+npm run screenshots    # replaces store/*.png with plain captures of the panel (needs `npm run preview` running;
+                       # store/ is left as it was if the run fails)
+npm run notices        # regenerates public/THIRD_PARTY_NOTICES.txt after a dependency change
 ```
 
 ### Releasing
@@ -65,7 +67,7 @@ npm run screenshots    # replaces store/*.png with plain captures of the panel (
 npm run build:all && npm run zip && npm run zip:firefox
 ```
 
-writes `.output/whatsyoursource-<version>-chrome.zip` (Chrome Web Store and Edge Add-ons), `-firefox.zip` (AMO) and `-sources.zip` (AMO source submission; build with Node 22, `npm ci`, `npm run build:firefox`). `npm run lint:firefox` runs the AMO linter; the warnings it reports are explained in `docs/STORE_LISTING.md`. Screenshots and promo tiles come from `npm run screenshots` with `npm run preview` running. The version comes from `package.json`.
+writes `.output/whatsyoursource-<version>-chrome.zip` (Chrome Web Store and Edge Add-ons), `-firefox.zip` (AMO) and `-sources.zip` (AMO source submission; build with Node 22.12+, 24 or 26+ (`"engines"` in `package.json`), `npm ci`, `npm run build:firefox`). `npm run lint:firefox` runs the AMO linter; the warnings it reports are explained in `docs/STORE_LISTING.md`. Screenshots and promo tiles come from `npm run screenshots` with `npm run preview` running. The version comes from `package.json`.
 
 See [MILESTONES.md](MILESTONES.md) for the plan to release, [docs/SWEEPS.md](docs/SWEEPS.md) for the audit ledger and [docs/STORE_LISTING.md](docs/STORE_LISTING.md) for the store copy.
 
@@ -91,3 +93,7 @@ A local model can't search by itself. The quickest private search backend is Sea
 ### Settings and keys
 
 Keys live in `browser.storage.local` on your device. They are never synced and are only ever sent to the provider you picked. The Gemini free tier may use prompts to improve Google's products; a paid key does not.
+
+## License
+
+MIT (see [LICENSE](LICENSE)), except `src/data/reliable-sources.json`: the outlet ratings are adapted from Wikipedia's [Reliable sources/Perennial sources](https://en.wikipedia.org/wiki/Wikipedia:Reliable_sources/Perennial_sources) list and are licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), not MIT. The licences of the bundled third-party packages are in `public/THIRD_PARTY_NOTICES.txt`, which ships in every build.

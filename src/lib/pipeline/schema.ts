@@ -44,15 +44,35 @@ export function toneForVerdict(kind: VerdictKind): Tone {
 
 export const ConfidenceSchema = z.enum(['high', 'medium', 'low']);
 
-const nullableStr = z.string().nullish();
 /** An optional detail (a date, a title): a number becomes text, anything else unusable becomes nothing. It can never fail the answer. */
 const looseStr = z.preprocess((v) => (typeof v === 'number' ? String(v) : typeof v === 'string' ? v : undefined), z.string().nullish());
-/** A list of non-empty strings, tolerant of nulls, numbers and a missing field. */
+/** Optional prose (missing context, notes): a list of sentences is joined, anything else unusable becomes nothing. */
+const looseText = z.preprocess(
+  (v) =>
+    typeof v === 'string'
+      ? v
+      : typeof v === 'number'
+        ? String(v)
+        : Array.isArray(v)
+          ? (v as unknown[]).filter((x): x is string => typeof x === 'string' && !!x.trim()).join(' ') || undefined
+          : undefined,
+  z.string().nullish(),
+);
+/** A list of non-empty strings, tolerant of nulls, numbers and a missing field; any other shape is an empty list. */
 const stringList = z.preprocess(
   (v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((x) => typeof x === 'string' && x.trim()) : []),
   z.array(z.string()),
 );
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** Enum values as models write them: "Misleading", " HIGH ", "older than claimed". */
+const enumText = (v: unknown) =>
+  typeof v === 'string'
+    ? v
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_]+/g, '-')
+    : v;
+const textOr = (fallback: string) => looseStr.transform((v) => v ?? fallback);
 
 /** What we ask the model to put in its ```json block. Lenient on purpose; the UI copes with gaps. */
 export const ModelResultSchema = z.object({
@@ -60,39 +80,31 @@ export const ModelResultSchema = z.object({
   title: looseStr,
   topic: looseStr,
   verdict: z.object({
-    label: z
-      .string()
-      .nullish()
-      .transform((v) => v?.trim() || 'Assessment'),
-    kind: VerdictKindSchema.catch('unverified'),
-    confidence: ConfidenceSchema.catch('medium'),
-    summary: z
-      .string()
-      .nullish()
-      .transform((v) => v ?? ''),
+    label: looseStr.transform((v) => v?.trim() || 'Assessment'),
+    kind: z.preprocess(enumText, VerdictKindSchema).catch('unverified'),
+    confidence: z.preprocess(enumText, ConfidenceSchema).catch('medium'),
+    summary: textOr(''),
   }),
-  originalSource: z
-    .object({
-      title: z
-        .string()
-        .nullish()
-        .transform((v) => v ?? ''),
-      url: nullableStr,
-      publisher: nullableStr,
-      date: nullableStr,
-      how: nullableStr,
-    })
-    .nullish(),
+  // A bare string names the source; any other shape that is not an object is dropped, not fatal.
+  originalSource: z.preprocess(
+    (v) => (typeof v === 'string' ? (v.trim() ? { title: v } : undefined) : isRecord(v) ? v : undefined),
+    z
+      .object({
+        title: textOr(''),
+        url: looseStr,
+        publisher: looseStr,
+        date: looseStr,
+        how: looseStr,
+      })
+      .nullish(),
+  ),
   claims: z.preprocess(
     (v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((c) => isRecord(c) && typeof c.text === 'string' && c.text.trim()) : []),
     z.array(
       z.object({
         text: z.string().min(1),
-        status: ClaimStatusSchema.catch('unverified'),
-        note: z
-          .string()
-          .nullish()
-          .transform((v) => v ?? ''),
+        status: z.preprocess(enumText, ClaimStatusSchema).catch('unverified'),
+        note: textOr(''),
         sourceUrls: stringList,
       }),
     ),
@@ -101,28 +113,28 @@ export const ModelResultSchema = z.object({
     (v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((s) => isRecord(s) && typeof s.url === 'string' && s.url.trim()) : []),
     z.array(
       z.object({
-        title: z
-          .string()
-          .nullish()
-          .transform((v) => v ?? ''),
+        title: textOr(''),
         url: z.string().min(1),
         date: looseStr,
       }),
     ),
   ),
-  evidence: z
-    .object({
-      for: stringList,
-      against: stringList,
-    })
-    .nullish(),
+  evidence: z.preprocess(
+    (v) => (isRecord(v) ? v : undefined),
+    z
+      .object({
+        for: stringList,
+        against: stringList,
+      })
+      .nullish(),
+  ),
   timeline: z.preprocess(
     (v): unknown[] => (Array.isArray(v) ? (v as unknown[]).filter((t) => isRecord(t) && typeof t.event === 'string' && t.event.trim()) : []),
     z.array(z.object({ date: looseStr, event: z.string().min(1), sourceUrl: looseStr })),
   ),
-  missingContext: nullableStr,
-  wouldChange: nullableStr,
-  notes: nullableStr,
+  missingContext: looseText,
+  wouldChange: looseText,
+  notes: looseText,
 });
 export type ModelResult = z.infer<typeof ModelResultSchema>;
 
@@ -172,6 +184,8 @@ export interface LocalProvenance {
   height?: number;
   mime?: string;
   bytes?: number;
+  /** Set when the file's metadata could not be read at all (e.g. 'WebP'), so its absence is not a finding. */
+  metadataUnread?: string;
 }
 
 /** A further question about a finished check, and the model's answer in prose. */
@@ -218,28 +232,76 @@ export interface CheckResult {
   originalCapture?: FirstCapture;
   credibility?: Record<string, Credibility>;
   mixNotes?: string[];
-  /** Set when the JSON block was missing or invalid; the narrative still shows. */
+  /** Set when the JSON block was missing or invalid, or the answer was cut off; the narrative still shows. */
   degraded?: boolean;
+  /** The model stopped before finishing (output limit, or a tool/server stop); the answer is incomplete. */
+  truncated?: boolean;
   rawText: string;
   /** Questions asked after the result, oldest first. */
   followUps?: FollowUp[];
 }
 
-/** Split the model output into the narrative and the last ```json block (or a trailing bare object). */
-/** Reasoning models (Qwen3, DeepSeek-R1 via Ollama/LM Studio) wrap their thinking in <think> tags; none of it is the answer. */
+/**
+ * Reasoning models (Qwen3, DeepSeek-R1 via Ollama/LM Studio) wrap their thinking in <think> tags; none
+ * of it is the answer. An unclosed <think> drops the rest. One forward pass, so it stays linear on long
+ * streams (it runs on every flush of the live view).
+ */
 export function stripThinking(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').replace(/<think>[\s\S]*$/i, '');
+  const open = /<think>/gi;
+  const close = /<\/think>\s*/gi;
+  let out = '';
+  let at = 0;
+  for (;;) {
+    open.lastIndex = at;
+    const o = open.exec(text);
+    if (!o) return out + text.slice(at);
+    out += text.slice(at, o.index);
+    close.lastIndex = o.index + o[0].length;
+    const c = close.exec(text);
+    if (!c) return out;
+    at = c.index + c[0].length;
+  }
 }
 
-export function extractJsonBlock(text: string): { narrative: string; jsonText: string | null } {
-  const fence = /```(?:json)?\s*([\s\S]*?)```/gi;
-  let match: RegExpExecArray | null;
-  let last: { start: number; body: string } | null = null;
-  while ((match = fence.exec(text)) !== null) {
-    const body = match[1] ?? '';
-    if (body.trim().startsWith('{')) last = { start: match.index, body };
+/** Where a fenced JSON body could start: a run of 3+ backticks at the start of a line, or one directly followed by "json". */
+const FENCE_OPEN = /(^|\n)[ \t]*(`{3,})[ \t]*(?:json)?[ \t]*\n?|`{3,}json[ \t]*\n?/gi;
+
+function parsesAsJson(t: string): boolean {
+  for (const c of [t, repairJson(t, false)]) {
+    try {
+      JSON.parse(c);
+      return true;
+    } catch {
+      /* try the next */
+    }
   }
-  if (last) return { narrative: text.slice(0, last.start).trim(), jsonText: last.body.trim() };
+  return false;
+}
+
+/**
+ * Split the model output into the narrative and the last ```json block (or a trailing bare object).
+ * Tolerates 4-backtick fences, stray ``` in the prose, a ```markdown wrapper around the whole reply
+ * and ``` inside JSON string values.
+ */
+export function extractJsonBlock(text: string): { narrative: string; jsonText: string | null } {
+  const candidates: { start: number; body: string }[] = [];
+  FENCE_OPEN.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = FENCE_OPEN.exec(text)) !== null) {
+    const start = m.index + (m[1] ?? '').length;
+    const bodyStart = m.index + m[0].length;
+    if (!text.slice(bodyStart).trimStart().startsWith('{')) continue;
+    candidates.push({ start, body: fencedBody(text, bodyStart) });
+  }
+  if (candidates.length) {
+    // The last block that parses; ``` inside an earlier block's string values can look like an opener.
+    const chosen = [...candidates].reverse().find((c) => parsesAsJson(c.body)) ?? candidates[candidates.length - 1]!;
+    const narrative = text
+      .slice(0, chosen.start)
+      .replace(/^\s*`{3,}[\w-]*[ \t]*\n/, '') // a ```markdown (or bare) wrapper opened before the narrative
+      .trim();
+    return { narrative, jsonText: chosen.body };
+  }
 
   // Native JSON mode (Gemini responseMimeType, OpenAI response_format): the whole reply is the object, no fence.
   const whole = text.trim();
@@ -252,6 +314,24 @@ export function extractJsonBlock(text: string): { narrative: string; jsonText: s
     if (candidate.endsWith('}')) return { narrative: text.slice(0, idx).trim(), jsonText: candidate };
   }
   return { narrative: text.trim(), jsonText: null };
+}
+
+/** The JSON body after an opener: up to the last closing fence that ends an object, else to the end. */
+function fencedBody(text: string, bodyStart: number): string {
+  const closers: number[] = [];
+  const re = /`{3,}/g;
+  re.lastIndex = bodyStart;
+  let c: RegExpExecArray | null;
+  while ((c = re.exec(text)) !== null) closers.push(c.index);
+  for (let i = closers.length - 1; i >= 0; i--) {
+    const body = text.slice(bodyStart, closers[i]).trim();
+    if (body.endsWith('}')) return body;
+  }
+  const rest = text
+    .slice(bodyStart)
+    .replace(/`+\s*$/, '')
+    .trim();
+  return closers.length && !rest.endsWith('}') ? text.slice(bodyStart, closers[0]).trim() : rest;
 }
 
 export function parseModelResult(jsonText: string | null): { ok: true; value: ModelResult } | { ok: false; error: string } {
@@ -272,15 +352,45 @@ export function parseModelResult(jsonText: string | null): { ok: true; value: Mo
 }
 
 /**
- * Common LLM JSON slips: trailing commas and an unterminated final brace; optionally smart quotes
- * (last resort, since replacing them inside string values can make things worse).
+ * Common LLM JSON slips: trailing commas and unterminated brackets/braces (a cut-off reply); optionally
+ * smart quotes (last resort, since replacing them inside string values can make things worse). One pass
+ * that knows when it is inside a string, so braces and commas in values are left alone.
  */
 export function repairJson(s: string, smartQuotes = true): string {
   let t = s.trim();
   if (smartQuotes) t = t.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
-  t = t.replace(/,\s*([}\]])/g, '$1');
-  const opens = (t.match(/{/g) ?? []).length;
-  const closes = (t.match(/}/g) ?? []).length;
-  if (opens > closes) t += '}'.repeat(opens - closes);
-  return t;
+  let out = '';
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  let pendingComma = -1; // index in `out` of a comma followed so far only by whitespace
+  for (const ch of t) {
+    if (inString) {
+      out += ch;
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '}' || ch === ']') {
+      if (pendingComma !== -1) out = out.slice(0, pendingComma) + out.slice(pendingComma + 1);
+      pendingComma = -1;
+      stack.pop();
+      out += ch;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      out += ch;
+      continue;
+    }
+    pendingComma = -1;
+    if (ch === '"') inString = true;
+    else if (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === ',') pendingComma = out.length;
+    out += ch;
+  }
+  if (inString) out += '"';
+  if (pendingComma !== -1) out = out.slice(0, pendingComma) + out.slice(pendingComma + 1);
+  return out + stack.reverse().join('');
 }

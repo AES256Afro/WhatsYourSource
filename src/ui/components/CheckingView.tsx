@@ -39,7 +39,9 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
           {run.claims.length > 0 && (
             <ol className="m-0 flex list-decimal flex-col gap-0.5 pb-2.5 pl-11 text-[12px] leading-4 text-ink-2">
               {run.claims.map((c) => (
-                <li key={c}>{c}</li>
+                <li key={c} dir="auto" className="wrap-anywhere">
+                  {c}
+                </li>
               ))}
             </ol>
           )}
@@ -102,17 +104,19 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
 
 function StepRow({ label, done, active }: { label: string; done?: boolean; active?: boolean }) {
   return (
-    <div className="flex h-9 items-center gap-2.5">
+    // min-h, not h: a long status (the no-search-tool notice) wraps instead of running into the next row.
+    <div className="flex min-h-9 items-start gap-2.5 py-[9px]">
       {done ? (
-        <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-ok-soft text-ok">
+        // Neutral, not the verdict green: a finished step says nothing about whether the claim holds up.
+        <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-muted-soft text-ink-2">
           <Check size={11} />
         </span>
       ) : active ? (
-        <span className="wys-spin" />
+        <span className="wys-spin shrink-0" />
       ) : (
-        <span className="h-[18px] w-[18px] rounded-full border-2 border-line-2" />
+        <span className="h-[18px] w-[18px] shrink-0 rounded-full border-2 border-line-2" />
       )}
-      <span className={`text-[13px] ${active ? 'font-semibold text-ink' : 'text-ink-2'}`}>{label}</span>
+      <span className={`min-w-0 text-[13px] leading-[18px] wrap-anywhere ${active ? 'font-semibold text-ink' : 'text-ink-2'}`}>{label}</span>
     </div>
   );
 }

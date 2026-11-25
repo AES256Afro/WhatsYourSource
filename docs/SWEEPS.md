@@ -480,3 +480,19 @@ Owner's instruction: three bug sweeps, then performance until nothing is left to
 - Verified: `npm run compile`, `npm run lint`, `npm run format:check`, 151 unit tests (21 new), `npm run build:all`, 3 Playwright tests on the built extension, and the panel walked in the preview (picker, custom question, timeline result, history).
 
 `clean: no` (bug sweeps: 12, 6, 8, then 3 on the follow-up; performance: the second and third found nothing required)
+
+### 2026-11-25 · Eight-stage audit of 1.2.0 (stopped by the owner at Stage 5), then fixes
+
+Report-only audit of commit 048fc37: Stage 1 (design, QoL, function, usability, 10 sweeps each), Stage 2 (code, bug, security, 10 sweeps each; none reached three clean in a row), Stage 3 (six categories × 3), Stage 4 (blind spots), Stage 6 (six categories × 3) and Stage 5 partly (code 10, bug 7, security 7). About 340 distinct findings, none Critical. Methods beyond reading: the panel rendered at 320–600 px, 200 % zoom and forced colours; the built extension driven in real Chromium with all network mocked (soak test, 137 forced worker restarts, frames, settings profiles with every request logged); 4,825 marker strings traced into prompts; 53 security and 122 bug fixes replayed (none regressed); parser fuzzing (250,000+ cases); 182 privacy claims checked. Reports, the merged catalogue and the milestone plan were kept outside the repo.
+
+The owner then asked to stop sweeping and fix what needs fixing. Fixed in this pass: every item in CHANGELOG [Unreleased]. Verified: `npm run compile`, `npm run lint`, `npm run format:check`, 253 unit tests (96 new, in `tests/unit/fix-*.test.ts`), `npm run build:all`, `web-ext lint` (0 errors), 3 Playwright tests, and the panel in the preview (buttons render at their class weight and size, no console errors).
+
+Recorded, not done (owner decisions or larger work):
+- **Host access is not optional on Chrome.** The content script matches `<all_urls>`, which Chromium treats as host access for the extension's own pages, so `fetch_page` and image downloads succeed without the optional "Allow all sites" grant (measured). PRIVACY.md, PERMISSIONS.md and the store form describe the grant as optional. Choose: gate those fetches on `permissions.contains()` in code, or reword the docs.
+- **Keys and endpoints in `storage.local`** are readable and writable from a compromised page process (reproduced end to end); moving keys alone does not close it, because rewriting the endpoint sends the key elsewhere. `setAccessLevel` needs Chrome 140; Firefox has no equivalent.
+- **Privacy and store wording**: "What was sent" omits lookups that found nothing, pages a local model read, and the first provider on fallback; follow-ups are not in PRIVACY.md; the Home note says content goes only to the model though lookups also run. Edge policy wants opt-in for the Wayback lookup (on by default).
+- **Accuracy is unmeasured**: the 20-claim and 30-image test sets (MILESTONES M2/M5 exit) were never built.
+- **Page checks send only the URL and title** (the excerpt has no producer); image checks carry no alt or caption text; post images are not attached.
+- **Selection trust**: a page can swap the selection after a right-click (top frame and frames) or at chip click, or hide and move the chip (S7-01, P5S4-01, P5S6-01/02, S10-01, S10-02).
+- **History restore** (the JSON export cannot be imported), settings export, the HTML export missing fact-checks/evidence/ratings (one result rendered four ways), and the run engine living inside a React hook (largest test gap).
+- Post extraction on feeds and embedded posts, the follow-up box taking 21–29 % of the panel, onboarding button/provider mismatch, and the long tail of Low items.

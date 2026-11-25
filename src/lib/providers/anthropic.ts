@@ -3,7 +3,9 @@ import { domainOf } from '../util/url';
 import {
   ProviderError,
   errorFromResponse,
-  toProviderError,
+  errorFromStreamPayload,
+  fetchFailure,
+  guardStream,
   type GenEvent,
   type GenerateRequest,
   type LlmProvider,
@@ -66,7 +68,7 @@ export class AnthropicProvider implements LlmProvider {
     try {
       res = await fetch(`${BASE}/v1/messages`, { method: 'POST', headers: this.headers(), body: JSON.stringify(body), signal });
     } catch (e) {
-      throw toProviderError(e);
+      throw fetchFailure(e);
     }
     if (!res.ok || !res.body) throw errorFromResponse(res.status, await res.text().catch(() => ''));
 
@@ -77,8 +79,9 @@ export class AnthropicProvider implements LlmProvider {
     let inputTokens = 0;
     let outputTokens = 0;
     let searches = 0;
+    let stopReason: string | undefined;
 
-    for await (const evt of parseSse(res.body)) {
+    for await (const evt of guardStream(parseSse(res.body))) {
       let d: AnthropicEvent;
       try {
         d = JSON.parse(evt.data) as AnthropicEvent;
@@ -87,7 +90,7 @@ export class AnthropicProvider implements LlmProvider {
       }
       switch (d.type) {
         case 'error':
-          throw new ProviderError(d.error?.type === 'overloaded_error' ? 'server' : 'unknown', d.error?.message ?? 'Claude returned an error.');
+          throw errorFromStreamPayload(d.error, 'Claude returned an error.');
         case 'message_start':
           inputTokens = d.message?.usage?.input_tokens ?? 0;
           break;
@@ -148,12 +151,15 @@ export class AnthropicProvider implements LlmProvider {
           outputTokens = d.usage?.output_tokens ?? outputTokens;
           if (d.usage?.server_tool_use?.web_search_requests != null) searches = d.usage.server_tool_use.web_search_requests;
           if (d.delta?.stop_reason === 'refusal') throw new ProviderError('blocked', 'Claude declined this request.');
+          if (d.delta?.stop_reason) stopReason = d.delta.stop_reason;
           break;
         case 'message_stop':
           break;
       }
     }
     yield { type: 'usage', usage: { inputTokens, outputTokens, searches } };
+    if (stopReason === 'max_tokens' && sawText)
+      yield { type: 'truncated', message: 'Claude reached its output limit before finishing, so the answer is cut off.' };
     yield { type: 'done' };
   }
 
@@ -168,7 +174,7 @@ export class AnthropicProvider implements LlmProvider {
       const j = (await res.json()) as { data?: { id?: string }[] };
       return { ok: true, models: (j.data ?? []).map((m) => m.id ?? '').filter(Boolean) };
     } catch (e) {
-      return { ok: false, error: toProviderError(e).message };
+      return { ok: false, error: fetchFailure(e).message };
     }
   }
 }

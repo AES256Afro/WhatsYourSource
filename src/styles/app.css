@@ -1,6 +1,5 @@
-@import 'tailwindcss';
-/* Scan the whole src tree regardless of which Vite root is building (extension or preview). */
-@source '../';
+/* Scan only src/ (the preview imports its components from there): docs, .output and other builds never add utilities. */
+@import 'tailwindcss' source('../');
 
 @theme {
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -75,31 +74,62 @@
   }
 }
 
-html,
-body,
-#root {
-  height: 100%;
-}
+/* Element defaults sit in the base layer, under Tailwind's preflight order, so component classes and utilities win over them. */
+@layer base {
+  /* Native scrollbars, form controls and the spinner's track follow the theme. */
+  :root {
+    color-scheme: light dark;
+  }
 
-body {
-  margin: 0;
-  background: var(--color-paper);
-  color: var(--color-ink);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.45;
-  -webkit-font-smoothing: antialiased;
-}
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
 
-a {
-  color: var(--color-accent);
-}
+  body {
+    margin: 0;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
+  a {
+    color: var(--color-accent);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  /* Tailwind's default placeholder is the text colour at 50 %: about 3.4:1 in light. ink-3 is 4.8:1 on paper. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-ink-3);
+    opacity: 1;
+  }
+
+  button[aria-disabled='true'] {
+    cursor: default;
+  }
+
+  /* No spinning, blinking or pulsing for people who asked their system for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 /* Small reusable bits that read better as classes than as 12 utilities repeated 40 times. */
@@ -133,10 +163,12 @@ textarea {
     cursor: pointer;
     white-space: nowrap;
   }
-  .wys-btn:hover {
+  .wys-btn:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--color-surface);
   }
-  .wys-btn:disabled {
+  /* Real `disabled` and `aria-disabled` (kept focusable) look the same: dimmed, no hover. */
+  .wys-btn:disabled,
+  .wys-btn[aria-disabled='true'] {
     opacity: 0.55;
     cursor: default;
   }
@@ -145,7 +177,7 @@ textarea {
     border-color: var(--color-accent-fill);
     color: #fff;
   }
-  .wys-btn-primary:hover {
+  .wys-btn-primary:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--color-accent-fill-hover);
     border-color: var(--color-accent-fill-hover);
   }
@@ -161,7 +193,12 @@ textarea {
     justify-content: center;
     cursor: pointer;
   }
-  .wys-icon-btn:hover,
+  .wys-icon-btn:disabled,
+  .wys-icon-btn[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .wys-icon-btn:hover:not(:disabled, [aria-disabled='true']),
   .wys-icon-btn[aria-pressed='true'] {
     background: var(--color-accent-soft);
     color: var(--color-accent);
@@ -175,6 +212,11 @@ textarea {
     padding: 0 12px;
     background: var(--color-paper);
     color: var(--color-ink);
+  }
+  .wys-input:disabled {
+    background: var(--color-surface);
+    color: var(--color-ink-3);
+    cursor: not-allowed;
   }
   .wys-input:focus,
   .wys-btn:focus-visible,
@@ -232,6 +274,10 @@ textarea {
       opacity: 0;
     }
   }
+  /* Model text can hold a long URL or token: break it rather than scroll the whole result sideways. */
+  .wys-prose {
+    overflow-wrap: anywhere;
+  }
   .wys-prose p {
     margin: 0 0 8px;
   }
@@ -267,5 +313,47 @@ textarea {
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
+  }
+}
+
+/*
+ * Windows High Contrast and other forced-colour modes replace every author colour, so state drawn
+ * only with a background (switches, selected chips and tabs) disappears. These rules use system
+ * colours, which survive. In the utilities layer so they beat `border-0` and friends on the same element.
+ */
+@layer utilities {
+  @media (forced-colors: active) {
+    [role='switch'] {
+      forced-color-adjust: none;
+      border: 1px solid ButtonText;
+      background: Canvas;
+    }
+    [role='switch'] > span {
+      forced-color-adjust: none;
+      background: ButtonText;
+      box-shadow: none;
+    }
+    [role='switch'][aria-checked='true'] {
+      border-color: Highlight;
+      background: Highlight;
+    }
+    [role='switch'][aria-checked='true'] > span {
+      background: HighlightText;
+    }
+    [role='switch']:disabled {
+      border-color: GrayText;
+    }
+    [role='switch']:disabled > span {
+      background: GrayText;
+    }
+    [role='radio'][aria-checked='true'],
+    [aria-pressed='true'],
+    [role='tab'][aria-selected='true'] {
+      outline: 3px solid Highlight;
+      outline-offset: 1px;
+    }
+    [role='tab'][aria-selected='false'] {
+      border-color: Canvas;
+    }
   }
 }

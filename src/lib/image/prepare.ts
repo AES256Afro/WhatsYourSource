@@ -27,8 +27,10 @@ async function prepareImage(input: ImageInput, tabId: number | undefined, status
   status('Fetching the image…');
   let img: ImageBytes;
   try {
-    img = await fetchImageBytes(input.srcUrl, signal);
+    img = await fetchImageBytes(input.srcUrl, signal, input.pageUrl);
   } catch (e) {
+    // Cancelled: no screenshot of the tab after the user said stop.
+    if (signal.aborted) throw new CancelledError();
     const err = e instanceof ImageFetchError ? e : new ImageFetchError('unknown', String(e));
     if (tabId == null) throw err;
     status('Direct download blocked — using a screenshot of the image instead');
@@ -39,13 +41,16 @@ async function prepareImage(input: ImageInput, tabId: number | undefined, status
     }
   }
 
+  if (signal.aborted) throw new CancelledError();
   status('Reading metadata on your device…');
   const [provenance, model] = await Promise.all([readProvenance(img.bytes, img.mime), prepareForModel(img)]);
   // The decoded size, always: a width/height tag inside the file is a claim, not a measurement.
   provenance.width = model.width;
   provenance.height = model.height;
   try {
-    provenance.phash = phashFromBitmap(model.bitmap);
+    // No hash for a flat image (all one colour, or fully transparent): it would match every other flat image.
+    const phash = phashFromBitmap(model.bitmap);
+    if (phash) provenance.phash = phash;
   } catch {
     /* canvas unavailable */
   } finally {
@@ -62,6 +67,13 @@ async function prepareImage(input: ImageInput, tabId: number | undefined, status
     provenanceMetadata: provenanceMetadata(provenance),
     via: img.via,
   };
+}
+
+class CancelledError extends Error {
+  constructor() {
+    super('Cancelled.');
+    this.name = 'CancelledError';
+  }
 }
 
 /**
@@ -81,6 +93,7 @@ export async function prepareImageForCheck(
   try {
     return { ok: true, image: await prepareImage(input, tab, status, signal) };
   } catch (e) {
+    if (e instanceof CancelledError || signal.aborted) return { ok: false, error: { code: 'cancelled', message: 'Cancelled.' } };
     const err = e instanceof ImageFetchError ? e : null;
     return {
       ok: false,

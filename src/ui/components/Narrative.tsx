@@ -8,10 +8,11 @@ export function Narrative({ text, streaming }: { text: string; streaming?: boole
     .map((p) => p.replace(/\n/g, ' ').trim())
     .filter(Boolean);
   if (paras.length === 0) return streaming ? <p className="wys-caret m-0" /> : null;
+  // dir="auto" per paragraph: a model answering in Arabic or Hebrew gets right-to-left lines and alignment.
   return (
     <div className="wys-prose text-[13px] leading-[19px]">
       {paras.map((p, i) => (
-        <p key={i} className={streaming && i === paras.length - 1 ? 'wys-caret' : undefined}>
+        <p key={i} dir="auto" className={streaming && i === paras.length - 1 ? 'wys-caret' : undefined}>
           {renderInline(p)}
         </p>
       ))}

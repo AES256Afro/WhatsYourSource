@@ -1,11 +1,54 @@
 import type { LocalProvenance } from '../pipeline/schema';
 
+/** What the prompt's "reliable facts" line and the provenance card say when the format is not one we know. */
+export const UNRECOGNISED_FORMAT = 'unrecognised format';
+
+/**
+ * Image types by fixed label. A Content-Type header or a data: URL is written by whoever serves the
+ * image, so its text is never echoed: it is mapped to one of these, or to "unrecognised format".
+ */
+const KNOWN_MIMES: Record<string, string> = {
+  'image/jpeg': 'image/jpeg',
+  'image/jpg': 'image/jpeg',
+  'image/pjpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/apng': 'image/png',
+  'image/webp': 'image/webp',
+  'image/gif': 'image/gif',
+  'image/bmp': 'image/bmp',
+  'image/x-bmp': 'image/bmp',
+  'image/x-ms-bmp': 'image/bmp',
+  'image/avif': 'image/avif',
+  'image/heic': 'image/heic',
+  'image/heif': 'image/heic',
+  'image/x-icon': 'image/x-icon',
+  'image/vnd.microsoft.icon': 'image/x-icon',
+  'image/svg+xml': 'image/svg+xml',
+};
+
+export function safeImageMime(mime: string | null | undefined): string {
+  const key = (mime ?? '').split(';')[0]!.trim().toLowerCase();
+  return KNOWN_MIMES[key] ?? UNRECOGNISED_FORMAT;
+}
+
+const FORMAT_NAME: Record<string, string> = {
+  'image/jpeg': 'JPEG',
+  'image/png': 'PNG',
+  'image/webp': 'WebP',
+  'image/gif': 'GIF',
+  'image/bmp': 'BMP',
+  'image/avif': 'AVIF',
+  'image/heic': 'HEIC',
+  'image/x-icon': 'ICO',
+  'image/svg+xml': 'SVG',
+};
+
 /**
  * Facts read from the file itself, on the user's device. These are shown separately from the AI's
  * opinion and also handed to the model as trustworthy context.
  */
 export async function readProvenance(bytes: Uint8Array, mime: string): Promise<LocalProvenance> {
-  const out: LocalProvenance = { mime, bytes: bytes.length };
+  const out: LocalProvenance = { mime: safeImageMime(mime), bytes: bytes.length };
   out.c2pa = { present: detectC2PA(bytes, mime) };
   if (out.c2pa.present) out.c2pa.summary = 'Content Credentials data found (not yet verified)';
 
@@ -31,10 +74,15 @@ export async function readProvenance(bytes: Uint8Array, mime: string): Promise<L
       pick(fields, parsed, 'ImageDescription', 'Description');
       pick(fields, parsed, 'DigitalSourceType', 'Digital source type');
       pick(fields, parsed, 'digitalSourceType', 'Digital source type');
+      // EXIF dates are wall-clock times; the offset tags (when present) say which zone.
+      withOffset(fields, 'Taken', parsed.OffsetTimeOriginal);
+      withOffset(fields, 'Created', parsed.OffsetTimeDigitized);
+      withOffset(fields, 'Modified', parsed.OffsetTime);
       if (parsed.latitude != null && parsed.longitude != null) fields.GPS = `${Number(parsed.latitude).toFixed(4)}, ${Number(parsed.longitude).toFixed(4)}`;
     }
   } catch {
-    /* no metadata, or a format exifr doesn't read */
+    // A format exifr cannot read (WebP, GIF, BMP, ICO): its metadata is unknown, not absent.
+    out.metadataUnread = FORMAT_NAME[out.mime ?? ''] ?? 'this format';
   }
   const pngHints = new Set<string>();
   if (mime === 'image/png') {
@@ -55,11 +103,16 @@ export async function readProvenance(bytes: Uint8Array, mime: string): Promise<L
 /** Facts the extension measured itself. Safe to present to the model as reliable. */
 export function provenanceFacts(p: LocalProvenance): string {
   const bits: string[] = [];
-  if (p.width && p.height) bits.push(`${p.width}x${p.height} ${p.mime ?? ''}`.trim());
+  // The format through the fixed allowlist again: a stored or older provenance may carry server text.
+  if (p.width && p.height) bits.push(`${p.width}x${p.height} ${p.mime ? safeImageMime(p.mime) : ''}`.trim());
   if (p.bytes) bits.push(`${Math.round(p.bytes / 1024)} KB`);
   bits.push(p.c2pa?.present ? 'a C2PA Content Credentials manifest is present (not verified)' : 'no C2PA Content Credentials');
   bits.push(
-    p.exif && Object.keys(p.exif).length ? `${Object.keys(p.exif).length} metadata fields present` : 'no EXIF/XMP metadata (typical after social-media upload)',
+    p.exif && Object.keys(p.exif).length
+      ? `${Object.keys(p.exif).length} metadata fields present`
+      : p.metadataUnread
+        ? `metadata not read (${p.metadataUnread}), so whether it has any is unknown`
+        : 'no EXIF/XMP metadata (typical after social-media upload)',
   );
   if (p.aiHints?.length) bits.push('metadata names an AI generator: ' + p.aiHints.join('; '));
   return bits.join('. ');
@@ -83,12 +136,27 @@ function pick(out: Record<string, string>, src: Record<string, unknown>, key: st
   const v = src[key];
   if (v == null || v === '') return;
   if (out[label]) return;
-  if (v instanceof Date) out[label] = v.toISOString().replace('T', ' ').slice(0, 19);
-  else if (typeof v === 'object') {
+  if (v instanceof Date) {
+    if (!Number.isNaN(v.getTime())) out[label] = formatExifDate(v);
+  } else if (typeof v === 'object') {
     const s = JSON.stringify(v);
     if (s.length < 120) out[label] = s;
   } else if (typeof v === 'string') out[label] = v.trim().slice(0, 200);
   else if (typeof v === 'number' || typeof v === 'boolean' || typeof v === 'bigint') out[label] = String(v);
+}
+
+/**
+ * exifr builds EXIF dates in the viewer's local zone from the file's wall-clock digits, so the local
+ * getters give those digits back unchanged (`toISOString` would shift them by the viewer's offset).
+ */
+export function formatExifDate(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function withOffset(out: Record<string, string>, label: string, offset: unknown) {
+  if (out[label] && typeof offset === 'string' && /^[+-]\d{2}:\d{2}$/.test(offset.trim()) && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(out[label]))
+    out[label] += ` ${offset.trim()}`;
 }
 
 const AI_PATTERNS: [RegExp, string][] = [

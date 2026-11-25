@@ -78,6 +78,13 @@ export const JobSchema = z.object({
   tabId: z.number().optional(),
   /** The window whose panel should run it; other open panels ignore it. */
   windowId: z.number().optional(),
+  /** The checked tab is in a private (incognito) window: the check must not be saved. */
+  incognito: z.boolean().optional(),
+  /**
+   * Which panel the producer opened for it: the window's side panel, or the fallback `sidepanel.html`
+   * popup window. A fallback window only runs jobs routed to it. Unset by producers that cannot tell.
+   */
+  surface: z.enum(['side', 'window']).optional(),
   input: CheckInputSchema,
 });
 export type Job = z.infer<typeof JobSchema>;

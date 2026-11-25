@@ -3,18 +3,27 @@
 //   npm run preview   (in another terminal)   then   npm run screenshots
 // Each image is 1280x800 (the Chrome Web Store / Edge size; AMO accepts it too): three captures of
 // the 400 px panel side by side on a plain background. The two promo tiles are the icon and the name.
-import { mkdir, readdir, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 import sharp from 'sharp';
 
 const BASE = process.env.WYS_PREVIEW_URL ?? 'http://localhost:5174';
-const OUT = 'store';
+const STORE = 'store';
 const BG = '#15171a';
 const PANEL = { width: 400, height: 760 };
 
-await mkdir(OUT, { recursive: true });
-// Old images go: the folder holds exactly what this run produces.
-for (const f of await readdir(OUT)) if (f.endsWith('.png')) await rm(`${OUT}/${f}`);
+// Nothing in store/ is touched until every image has been made: check the preview first, render into a
+// temporary folder, and swap the images in at the end. A failed run leaves the committed images as they were.
+try {
+  const res = await fetch(BASE);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+} catch (e) {
+  console.error(`The preview is not reachable at ${BASE} (${e instanceof Error ? e.message : e}). Start it with npm run preview, then run this again.`);
+  process.exit(1);
+}
+const OUT = await mkdtemp(join(tmpdir(), 'wys-screenshots-'));
 
 const browser = await chromium.launch();
 const context = await browser.newContext({ viewport: { width: 440, height: 800 }, deviceScaleFactor: 1, colorScheme: 'dark' });
@@ -57,7 +66,7 @@ async function compose(name, shots) {
     .composite(shots.map((input, i) => ({ input, left: Math.round(gap + i * (PANEL.width + gap)), top: (800 - PANEL.height) / 2 })))
     .png()
     .toFile(`${OUT}/${name}.png`);
-  console.log(`${OUT}/${name}.png`);
+  console.log(`made ${name}.png`);
 }
 
 // 1. A fact-check: the home screen, the result, its claims and sources.
@@ -137,8 +146,15 @@ for (const [w, h, name] of [
       <div style="font-size:${30 * scale}px;font-weight:700;letter-spacing:-0.01em">WhatsYourSource</div>
     </div></body></html>`);
   await tile.screenshot({ path: `${OUT}/${name}.png` });
-  console.log(`${OUT}/${name}.png`);
+  console.log(`made ${name}.png`);
   await tile.close();
 }
 
 await browser.close();
+
+// Old images go: the folder holds exactly what this run produced.
+await mkdir(STORE, { recursive: true });
+for (const f of await readdir(STORE)) if (f.endsWith('.png')) await rm(join(STORE, f));
+for (const f of await readdir(OUT)) await copyFile(join(OUT, f), join(STORE, f));
+await rm(OUT, { recursive: true, force: true });
+console.log(`store/: ${(await readdir(STORE)).filter((f) => f.endsWith('.png')).length} images`);

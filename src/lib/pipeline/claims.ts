@@ -1,8 +1,8 @@
 import type { CheckInput } from '../messaging/protocol';
 import type { GenerateRequest, LlmProvider } from '../providers/types';
 import { truncate } from '../util/url';
-import { extractJsonBlock } from './schema';
-import { untrusted } from './prompts';
+import { extractJsonBlock, repairJson } from './schema';
+import { untrusted, webPageUrl } from './prompts';
 
 /**
  * First pass of a two-pass check: pull the specific, checkable claims out of the content with a
@@ -14,29 +14,41 @@ const SYSTEM = `You extract checkable claims. Given content copied from a web pa
 export function buildClaimsRequest(input: CheckInput): GenerateRequest {
   const body =
     input.kind === 'text'
-      ? untrusted('selection', { page: input.pageUrl || undefined }, truncate(input.text, 3000))
+      ? untrusted('selection', { page: webPageUrl(input.pageUrl) }, truncate(input.text, 3000))
       : input.kind === 'post'
         ? untrusted('post', { site: input.site, author: input.author }, truncate(input.text, 3000))
         : input.kind === 'page'
-          ? untrusted('page', { url: input.url, title: input.title || undefined }, truncate(input.excerpt ?? '', 3000))
-          : untrusted('image', { page: input.pageUrl || undefined }, [input.alt, input.nearbyText].filter(Boolean).join('\n'));
+          ? untrusted(
+              'page',
+              { url: webPageUrl(input.url), title: webPageUrl(input.url) && input.title ? input.title : undefined },
+              truncate(input.excerpt ?? '', 3000),
+            )
+          : untrusted('image', { page: webPageUrl(input.pageUrl) }, [input.alt, input.nearbyText].filter(Boolean).join('\n'));
   return { system: SYSTEM, parts: [{ text: body }], wantSearch: false, plain: true };
 }
 
 export function parseClaims(text: string): string[] {
   const { jsonText } = extractJsonBlock(text);
   if (!jsonText) return [];
-  try {
-    const obj: unknown = JSON.parse(jsonText);
+  // The same slips the main answer gets repaired for (trailing commas, a missing final brace).
+  for (const t of [jsonText, repairJson(jsonText, false), repairJson(jsonText, true)]) {
+    let obj: unknown;
+    try {
+      obj = JSON.parse(t);
+    } catch {
+      continue;
+    }
     const arr = (obj as { claims?: unknown } | null)?.claims;
     if (!Array.isArray(arr)) return [];
     return arr
-      .filter((c): c is string => typeof c === 'string' && c.trim().length > 3)
+      .map((c: unknown) =>
+        typeof c === 'string' ? c : c && typeof c === 'object' && typeof (c as { text?: unknown }).text === 'string' ? (c as { text: string }).text : '',
+      )
+      .filter((c) => c.trim().length > 3)
       .map((c) => c.trim().slice(0, 300))
       .slice(0, 6);
-  } catch {
-    return [];
   }
+  return [];
 }
 
 /** Run the extraction; an empty list (model failure, no claims) is a normal outcome, not an error. */

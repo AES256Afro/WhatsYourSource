@@ -81,7 +81,8 @@ describe('GeminiProvider + runCheck', () => {
     );
     const provider = new GeminiProvider({ apiKey: 'bad', model: 'gemini-3.8-flash', grounding: true, urlContext: true });
     const { error } = await collectCheck({ kind: 'page', url: 'https://example.com', title: 'x' }, provider);
-    expect(error?.code).toBe('bad-request');
+    // Gemini answers a bad key with HTTP 400; the body says what it is (B4-03).
+    expect(error?.code).toBe('auth');
     expect(error?.details).toContain('API key not valid');
   });
 

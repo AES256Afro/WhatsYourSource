@@ -1,3 +1,5 @@
+import { truncate } from '../util/url';
+
 /**
  * Published fact-checks via Google's Fact Check Tools API (ClaimReview markup aggregated from
  * PolitiFact, Snopes, AFP, Full Fact, Reuters and many more). Free; needs an API key from Google
@@ -53,15 +55,47 @@ export function parseFactChecks(json: unknown): FactCheck[] {
   return out.slice(0, 8);
 }
 
-/** The words worth searching for: the first sentence or the first ~14 words of the content. */
+/** Words a period follows without ending the sentence ("Sept.", "Univ.", "Dr."). Single letters and dotted initials (U.S., F.D.A.) are handled by shape. */
+const ABBREVIATIONS = new Set(
+  (
+    'mr mrs ms dr prof sr jr st mt ft gen gov sen rep col lt sgt capt cmdr adm pres rev hon ' +
+    'jan feb mar apr jun jul aug sep sept oct nov dec univ dept assn inc ltd co corp bros est approx vs etc no nos vol vols fig al ed eds'
+  ).split(' '),
+);
+
+/** The end of the first sentence (index after its punctuation) within `max` characters, or -1. */
+function firstSentenceEnd(flat: string, min: number, max: number): number {
+  const end = /[.!?。！？]+/g;
+  let m: RegExpExecArray | null;
+  while ((m = end.exec(flat)) !== null) {
+    const stop = m.index + m[0].length;
+    if (stop > max) return -1;
+    const cjk = /[。！？]/.test(m[0]);
+    const after = flat.slice(stop).replace(/^["”'’」』)]+/, '');
+    // A period inside a token ("3.5", "example.com") is not an end; CJK punctuation needs no space.
+    if (!cjk && after && !after.startsWith(' ')) continue;
+    if (m[0] === '.') {
+      const word = /[\p{L}.]*$/u.exec(flat.slice(0, m.index))?.[0] ?? '';
+      if (/^(\p{L}\.)*\p{L}$/u.test(word) && (word.length === 1 || word.includes('.'))) continue; // "J." or "U.S."
+      if (ABBREVIATIONS.has(word.toLowerCase())) continue;
+    }
+    if (stop >= min) return stop;
+  }
+  return -1;
+}
+
+/** The words worth searching for: the first sentence, at most 24 words and 200 characters (text without spaces, like Chinese or Thai, is cut by length). */
 export function factCheckQuery(text: string): string {
   const flat = text.replace(/\s+/g, ' ').trim();
-  const sentence = /^(.{20,220}?[.!?])["”']?(\s|$)/.exec(flat)?.[1] ?? flat;
-  return sentence
+  const stop = firstSentenceEnd(flat, 20, 220);
+  const sentence = stop === -1 ? flat : flat.slice(0, stop);
+  const words = sentence
     .split(' ')
     .slice(0, 24)
     .join(' ')
     .replace(/^["“”']+|["“”']+$/g, '');
+  // truncate() never splits an emoji (a lone surrogate makes encodeURIComponent throw); its ellipsis is not part of a query.
+  return words.length > 200 ? truncate(words, 201).replace(/…$/, '') : words;
 }
 
 export async function searchFactChecks(query: string, apiKey: string, signal?: AbortSignal, language = 'en'): Promise<FactCheck[]> {

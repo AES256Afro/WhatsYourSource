@@ -36,9 +36,14 @@ const KIND_NAME = { text: 'Text', image: 'Image', page: 'Page', post: 'Post' } a
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const pad = (n: number) => String(n).padStart(2, '0');
 /** Local date and time, in a form every spreadsheet reads as a date. */
-function localStamp(ms: number): string {
+export function localStamp(ms: number): string {
   const d = new Date(ms);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** The local calendar date as YYYY-MM-DD, for file names (the UTC date is already tomorrow on an American evening). */
+export function localDay(ms = Date.now()): string {
+  return localStamp(ms).slice(0, 10);
 }
 
 /** Never a formula: a leading = + - @ would be run by Excel and Sheets. */
