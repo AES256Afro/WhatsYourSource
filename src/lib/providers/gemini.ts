@@ -4,7 +4,9 @@ import { estimateUsd } from './pricing';
 import {
   ProviderError,
   errorFromResponse,
-  toProviderError,
+  errorFromStreamPayload,
+  fetchFailure,
+  guardStream,
   type GenEvent,
   type GenerateRequest,
   type LlmProvider,
@@ -21,8 +23,17 @@ export interface GeminiConfig {
 
 const BASE = 'https://generativelanguage.googleapis.com';
 
+/**
+ * Every call is capped: without a limit the output (and the bill) is bounded only by the model's
+ * ceiling, which injected content can push towards. Enough for the narrative plus the JSON block.
+ */
+export const GEMINI_MAX_OUTPUT_TOKENS = 8192;
+
+/** Finish reasons that are a content decision; anything else that is not STOP is a tool or server fault. */
+const SAFETY_STOPS = new Set(['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'IMAGE_SAFETY']);
+
 interface GeminiChunk {
-  error?: { message?: string; status?: string };
+  error?: { code?: number; message?: string; status?: string };
   promptFeedback?: { blockReason?: string };
   usageMetadata?: {
     promptTokenCount?: number;
@@ -79,7 +90,11 @@ export class GeminiProvider implements LlmProvider {
       ],
       ...(tools.length ? { tools } : {}),
       // The repair pass has no tools, so native JSON mode is allowed there (grounding and JSON mode cannot be combined).
-      generationConfig: { temperature: 0.2, ...(req.plain ? { responseMimeType: 'application/json' } : {}) },
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
+        ...(req.plain ? { responseMimeType: 'application/json' } : {}),
+      },
     };
 
     const searching = !req.plain && req.wantSearch && this.cfg.grounding;
@@ -94,7 +109,7 @@ export class GeminiProvider implements LlmProvider {
         signal,
       });
     } catch (e) {
-      throw toProviderError(e);
+      throw fetchFailure(e);
     }
     if (!res.ok || !res.body) throw errorFromResponse(res.status, await res.text().catch(() => ''));
 
@@ -104,15 +119,16 @@ export class GeminiProvider implements LlmProvider {
     const seenSources = new Set<string>();
     let promptTokens = 0;
     let outputTokens = 0;
+    let finishReason: string | undefined;
 
-    for await (const evt of parseSse(res.body)) {
+    for await (const evt of guardStream(parseSse(res.body))) {
       let chunk: GeminiChunk;
       try {
         chunk = JSON.parse(evt.data) as GeminiChunk;
       } catch {
         continue;
       }
-      if (chunk.error) throw new ProviderError('unknown', chunk.error.message ?? 'Gemini returned an error.');
+      if (chunk.error) throw errorFromStreamPayload(chunk.error, 'Gemini returned an error.');
       if (chunk.promptFeedback?.blockReason) {
         throw new ProviderError('blocked', `Google AI declined this request (${chunk.promptFeedback.blockReason}).`);
       }
@@ -170,8 +186,21 @@ export class GeminiProvider implements LlmProvider {
         promptTokens = chunk.usageMetadata.promptTokenCount ?? promptTokens;
         outputTokens = (chunk.usageMetadata.candidatesTokenCount ?? 0) + (chunk.usageMetadata.thoughtsTokenCount ?? 0) || outputTokens;
       }
-      if (cand?.finishReason && !['STOP', 'MAX_TOKENS'].includes(cand.finishReason)) {
-        if (!sawText) throw new ProviderError('blocked', `Google AI stopped early (${cand.finishReason}).`);
+      if (cand?.finishReason) finishReason = cand.finishReason;
+    }
+
+    if (finishReason && SAFETY_STOPS.has(finishReason)) {
+      throw new ProviderError('blocked', 'Google AI declined to finish this answer (a safety or recitation filter stopped it).', finishReason);
+    }
+    let truncated: string | undefined;
+    if (finishReason && finishReason !== 'STOP' && finishReason !== 'FINISH_REASON_UNSPECIFIED') {
+      if (finishReason === 'MAX_TOKENS') {
+        if (sawText) truncated = 'Google AI reached its output limit before finishing, so the answer is cut off.';
+      } else if (!sawText) {
+        // Tool-call faults (MALFORMED_FUNCTION_CALL, TOO_MANY_TOOL_CALLS…) and OTHER are not a refusal of the content.
+        throw new ProviderError('server', 'Google AI stopped early because of a search-tool or server problem.', finishReason);
+      } else {
+        truncated = 'Google AI stopped early because of a search-tool or server problem, so the answer may be incomplete.';
       }
     }
 
@@ -184,6 +213,7 @@ export class GeminiProvider implements LlmProvider {
         estUsd: estimateUsd(this.cfg.model, promptTokens, outputTokens, queries.length),
       },
     };
+    if (truncated) yield { type: 'truncated', message: truncated };
     yield { type: 'done' };
   }
 
@@ -204,7 +234,7 @@ export class GeminiProvider implements LlmProvider {
         .filter((n) => n.startsWith('gemini-'));
       return { ok: true, models };
     } catch (e) {
-      const err = toProviderError(e);
+      const err = fetchFailure(e);
       return { ok: false, error: err.message };
     }
   }

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { MAX_FOLLOW_UP_QUESTION } from '@/lib/pipeline/followUp';
-import type { FollowUpThread } from '../hooks/useFollowUps';
+import { stripThinking } from '@/lib/pipeline/schema';
+import { FOLLOW_UPS_FULL, type FollowUpThread } from '../hooks/useFollowUps';
 import { Count, Label } from './common';
 import { Narrative } from './Narrative';
 
@@ -49,7 +50,12 @@ export function FollowUpList({ thread }: { thread: FollowUpThread }) {
         {pending && (
           <li className="wys-card flex flex-col gap-1.5 px-3 py-2.5">
             <span className="text-[13px] leading-[18px] font-semibold">{pending.question}</span>
-            {pending.text ? <Narrative text={pending.text} streaming /> : <span className="text-[12px] text-ink-2">{pending.status || 'Asking…'}</span>}
+            {/* A local model's <think> reasoning is not the answer: hidden while it streams, as in the saved answer. */}
+            {stripThinking(pending.text) ? (
+              <Narrative text={stripThinking(pending.text)} streaming />
+            ) : (
+              <span className="text-[12px] text-ink-2">{pending.status || 'Asking…'}</span>
+            )}
           </li>
         )}
       </ol>
@@ -71,7 +77,7 @@ export function FollowUpBox({ thread, onSettings }: { thread: FollowUpThread; on
   const id = useId();
   const [draft, setDraft] = useState('');
   const busy = !!thread.pending;
-  const usable = !!thread.providerLabel;
+  const usable = !!thread.providerLabel && !thread.full;
   const send = async () => {
     const q = draft.trim();
     if (!q || busy || !usable) return;
@@ -93,7 +99,9 @@ export function FollowUpBox({ thread, onSettings }: { thread: FollowUpThread; on
           value={draft}
           maxLength={MAX_FOLLOW_UP_QUESTION}
           disabled={!usable}
-          placeholder={usable ? 'Ask a follow-up question…' : 'Set up a model to ask follow-up questions'}
+          placeholder={
+            usable ? 'Ask a follow-up question…' : thread.full ? 'No more follow-up questions on this check' : 'Set up a model to ask follow-up questions'
+          }
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -106,7 +114,7 @@ export function FollowUpBox({ thread, onSettings }: { thread: FollowUpThread; on
           <button type="button" className="wys-btn shrink-0" onClick={thread.stop}>
             Stop
           </button>
-        ) : usable || !onSettings ? (
+        ) : usable || thread.full || !onSettings ? (
           <button type="button" className="wys-btn wys-btn-primary shrink-0" disabled={!usable || !draft.trim()} onClick={() => void send()}>
             Ask
           </button>
@@ -116,7 +124,11 @@ export function FollowUpBox({ thread, onSettings }: { thread: FollowUpThread; on
           </button>
         )}
       </div>
-      {thread.providerLabel && <span className="text-[11px] leading-[15px] text-ink-2">Answered by {thread.providerLabel}, with this result as context.</span>}
+      {thread.full ? (
+        <span className="text-[11px] leading-[15px] text-ink-2">{FOLLOW_UPS_FULL}</span>
+      ) : (
+        thread.providerLabel && <span className="text-[11px] leading-[15px] text-ink-2">Answered by {thread.providerLabel}, with this result as context.</span>
+      )}
     </div>
   );
 }

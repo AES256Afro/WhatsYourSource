@@ -105,21 +105,24 @@ export interface RequestExtras {
   claims?: string;
 }
 
+/**
+ * The page address, only when it is a web page. A `file://` path names the user and their folders, and
+ * an `about:`/`chrome:` page says nothing about the content, so neither (nor its title) goes to a provider.
+ */
+export function webPageUrl(url: string | undefined): string | undefined {
+  return url && /^https?:\/\//i.test(url) ? url : undefined;
+}
+
 export function buildRequest(input: CheckInput, extra?: RequestExtras): GenerateRequest {
   const parts: Part[] = [];
   const urls: string[] = [];
 
   switch (input.kind) {
     case 'text': {
+      const page = webPageUrl(input.pageUrl);
       const lines = [
-        input.pageUrl
-          ? 'The user highlighted this text on a web page (page and title in the attributes):'
-          : 'The user pasted this text (its origin is unknown):',
-        untrusted(
-          'selection',
-          { page: input.pageUrl || undefined, title: input.pageTitle ? truncate(input.pageTitle, 120) : undefined },
-          truncate(input.text, 4000),
-        ),
+        page ? 'The user highlighted this text on a web page (page and title in the attributes):' : 'The user pasted this text (its origin is unknown):',
+        untrusted('selection', { page, title: page && input.pageTitle ? truncate(input.pageTitle, 120) : undefined }, truncate(input.text, 4000)),
       ];
       if (input.surrounding && input.surrounding.trim() !== input.text.trim()) {
         lines.push('Context around the selection on the same page (for disambiguation only):');
@@ -130,10 +133,13 @@ export function buildRequest(input: CheckInput, extra?: RequestExtras): Generate
       break;
     }
     case 'image': {
-      const lines = [
-        'The user asked about an image on a web page (page and title in the attributes):',
-        untrusted('page', { url: input.pageUrl || undefined, title: input.pageTitle ? truncate(input.pageTitle, 120) : undefined }, ''),
-      ];
+      const page = webPageUrl(input.pageUrl);
+      const lines = page
+        ? [
+            'The user asked about an image on a web page (page and title in the attributes):',
+            untrusted('page', { url: page, title: input.pageTitle ? truncate(input.pageTitle, 120) : undefined }, ''),
+          ]
+        : ['The user asked about an image (where it was shown is not known).'];
       if (input.alt) lines.push(`Alt text on the page: ${untrusted('alt', {}, truncate(input.alt, 300))}`);
       if (input.nearbyText) lines.push(`Text near the image: ${untrusted('caption', {}, truncate(input.nearbyText, 800))}`);
       if (extra?.provenanceFacts) lines.push(`Facts measured locally from the file itself (these are reliable): ${extra.provenanceFacts}`);
@@ -147,10 +153,17 @@ export function buildRequest(input: CheckInput, extra?: RequestExtras): Generate
       break;
     }
     case 'page': {
-      urls.push(input.url);
+      const page = webPageUrl(input.url);
+      if (page) urls.push(page);
       const lines = [
-        'The user asked about a web page (URL and title in the attributes):',
-        untrusted('page', { url: input.url, title: input.title ? truncate(input.title, 120) : undefined }, input.excerpt ? truncate(input.excerpt, 3000) : ''),
+        page
+          ? 'The user asked about a web page (URL and title in the attributes):'
+          : 'The user asked about a page that is not on the web (its address is not shared):',
+        untrusted(
+          'page',
+          { url: page, title: page && input.title ? truncate(input.title, 120) : undefined },
+          input.excerpt ? truncate(input.excerpt, 3000) : '',
+        ),
       ];
       lines.push(`${questionFor(input.ask, 'page')} ${detailFor(input.ask, 'page')}`);
       parts.push({ text: lines.join('\n\n') });
@@ -159,7 +172,11 @@ export function buildRequest(input: CheckInput, extra?: RequestExtras): Generate
     case 'post': {
       const lines = [
         'The user asked about a social post (site, author, time and permalink in the attributes):',
-        untrusted('post', { site: input.site, author: input.author, posted: input.postedAt, permalink: input.permalink }, truncate(input.text, 5000)),
+        untrusted(
+          'post',
+          { site: input.site, author: input.author, posted: input.postedAt, permalink: webPageUrl(input.permalink) },
+          truncate(input.text, 5000),
+        ),
       ];
       if (input.images.length) lines.push(`Images attached to the post:\n${untrusted('image-urls', {}, input.images.slice(0, 4).join('\n'))}`);
       if (input.links.length) {

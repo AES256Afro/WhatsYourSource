@@ -4,6 +4,55 @@ All notable changes to WhatsYourSource. The format follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+### Added
+- `THIRD_PARTY_NOTICES.txt` ships in every build: the licence of each bundled package (React, ReactDOM, scheduler, zod, idb, DOMPurify, Readability, exifr, Tailwind CSS, WXT) and the CC BY-SA 4.0 attribution for the Wikipedia outlet ratings. `npm run notices` regenerates it.
+
+### Changed
+- The outlet-ratings note under Sources links to the Wikipedia page it is adapted from and to the CC BY-SA 4.0 licence. README and LICENSE say that data file is CC BY-SA 4.0, not MIT.
+- Outlet rating pills are outlined instead of filled; "Reliable" no longer uses the green of a "Supported" claim. Finished progress steps have a neutral tick.
+- Wording: the home screen and the popup no longer say right-click asks the default question; the popup says when no key or model is set up; the home hint does not promise the chip when it is off.
+- `engines.node` is `^22.12.0 || ^24.0.0 || >=26.0.0`.
+
+### Fixed
+- Base element styles (link colour, `font: inherit` on controls) sat outside any cascade layer and overrode button and text utilities; they are in the base layer now.
+- Dark mode uses dark scrollbars and native controls; placeholder text meets 4.5:1 in light mode.
+- Buttons marked unavailable look unavailable and do not change on hover; disabled inputs look disabled.
+- With "reduce motion" set in the system, the spinners, caret and loading placeholders stop moving.
+- In forced-colours (High Contrast) mode, switches have a border and show on/off; the selected question, filter and tab are outlined.
+- Model text, claims and the selection follow their own writing direction (right-to-left text is laid out right to left), and a long URL in an answer wraps instead of scrolling the result sideways.
+- The top bar keeps History and Settings inside a narrow or zoomed panel; progress rows grow with a long status line.
+- The saved-page tab's header wraps instead of clipping the image-loading warning, and the saved page's text is at most 72 characters wide.
+- Tailwind scans only `src/`, so text in docs or other build output no longer adds CSS to the build.
+- `npm run screenshots` checks the preview is running before it changes anything, and replaces `store/` only after every image is made.
+- Checks started in a private window are not saved to history, and no page copy or screenshot is taken ("Not saved: private window").
+- "Fact-check this page/post" does nothing on `file:`, `about:` and `view-source:` pages, and no prompt carries a non-web address (a local file path, with the user name in it, was sent to the provider).
+- The Wayback Machine lookup sends only the page's scheme, host and path, never its query string or fragment.
+- The image type a server or `data:` URL declares no longer reaches the "measured locally" facts given to the model or shown in the panel; only known image types are named.
+- Search results and pages read by a local model, and the up-front search block, are passed to the model as untrusted content; a local-model check makes at most 12 tool calls.
+- Gemini calls set an output-token limit; reasoning (`<think>`) text is stripped in linear time, so a very long answer no longer freezes the panel.
+- An answer that stopped early (token limit, content filter) is marked incomplete instead of being accepted; a refusal is reported as declined, not as an empty answer.
+- Error codes: a wrong or expired Gemini key is reported as a key problem; 402, 408 and other client errors map to quota, server and bad request; errors that arrive mid-answer keep their real code, so fallback works.
+- Model answers with a wrongly typed optional field, upper-case verdict words, a four-backtick fence or braces inside strings are read instead of costing a repair call; a repaired answer no longer shows raw JSON as the assessment; the claim list uses the same repair.
+- Image downloads go only to public hosts, follow no redirects and time out after 15 s; cancelling during a download no longer falls back to a screenshot; images over 40 megapixels (read from the file header for every supported format) are refused before decoding.
+- Transparent and flat images no longer share one fingerprint, so "You checked this image before" stops matching unrelated logos; EXIF dates keep their local time; unread WebP metadata is reported as not read rather than absent.
+- Published fact-check queries no longer stop at abbreviations such as "U.S."; queries in Chinese, Japanese or Thai are capped by length.
+- Outlet ratings: entries with a path (for example Rolling Stone politics) and `www.` entries now match, and the rating no longer depends on file order (CNET, Free Beacon).
+- The right-click items follow a cleared or reworded custom question; `&` and `%s` in it display correctly.
+- Export HTML on a saved check includes follow-ups asked since it was opened; at 30 follow-ups a new one is refused instead of deleting the first.
+- History and Settings stay usable while a check runs (the panel no longer jumps back on every progress update).
+- "Try again" after a failed second opinion retries that provider; a new check no longer cancels the previous result's archive and fact-check lookups.
+- History, a saved check and Recent show an error with Try again when the database cannot be read, instead of "Loading…" forever; Recent shows the day for older checks.
+- Dates without a time (archive dates, fact-check reviews, post dates) show the right day in every time zone; exported file names use the local date; Markdown copies use local time.
+- "Never show the chip on these sites" matches entries typed with capitals, a port, `www.` or a full address.
+- Changing the server address on the first-run screen clears the old key and model, as Settings does.
+- Two panels saving at once no longer delete twice the saved pages the storage cap needs.
+- With a fallback panel window open, a check started in a normal window runs in that window's side panel.
+- Development builds go to `.output/*-dev` folders, so they never replace the release build that README, the e2e tests and `lint:firefox` load.
+- History's "Backup" button is "Export all (JSON)" and says the file cannot be imported back yet.
+
+### Corrections to earlier entries
+- 1.1.0 said the right-click items are "still absent on the extension's own pages". They are shown there and do nothing when picked.
+
 ## [1.2.0] - 2026-11-19
 
 ### Added

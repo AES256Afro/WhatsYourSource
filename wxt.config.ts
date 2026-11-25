@@ -9,7 +9,8 @@ export default defineConfig({
   srcDir: 'src',
   manifestVersion: 3,
   modules: ['@wxt-dev/module-react'],
-  outDirTemplate: '{{browser}}-mv{{manifestVersion}}',
+  // Dev builds go to `-dev` folders so they never overwrite the release build that README, the e2e tests and lint:firefox load.
+  outDirTemplate: '{{browser}}-mv{{manifestVersion}}{{modeSuffix}}',
   vite: () => ({
     plugins: [tailwindcss()],
   }),

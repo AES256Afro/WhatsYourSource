@@ -21,22 +21,27 @@ export function useTargetSelection(watchTabs = false): { tab: TargetTab | null; 
 
   useEffect(() => {
     let alive = true;
+    // Refreshes overlap (a tab switch while the previous tab is slow to answer); only the latest may
+    // write, or a late reply from the tab the user left would replace the one now shown.
+    let latest = 0;
     const refresh = async () => {
+      const mine = ++latest;
+      const current = () => alive && mine === latest;
       const t = await getTargetTab();
-      if (!alive) return;
+      if (!current()) return;
       setTab(t ? { id: t.id, windowId: t.windowId, url: t.url ?? '', title: t.title ?? '' } : null);
       if (t?.id == null) return setSelection(null);
       try {
         const reply: unknown = await browser.tabs.sendMessage(t.id, { type: 'wys:get-selection' });
         const parsed = SelectionInfoSchema.safeParse(reply);
-        if (!alive) return;
+        if (!current()) return;
         if (parsed.success) {
           setTab({ id: t.id, windowId: t.windowId, url: parsed.data.pageUrl || t.url || '', title: parsed.data.pageTitle || t.title || '' });
           setSelection(parsed.data.text.trim() ? parsed.data : null);
         } else setSelection(null);
       } catch {
         // No content script on this page (restricted, or loaded before the extension was installed).
-        if (alive) setSelection(null);
+        if (current()) setSelection(null);
       }
     };
     void refresh();

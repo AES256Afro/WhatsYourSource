@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { hasAllUrls, hasOrigin, requestAllUrls, requestOrigin } from '@/lib/permissions';
-import { OPENAI_COMPAT_PRESETS, openaiCompatLabel, presetFor, PROVIDER_LABELS } from '@/lib/providers/registry';
+import { OPENAI_COMPAT_PRESETS, openaiCompatLabel, PROVIDER_LABELS } from '@/lib/providers/registry';
 import { describeLocalModels, localServer, type LocalModelInfo } from '@/lib/providers/localModels';
 import { OpenAICompatProvider } from '@/lib/providers/openaiCompat';
 import { createSearchBackend } from '@/lib/search/backends';
-import type { SearchToolId, Settings } from '@/lib/storage/settings';
+import { withEndpoint, type SearchToolId, type Settings } from '@/lib/storage/settings';
 import { hostOf } from '@/lib/util/url';
 import { Alert, Cpu } from '../Icons';
 import { PROVIDER_CARD_ID } from '../SettingsView';
@@ -17,6 +17,8 @@ type O = Settings['providers']['openaiCompat'];
 export function OpenAICompatCard({ settings, update }: { settings: Settings; update: UpdateSettings }) {
   const o = settings.providers.openaiCompat;
   const set = (patch: Partial<O>) => update((s) => ({ ...s, providers: { ...s.providers, openaiCompat: { ...s.providers.openaiCompat, ...patch } } }));
+  const setEndpoint = (baseUrl: string) =>
+    update((s) => ({ ...s, providers: { ...s.providers, openaiCompat: withEndpoint(s.providers.openaiCompat, baseUrl) } }));
   const [info, setInfo] = useState<LocalModelInfo[]>([]);
   const [originOk, setOriginOk] = useState<boolean | null>(null);
   const [allUrls, setAllUrls] = useState<boolean | null>(null);
@@ -122,17 +124,8 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
             onChange={(e) => {
               const p = OPENAI_COMPAT_PRESETS.find((x) => x.id === e.target.value);
               if (!p?.baseUrl) return;
-              // A new server means a new model list; a key for a hosted API must not be sent to localhost (or vice versa).
-              const wasLocal = presetFor(o.baseUrl)?.local ?? localServer(o.baseUrl).isLocal;
-              void set({
-                baseUrl: p.baseUrl,
-                model: '',
-                modelVision: null,
-                modelTools: null,
-                modelContext: null,
-                // ...and a key for one hosted API must not be sent to another.
-                ...(p.local !== wasLocal || hostOf(p.baseUrl) !== hostOf(o.baseUrl) ? { apiKey: '' } : {}),
-              });
+              // A new server means a new model list; a key for one host must not be sent to another (withEndpoint).
+              void setEndpoint(p.baseUrl);
             }}
           >
             {OPENAI_COMPAT_PRESETS.map((p) => (
@@ -150,11 +143,8 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         <CommitInput
           id="wys-ocurl"
           value={o.baseUrl}
-          onCommit={(v) => {
-            const baseUrl = v.replace(/\/+$/, '');
-            // A key belongs to the host it was entered for; a different host starts without one.
-            void set(hostOf(baseUrl) !== hostOf(o.baseUrl) ? { baseUrl, apiKey: '' } : { baseUrl });
-          }}
+          // A key belongs to the host it was entered for, a model to its server (withEndpoint).
+          onCommit={(v) => void setEndpoint(v)}
           placeholder="http://localhost:11434/v1"
           className="h-8 min-w-0 grow text-[12px]"
         />

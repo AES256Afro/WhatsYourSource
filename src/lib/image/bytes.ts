@@ -1,5 +1,7 @@
 import { browser } from 'wxt/browser';
 import { LocateImageReplySchema } from '../messaging/protocol';
+import { isPublicHttpUrl } from '../util/url';
+import { safeImageMime, UNRECOGNISED_FORMAT } from './provenance';
 
 /**
  * Getting the pixels of "that image the user right-clicked" is the fiddly part of image checks:
@@ -25,6 +27,10 @@ export class ImageFetchError extends Error {
 
 /** Bigger than any photo worth checking; bounds memory (bytes, then the decoded bitmap) on a hostile or huge file. */
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+/** Decoded size cap: a few-KB PNG, GIF or BMP can declare 20000×20000 (1.6 GB of RGBA) and take the renderer down. */
+export const MAX_IMAGE_PIXELS = 40_000_000;
+/** A stalled image host must not hold "Fetching the image…" forever; on timeout the screenshot fallback runs. */
+const IMAGE_FETCH_TIMEOUT_MS = 15_000;
 
 async function readBytesCapped(res: Response, max: number): Promise<Uint8Array> {
   if (!res.body) return new Uint8Array(await res.arrayBuffer());
@@ -51,26 +57,56 @@ async function readBytesCapped(res: Response, max: number): Promise<Uint8Array> 
   return out;
 }
 
-export async function fetchImageBytes(srcUrl: string, signal?: AbortSignal): Promise<ImageBytes> {
+/**
+ * The page decides the image address, and this request carries the extension's host permissions, so
+ * the same rule as fetch_page applies: public http(s) hosts only. A page on a local or LAN host may
+ * show its own images (a developer's localhost page), nothing else may point inside the network.
+ */
+export function imageFetchAllowed(srcUrl: string, pageUrl?: string): boolean {
+  if (isPublicHttpUrl(srcUrl)) return true;
+  if (!pageUrl || !/^https?:\/\//i.test(srcUrl) || !/^https?:\/\//i.test(pageUrl)) return false;
+  try {
+    const src = new URL(srcUrl);
+    const page = new URL(pageUrl);
+    if (src.username || src.password) return false;
+    return src.hostname.toLowerCase().replace(/\.$/, '') === page.hostname.toLowerCase().replace(/\.$/, '');
+  } catch {
+    return false;
+  }
+}
+
+/** The format by fixed label: the sniffed bytes, else the declared type through the allowlist. */
+function mimeFor(buf: Uint8Array, declared: string | null): string {
+  return sniffMime(buf) ?? safeImageMime(declared);
+}
+
+export async function fetchImageBytes(srcUrl: string, signal?: AbortSignal, pageUrl?: string): Promise<ImageBytes> {
   if (srcUrl.startsWith('data:')) {
     const res = await fetch(srcUrl);
     const buf = new Uint8Array(await res.arrayBuffer());
-    return { bytes: buf, mime: sniffMime(buf) ?? res.headers.get('content-type') ?? 'image/png', via: 'fetch' };
+    return { bytes: buf, mime: mimeFor(buf, res.headers.get('content-type') ?? 'image/png'), via: 'fetch' };
   }
+  if (!imageFetchAllowed(srcUrl, pageUrl)) throw new ImageFetchError('unknown', 'The image is on a private or local address, so it is not downloaded.');
+  const timeout = AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS);
+  const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
   let res: Response;
   try {
-    res = await fetch(srcUrl, { signal, credentials: 'omit', redirect: 'follow' });
+    // Redirects are not followed: the target cannot be vetted first (it could be inside the LAN).
+    res = await fetch(srcUrl, { signal: combined, credentials: 'omit', redirect: 'manual' });
   } catch (e) {
+    if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new DOMException('Cancelled.', 'AbortError');
+    if (timeout.aborted) throw new ImageFetchError('http', 'The image host did not answer in time.');
     // A TypeError here is almost always CORS / missing host permission.
     throw new ImageFetchError('permission', e instanceof Error ? e.message : String(e));
   }
+  if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) throw new ImageFetchError('http', 'The image address redirects elsewhere.');
   if (!res.ok) throw new ImageFetchError('http', `HTTP ${res.status}`);
   const declared = Number(res.headers.get('content-length') ?? 0);
   if (declared > MAX_IMAGE_BYTES) throw new ImageFetchError('not-image', `Image too large (${Math.round(declared / 1048576)} MB)`);
   const buf = await readBytesCapped(res, MAX_IMAGE_BYTES);
-  const mime = sniffMime(buf) ?? res.headers.get('content-type')?.split(';')[0] ?? '';
-  if (!mime.startsWith('image/')) throw new ImageFetchError('not-image', `Not an image (${mime || 'unknown type'})`);
-  return { bytes: buf, mime, via: 'fetch' };
+  const type = res.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (!sniffMime(buf) && !type.startsWith('image/')) throw new ImageFetchError('not-image', 'Not an image.');
+  return { bytes: buf, mime: mimeFor(buf, type), via: 'fetch' };
 }
 
 /** Screenshot the visible tab and crop to the image's on-screen box. Needs activeTab for that tab. */
@@ -115,7 +151,8 @@ export interface ModelImage {
 
 /** Downscale for upload (long side ≤ 1536 px) and encode as JPEG, keeping PNG for small/transparent images. */
 export async function prepareForModel(img: ImageBytes, maxSide = 1536): Promise<ModelImage> {
-  const blob = new Blob([img.bytes as BlobPart], { type: img.mime });
+  assertDecodable(img);
+  const blob = new Blob([img.bytes as BlobPart], { type: img.mime === UNRECOGNISED_FORMAT ? '' : img.mime });
   const bitmap = await createImageBitmap(blob);
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));
@@ -140,11 +177,173 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
+/**
+ * Refuse to decode what would not fit: the size comes from the file header, before any pixels are
+ * allocated. A format whose size cannot be read (other than SVG, which has no fixed pixel size) is
+ * refused too, since its decoded size is unknown.
+ */
+export function assertDecodable(img: ImageBytes): void {
+  const dims = imageDimensions(img.bytes);
+  if (!dims) {
+    if (img.mime === 'image/svg+xml') return;
+    throw new ImageFetchError('unknown', 'The image format is not recognised, so its size cannot be checked before decoding it.');
+  }
+  if (dims.width * dims.height > MAX_IMAGE_PIXELS)
+    throw new ImageFetchError('unknown', `The image is too large to decode safely (${dims.width}×${dims.height} pixels).`);
+}
+
+const u16be = (b: Uint8Array, i: number) => (b[i]! << 8) | b[i + 1]!;
+const u16le = (b: Uint8Array, i: number) => b[i]! | (b[i + 1]! << 8);
+const u24le = (b: Uint8Array, i: number) => b[i]! | (b[i + 1]! << 8) | (b[i + 2]! << 16);
+const u32be = (b: Uint8Array, i: number) => ((b[i]! << 24) | (b[i + 1]! << 16) | (b[i + 2]! << 8) | b[i + 3]!) >>> 0;
+const u32le = (b: Uint8Array, i: number) => (b[i]! | (b[i + 1]! << 8) | (b[i + 2]! << 16) | (b[i + 3]! << 24)) >>> 0;
+const i32le = (b: Uint8Array, i: number) => b[i]! | (b[i + 1]! << 8) | (b[i + 2]! << 16) | (b[i + 3]! << 24);
+
+type Dims = { width: number; height: number };
+const dimsOrNull = (width: number, height: number): Dims | null => (width > 0 && height > 0 ? { width, height } : null);
+
+/** Width and height from the file header (PNG, JPEG, WebP, GIF, BMP, ICO/CUR, AVIF/HEIC), or null when unknown. */
+export function imageDimensions(b: Uint8Array): Dims | null {
+  if (b.length < 10) return null;
+  const mime = sniffMime(b);
+  switch (mime) {
+    case 'image/png':
+      return b.length >= 24 && String.fromCharCode(b[12]!, b[13]!, b[14]!, b[15]!) === 'IHDR' ? dimsOrNull(u32be(b, 16), u32be(b, 20)) : null;
+    case 'image/jpeg':
+      return jpegDims(b);
+    case 'image/webp':
+      return webpDims(b);
+    case 'image/gif':
+      return gifDims(b);
+    case 'image/bmp':
+      return bmpDims(b, 0);
+    case 'image/x-icon':
+      return icoDims(b);
+    case 'image/avif':
+    case 'image/heic':
+      return ispeDims(b);
+    default:
+      return null;
+  }
+}
+
+function jpegDims(b: Uint8Array): Dims | null {
+  let i = 2;
+  while (i + 9 < b.length) {
+    if (b[i] !== 0xff) return null;
+    const marker = b[i + 1]!;
+    if (marker === 0xff) {
+      i++; // fill byte
+      continue;
+    }
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      i += 2;
+      continue;
+    }
+    if (marker === 0xd9 || marker === 0xda) return null; // end, or scan data before any frame header
+    // SOF0–SOF15, except DHT (C4), JPG (C8) and DAC (CC).
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) return dimsOrNull(u16be(b, i + 7), u16be(b, i + 5));
+    i += 2 + u16be(b, i + 2);
+  }
+  return null;
+}
+
+function webpDims(b: Uint8Array): Dims | null {
+  if (b.length < 30) return null;
+  const chunk = String.fromCharCode(b[12]!, b[13]!, b[14]!, b[15]!);
+  if (chunk === 'VP8X') return dimsOrNull(u24le(b, 24) + 1, u24le(b, 27) + 1);
+  if (chunk === 'VP8L') {
+    if (b[20] !== 0x2f) return null;
+    const bits = u32le(b, 21);
+    return dimsOrNull((bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1);
+  }
+  if (chunk === 'VP8 ') {
+    if (b[23] !== 0x9d || b[24] !== 0x01 || b[25] !== 0x2a) return null;
+    return dimsOrNull(u16le(b, 26) & 0x3fff, u16le(b, 28) & 0x3fff);
+  }
+  return null;
+}
+
+/** The logical screen, grown by any frame that reaches past it (decoders size the canvas to fit both). */
+function gifDims(b: Uint8Array): Dims | null {
+  let width = u16le(b, 6);
+  let height = u16le(b, 8);
+  let i = 13;
+  if (b[10]! & 0x80) i += 3 * (1 << ((b[10]! & 0x07) + 1));
+  const skipSubBlocks = () => {
+    while (i < b.length) {
+      const n = b[i]!;
+      i += 1 + n;
+      if (n === 0) return;
+    }
+  };
+  while (i < b.length) {
+    const t = b[i]!;
+    if (t === 0x3b) break; // trailer
+    if (t === 0x21) {
+      i += 2;
+      skipSubBlocks();
+    } else if (t === 0x2c) {
+      if (i + 10 > b.length) break;
+      width = Math.max(width, u16le(b, i + 1) + u16le(b, i + 5));
+      height = Math.max(height, u16le(b, i + 3) + u16le(b, i + 7));
+      const packed = b[i + 9]!;
+      i += 10;
+      if (packed & 0x80) i += 3 * (1 << ((packed & 0x07) + 1));
+      i += 1; // LZW minimum code size
+      skipSubBlocks();
+    } else break;
+  }
+  return dimsOrNull(width, height);
+}
+
+/** A BMP file header at `at` (or a bare DIB header inside an ICO when `dibOnly`). */
+function bmpDims(b: Uint8Array, at: number, dibOnly = false): Dims | null {
+  const dib = dibOnly ? at : at + 14;
+  if (dib + 12 > b.length) return null;
+  const size = u32le(b, dib);
+  if (size === 12) return dimsOrNull(u16le(b, dib + 4), u16le(b, dib + 6));
+  if (dib + 12 > b.length || size < 40) return null;
+  const h = Math.abs(i32le(b, dib + 8));
+  // In an icon the DIB height covers the image and its AND mask.
+  return dimsOrNull(Math.abs(i32le(b, dib + 4)), dibOnly ? Math.ceil(h / 2) : h);
+}
+
+/** The largest entry of an ICO/CUR: each entry's real size comes from its embedded PNG or DIB header. */
+function icoDims(b: Uint8Array): Dims | null {
+  const count = u16le(b, 4);
+  let best: Dims | null = null;
+  for (let k = 0; k < count; k++) {
+    const e = 6 + 16 * k;
+    if (e + 16 > b.length) return null;
+    const off = u32le(b, e + 12);
+    if (off + 24 > b.length) return null;
+    const sub = b.subarray(off);
+    const d = sniffMime(sub) === 'image/png' ? imageDimensions(sub) : bmpDims(b, off, true);
+    if (!d) return null;
+    if (!best || d.width * d.height > best.width * best.height) best = d;
+  }
+  return best;
+}
+
+/** AVIF/HEIC: the largest `ispe` (image spatial extents) property. */
+function ispeDims(b: Uint8Array): Dims | null {
+  let best: Dims | null = null;
+  for (let i = 4; i + 16 <= b.length; i++) {
+    if (b[i] !== 0x69 || b[i + 1] !== 0x73 || b[i + 2] !== 0x70 || b[i + 3] !== 0x65) continue; // "ispe"
+    const d = dimsOrNull(u32be(b, i + 8), u32be(b, i + 12));
+    if (d && (!best || d.width * d.height > best.width * best.height)) best = d;
+  }
+  return best;
+}
+
 export function sniffMime(b: Uint8Array): string | null {
   if (b.length < 4) return null;
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
   if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
   if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
+  // ICO (00 00 01 00) and CUR (00 00 02 00), with at least one directory entry.
+  if (b[0] === 0 && b[1] === 0 && (b[2] === 1 || b[2] === 2) && b[3] === 0 && b.length >= 22 && u16le(b, 4) > 0) return 'image/x-icon';
   if (b.length < 12) return null;
   if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50)
     return 'image/webp';

@@ -33,9 +33,11 @@ export interface FetchPagePolicy {
 
 export function assertFetchAllowed(url: string, policy: FetchPagePolicy = {}): void {
   if (!isPublicHttpUrl(url)) throw new FetchPolicyError('Only public http(s) pages can be read.');
-  const host = new URL(url).hostname.toLowerCase();
+  // Hostnames compare without case and without the trailing dot ("Localhost." is the same host).
+  const norm = (h: string) => h.toLowerCase().replace(/\.+$/, '');
+  const host = norm(new URL(url).hostname);
   for (const b of policy.blockedHosts ?? []) {
-    if (host === b.toLowerCase()) throw new FetchPolicyError('That host is one of your own endpoints and is off limits to the model.');
+    if (host === norm(b)) throw new FetchPolicyError('That host is one of your own endpoints and is off limits to the model.');
   }
 }
 
@@ -64,12 +66,54 @@ export async function fetchPageText(url: string, signal?: AbortSignal, maxChars 
     title = typeof doc.title === 'string' ? doc.title.trim() : ''; // a page element named "title" shadows it
     for (const el of Array.from(doc.querySelectorAll('script, style, noscript, nav, footer, header, aside, iframe, svg, form'))) el.remove();
     const main = doc.querySelector('main, article, [role=main]') ?? doc.body;
-    text = (main?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    text = main ? readableText(main) : '';
   } else {
     text = raw.replace(/\s+/g, ' ').trim();
   }
   const truncated = text.length > maxChars;
   return { url: res.url || url, title, text: truncated ? text.slice(0, maxChars) : text, truncated };
+}
+
+const BLOCK = /^(P|DIV|LI|BR|H[1-6]|BLOCKQUOTE|PRE|TR|SECTION|ARTICLE|HEADER|FOOTER|UL|OL|TABLE|FIGCAPTION|FIGURE|DD|DT|DL|HR|MAIN|CAPTION|THEAD|TBODY|TFOOT)$/;
+
+/**
+ * Text with line breaks between blocks and " | " between table cells. `textContent` adds nothing
+ * between elements, so minified markup glues words and numbers ("20181,204"). Same approach as the
+ * post extractor's walker, iterative so a deeply nested page cannot overflow the stack.
+ */
+export function readableText(root: Node): string {
+  const out: string[] = [];
+  const stack: (Node | string)[] = [root];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (typeof n === 'string') {
+      out.push(n);
+      continue;
+    }
+    if (n.nodeType === Node.TEXT_NODE) {
+      out.push(n.nodeValue ?? '');
+      continue;
+    }
+    if (n.nodeType !== Node.ELEMENT_NODE && n.nodeType !== Node.DOCUMENT_NODE) continue;
+    const tag = (n as Element).tagName ?? '';
+    const block = BLOCK.test(tag);
+    const after = block ? '\n' : tag === 'TD' || tag === 'TH' ? ' | ' : tag === 'SPAN' || tag === 'A' ? ' ' : '';
+    if (after) stack.push(after);
+    const kids = Array.from(n.childNodes);
+    for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]!);
+    if (block) out.push('\n');
+  }
+  return out
+    .join('')
+    .split('\n')
+    .map((l) =>
+      l
+        .replace(/\s+/g, ' ')
+        .replace(/^[\s|]+|[\s|]+$/g, '')
+        .trim(),
+    )
+    .filter(Boolean)
+    .join('\n');
 }
 
 async function readCapped(res: Response, max: number): Promise<string> {

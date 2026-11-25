@@ -3,11 +3,22 @@ import { domainOf, isHttpUrl } from '@/lib/util/url';
 import { Label } from './common';
 import { External, Shield } from './Icons';
 
+/**
+ * A calendar date with no time of day: "2024-05-01", or midnight UTC as ISO ("2024-05-01T00:00:00Z",
+ * how review dates arrive). `new Date` reads these as UTC midnight, which is the evening before west
+ * of Greenwich, so they are shown in UTC: the date as written.
+ */
+export function isDateOnly(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}(T00:00(:00(\.0+)?)?(Z|[+-]00:?00))?$/.test(s.trim());
+}
+
 /** ISO or RFC dates from the lookups, shown the way the rest of the panel shows dates. */
 export function localeDate(iso?: string): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+  return Number.isNaN(d.getTime())
+    ? iso.slice(0, 10)
+    : d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric', ...(isDateOnly(iso) ? { timeZone: 'UTC' } : {}) });
 }
 
 /**

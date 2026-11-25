@@ -1,3 +1,4 @@
+import { untrusted } from '../pipeline/prompts';
 import { formatHits } from '../search/backends';
 import { fetchPageText } from '../search/fetchPage';
 import type { SearchBackend, SearchHit } from '../search/types';
@@ -6,6 +7,9 @@ import { domainOf, normalizeUrl, truncate } from '../util/url';
 import {
   ProviderError,
   errorFromResponse,
+  errorFromStreamPayload,
+  fetchFailure,
+  guardStream,
   toProviderError,
   type GenEvent,
   type GenerateRequest,
@@ -64,6 +68,9 @@ const TOOLS = [
 ] as const;
 
 const MAX_ROUNDS = 6;
+/** Tool calls per check, across all rounds: a model (or injected text) can ask for many calls in one round. */
+export const MAX_TOOL_CALLS = 12;
+const TOOL_LIMIT_REPLY = 'Tool call limit reached for this check. Answer now with what you have.';
 
 /** Shown while a local model answers without a search tool; the action is in Settings. */
 export const NO_SEARCH_TOOL_STATUS = 'No search tool configured — answering from the model alone. Pick one in Settings to get sources.';
@@ -168,6 +175,7 @@ export class OpenAICompatProvider implements LlmProvider {
     const queries: string[] = [];
     let inputTokens = 0;
     let outputTokens = 0;
+    let toolCalls = 0;
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const res = await this.post(
@@ -175,15 +183,17 @@ export class OpenAICompatProvider implements LlmProvider {
         { model: this.cfg.model, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.2, max_tokens: MAX_TOKENS, stream: false },
         signal,
       );
-      const j = (await res.json()) as {
-        choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] } }[];
+      const j = (await readJson(res)) as {
+        choices?: { message?: { content?: string | null; refusal?: string | null; tool_calls?: ToolCall[] }; finish_reason?: string | null }[];
         usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
       inputTokens += j.usage?.prompt_tokens ?? 0;
       outputTokens += j.usage?.completion_tokens ?? 0;
-      const msg = j.choices?.[0]?.message;
+      const choice = j.choices?.[0];
+      const msg = choice?.message;
       if (!msg) throw new ProviderError('unknown', 'The model returned no message.');
-      const calls = msg.tool_calls ?? [];
+      this.checkStop(msg.refusal, choice?.finish_reason);
+      const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
       if (calls.length === 0 || round === MAX_ROUNDS - 1) {
         const text = (msg.content ?? '').trim();
         if (!text && calls.length) {
@@ -196,15 +206,20 @@ export class OpenAICompatProvider implements LlmProvider {
         yield { type: 'status', message: 'Writing assessment…' };
         yield { type: 'delta', text };
         yield { type: 'usage', usage: { inputTokens, outputTokens, searches: queries.length } };
+        if (text && choice?.finish_reason === 'length') yield { type: 'truncated', message: LENGTH_NOTE(this.label) };
         yield { type: 'done' };
         return;
       }
 
       messages.push({ role: 'assistant', content: msg.content ?? null, tool_calls: calls });
       for (const call of calls) {
-        const args = parseArgs(call.function.arguments);
+        // Shapes from local servers vary; a call without a name is answered, not a crash.
+        const name: unknown = call?.function?.name;
+        const args = parseArgs(call?.function?.arguments);
         let content: string;
-        if (call.function.name === 'web_search') {
+        if (++toolCalls > MAX_TOOL_CALLS) {
+          content = TOOL_LIMIT_REPLY;
+        } else if (name === 'web_search') {
           const q = str(args.query).trim();
           if (!q) content = 'Empty query.';
           else {
@@ -214,7 +229,8 @@ export class OpenAICompatProvider implements LlmProvider {
             try {
               const hits = await search.search(q, signal);
               for (const h of hits) if (!readable.has(readKey(h.url))) readable.set(readKey(h.url), h.url);
-              content = formatHits(hits);
+              // Search results are written by whoever ranks for the query: data for the model, never instructions.
+              content = untrusted('search_results', { query: q }, formatHits(hits));
               const fresh = hitsToSources(hits, seen);
               if (fresh.length) yield { type: 'sources', sources: fresh };
             } catch (e) {
@@ -222,7 +238,7 @@ export class OpenAICompatProvider implements LlmProvider {
               yield { type: 'status', message: `Search failed (${search.label})` };
             }
           }
-        } else if (call.function.name === 'fetch_page') {
+        } else if (name === 'fetch_page') {
           const url = str(args.url).trim();
           if (!/^https?:\/\//i.test(url)) content = 'Invalid URL.';
           else if (!readable.has(readKey(url)))
@@ -232,7 +248,7 @@ export class OpenAICompatProvider implements LlmProvider {
             yield { type: 'status', message: `Reading ${domainOf(stored)}` };
             try {
               const page = await fetchPageText(stored, signal, 6000, { blockedHosts: this.ownHosts() });
-              content = `Title: ${page.title}\nURL: ${page.url}\n\n${page.text}${page.truncated ? '\n[truncated]' : ''}`;
+              content = untrusted('fetched_page', { url: page.url, title: page.title || undefined }, `${page.text}${page.truncated ? '\n[truncated]' : ''}`);
               if (!seen.has(stored)) {
                 seen.add(stored);
                 yield { type: 'sources', sources: [{ url: stored, title: page.title || domainOf(stored), domain: domainOf(stored) }] };
@@ -242,9 +258,9 @@ export class OpenAICompatProvider implements LlmProvider {
             }
           }
         } else {
-          content = `Unknown tool ${call.function.name}.`;
+          content = `Unknown tool ${truncate(String(name), 40)}.`;
         }
-        messages.push({ role: 'tool', tool_call_id: call.id, content });
+        messages.push({ role: 'tool', tool_call_id: call?.id ?? '', content });
       }
     }
   }
@@ -257,7 +273,9 @@ export class OpenAICompatProvider implements LlmProvider {
       yield { type: 'status', message: `Searching: ${truncate(q, 60)}` };
       try {
         const hits = await search.search(q, signal);
-        block = `Web search results for "${q}" (from ${search.label}):\n${formatHits(hits)}`;
+        // The query carries page words (and, for follow-ups, earlier model output), the hits are written by
+        // whoever ranks for it: all of it is data, so it goes inside an untrusted block.
+        block = `Web search results (from ${search.label}):\n${untrusted('search_results', { query: q }, formatHits(hits))}`;
         const fresh = hitsToSources(hits, new Set());
         if (fresh.length) yield { type: 'sources', sources: fresh };
       } catch (e) {
@@ -296,13 +314,19 @@ export class OpenAICompatProvider implements LlmProvider {
     );
     if (!res.body) throw new ProviderError('unknown', 'Empty response body.');
     let sawText = false;
+    let refusal = '';
+    let finish: string | null | undefined;
     let inputTokens = usageBase.inputTokens ?? 0;
     let outputTokens = usageBase.outputTokens ?? 0;
     const ctype = res.headers.get('content-type') ?? '';
     if (!/event-stream/i.test(ctype)) {
       // Server ignored `stream`; treat it as one JSON reply.
-      const j = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+      const j = (await readJson(res)) as {
+        choices?: { message?: { content?: string | null; refusal?: string | null }; finish_reason?: string | null }[];
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
       const text = j.choices?.[0]?.message?.content ?? '';
+      this.checkStop(j.choices?.[0]?.message?.refusal, j.choices?.[0]?.finish_reason);
       yield { type: 'status', message: 'Writing assessment…' };
       yield { type: 'delta', text };
       yield {
@@ -313,23 +337,27 @@ export class OpenAICompatProvider implements LlmProvider {
           searches: usageBase.searches,
         },
       };
+      if (text && j.choices?.[0]?.finish_reason === 'length') yield { type: 'truncated', message: LENGTH_NOTE(this.label) };
       yield { type: 'done' };
       return;
     }
-    for await (const evt of parseSse(res.body)) {
+    for await (const evt of guardStream(parseSse(res.body))) {
       if (evt.data.trim() === '[DONE]') break;
       let chunk: {
-        choices?: { delta?: { content?: string | null } }[];
+        choices?: { delta?: { content?: string | null; refusal?: string | null }; finish_reason?: string | null }[];
         usage?: { prompt_tokens?: number; completion_tokens?: number };
-        error?: { message?: string };
+        error?: { message?: string; code?: unknown; type?: string; status?: unknown };
       };
       try {
         chunk = JSON.parse(evt.data) as typeof chunk;
       } catch {
         continue;
       }
-      if (chunk.error) throw new ProviderError('unknown', chunk.error.message ?? 'The model returned an error.');
-      const text = chunk.choices?.[0]?.delta?.content;
+      if (chunk.error) throw errorFromStreamPayload(chunk.error, 'The model returned an error.');
+      const choice = chunk.choices?.[0];
+      if (typeof choice?.delta?.refusal === 'string') refusal += choice.delta.refusal;
+      if (choice?.finish_reason) finish = choice.finish_reason;
+      const text = choice?.delta?.content;
       if (text) {
         if (!sawText) {
           sawText = true;
@@ -342,8 +370,16 @@ export class OpenAICompatProvider implements LlmProvider {
         outputTokens = (usageBase.outputTokens ?? 0) + (chunk.usage.completion_tokens ?? 0);
       }
     }
+    this.checkStop(refusal, finish);
     yield { type: 'usage', usage: { inputTokens, outputTokens, searches: usageBase.searches } };
+    if (sawText && finish === 'length') yield { type: 'truncated', message: LENGTH_NOTE(this.label) };
     yield { type: 'done' };
+  }
+
+  /** A refusal or a content filter is the provider declining, not an empty answer. */
+  private checkStop(refusal: string | null | undefined, finish: string | null | undefined): void {
+    if (refusal?.trim()) throw new ProviderError('blocked', `${this.label} declined this request.`, refusal.trim().slice(0, 400));
+    if (finish === 'content_filter') throw new ProviderError('blocked', `${this.label} declined this request (its content filter stopped the answer).`);
   }
 
   private async post(path: string, body: unknown, signal: AbortSignal): Promise<Response> {
@@ -351,7 +387,7 @@ export class OpenAICompatProvider implements LlmProvider {
     try {
       res = await fetch(`${this.base}${path}`, { method: 'POST', headers: this.headers(), body: JSON.stringify(body), signal });
     } catch (e) {
-      const err = toProviderError(e);
+      const err = fetchFailure(e);
       if (err.code === 'network') err.details = unreachableHint(this.base);
       throw err;
     }
@@ -371,7 +407,7 @@ export class OpenAICompatProvider implements LlmProvider {
       if (!models.length && j.models) models.push(...j.models.map((m) => m.name ?? '').filter(Boolean));
       return { ok: true, models: models.sort() };
     } catch (e) {
-      const err = toProviderError(e);
+      const err = fetchFailure(e);
       return {
         ok: false,
         error: err.code === 'network' ? unreachableHint(this.base) : err.message,
@@ -392,7 +428,25 @@ function toUserContent(req: GenerateRequest): UserContent {
   );
 }
 
-function parseArgs(s: string): Record<string, unknown> {
+const LENGTH_NOTE = (label: string) => `${label} reached its output limit before finishing, so the answer is cut off.`;
+
+/** A JSON body; a dropped connection while reading it is a network error, a malformed body is not. */
+async function readJson(res: Response): Promise<unknown> {
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (e) {
+    throw fetchFailure(e);
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new ProviderError('unknown', 'The server sent a reply that is not JSON.', text.slice(0, 200));
+  }
+}
+
+function parseArgs(s: unknown): Record<string, unknown> {
+  if (typeof s !== 'string') return {};
   try {
     const v: unknown = JSON.parse(s || '{}');
     return typeof v === 'object' && v ? (v as Record<string, unknown>) : {};

@@ -248,14 +248,18 @@ export async function updateCheckResult(result: CheckResult): Promise<boolean> {
   return !!c;
 }
 
-/** Add a follow-up to a saved check, keeping the newest `max`. False when the check is not in history. */
+/**
+ * Add a follow-up to a saved check. A thread already holding `max` is left as it is (the panel refuses
+ * new questions at the cap; the first ones are never dropped). False when it was not added.
+ */
 export async function appendFollowUp(checkId: string, followUp: FollowUp, max = 30): Promise<boolean> {
   const db = await getDb();
   const tx = db.transaction('checks', 'readwrite');
   const c = await tx.store.get(checkId);
-  if (c) await tx.store.put({ ...c, result: { ...c.result, followUps: [...(c.result.followUps ?? []), followUp].slice(-max) } });
+  const room = !!c && (c.result.followUps?.length ?? 0) < max;
+  if (c && room) await tx.store.put({ ...c, result: { ...c.result, followUps: [...(c.result.followUps ?? []), followUp] } });
   await tx.done;
-  return !!c;
+  return room;
 }
 
 export async function deleteCheck(id: string): Promise<void> {
@@ -294,7 +298,19 @@ export async function storageStats(): Promise<{ checks: number; snapshots: numbe
  * collects ids; every other read and write happens afterwards in its own transaction. (fake-indexeddb
  * does not enforce this, so a unit test cannot catch an interleaved await; keep the passes separate.)
  */
-export async function enforceSnapshotCap(maxBytes: number): Promise<number> {
+/**
+ * Runs one at a time (two panels can finish checks together): a pass that read the total before the
+ * other pass deleted anything would otherwise evict the same excess a second time.
+ */
+let capRun: Promise<unknown> = Promise.resolve();
+
+export function enforceSnapshotCap(maxBytes: number): Promise<number> {
+  const run = capRun.then(() => capPass(maxBytes));
+  capRun = run.catch(() => undefined);
+  return run;
+}
+
+async function capPass(maxBytes: number): Promise<number> {
   const db = await getDb();
   const { snapshotBytes } = await storageStats();
   if (snapshotBytes <= maxBytes) return 0;
@@ -308,24 +324,21 @@ export async function enforceSnapshotCap(maxBytes: number): Promise<number> {
     cursor = await cursor.continue();
   }
 
-  // Pass 2: sizes, then victims.
-  const victims: string[] = [];
+  // Pass 2: delete oldest first, one transaction each, counting only bytes actually deleted (a snapshot
+  // already gone, removed by the user meanwhile, frees nothing here and must not count).
+  let removed = 0;
   for (const id of candidates) {
     if (excess <= 0) break;
-    const snap = await db.get('snapshots', id);
-    if (!snap) continue;
-    victims.push(id);
-    excess -= snap.bytes;
-  }
-
-  // Pass 3: delete, flagging the check row.
-  let removed = 0;
-  for (const id of victims) {
     const tx = db.transaction(['checks', 'snapshots'], 'readwrite');
-    const c = await tx.objectStore('checks').get(id);
-    if (c) await tx.objectStore('checks').put({ ...c, hasSnapshot: false });
-    await tx.objectStore('snapshots').delete(id);
+    const snap = await tx.objectStore('snapshots').get(id);
+    if (snap) {
+      const c = await tx.objectStore('checks').get(id);
+      if (c) await tx.objectStore('checks').put({ ...c, hasSnapshot: false });
+      await tx.objectStore('snapshots').delete(id);
+    }
     await tx.done;
+    if (!snap) continue;
+    excess -= snap.bytes;
     removed++;
   }
   return removed;

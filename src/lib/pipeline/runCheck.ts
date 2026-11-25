@@ -51,6 +51,7 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
   let queries: string[] = [];
   let suggestions: string | undefined;
   let usage: Usage | undefined;
+  let truncated: string | undefined;
 
   try {
     for await (const ev of provider.generate(req, signal)) {
@@ -77,6 +78,9 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
           break;
         case 'status':
           yield ev;
+          break;
+        case 'truncated':
+          truncated = ev.message;
           break;
         case 'done':
           break;
@@ -105,7 +109,7 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
   }
 
   const extracted = extractJsonBlock(text);
-  let narrative = extracted.narrative;
+  const narrative = extracted.narrative;
   let parsed = parseModelResult(extracted.jsonText);
 
   if (!parsed.ok) {
@@ -117,10 +121,8 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
       }
       const again = extractJsonBlock(repairText);
       const p2 = parseModelResult(again.jsonText);
-      if (p2.ok) {
-        parsed = p2;
-        if (!narrative) narrative = text.trim();
-      }
+      // A JSON-only reply has no narrative; the verdict summary stands in for it below, never the raw JSON.
+      if (p2.ok) parsed = p2;
     } catch {
       /* keep the degraded result */
     }
@@ -143,7 +145,7 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
     searchQueries: queries,
     searchSuggestionsHtml: suggestions,
     usage,
-    notes: model?.notes ?? undefined,
+    notes: truncated ? [`The answer is incomplete: ${truncated}`, model?.notes].filter(Boolean).join(' ') : (model?.notes ?? undefined),
     title: model?.title?.replace(/\s+/g, ' ').trim().slice(0, 140) || undefined,
     topic: TOPICS.find((t) => t === model?.topic?.trim().toLowerCase()),
     timeline: resolveTimeline(model, sources),
@@ -154,7 +156,8 @@ export async function* runCheck(input: CheckInput, provider: LlmProvider, signal
     missingContext: model?.missingContext ?? undefined,
     wouldChange: model?.wouldChange ?? undefined,
     provenance: opts.image?.provenance,
-    degraded: !model,
+    degraded: !model || !!truncated,
+    ...(truncated ? { truncated: true } : {}),
     rawText: text,
   };
   yield { type: 'status', message: 'Done', done: true };

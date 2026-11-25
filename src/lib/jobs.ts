@@ -10,30 +10,50 @@ export type { Job } from './messaging/protocol';
  */
 const KEY = 'pendingJob';
 
-export async function enqueueJob(input: CheckInput, tabId?: number, windowId?: number): Promise<Job> {
-  const job: Job = { id: crypto.randomUUID(), createdAt: Date.now(), tabId, windowId, input: clampInput(input) };
+export async function enqueueJob(
+  input: CheckInput,
+  tabId?: number,
+  windowId?: number,
+  extra: { incognito?: boolean; surface?: Job['surface'] } = {},
+): Promise<Job> {
+  const job: Job = { id: crypto.randomUUID(), createdAt: Date.now(), tabId, windowId, ...extra, input: clampInput(input) };
   await browser.storage.session.set({ [KEY]: job });
   return job;
 }
 
 /**
- * The browser window this panel serves, or undefined when it serves any. A side panel / sidebar has
- * no tab of its own and belongs to its window; the fallback `sidepanel.html` *window* is itself a
- * tab in a popup window, which no producer can know the id of, so it takes whatever is queued.
+ * Which panel this is. A side panel / sidebar has no tab of its own and belongs to its window; the
+ * fallback `sidepanel.html` *window* is itself a tab in a popup window, which no producer can know
+ * the id of.
  */
-async function currentWindowId(): Promise<number | undefined> {
+export interface PanelContext {
+  fallback: boolean;
+  windowId?: number;
+}
+
+async function currentPanel(): Promise<PanelContext> {
   try {
     const self = await browser.tabs.getCurrent();
-    if (self) return undefined;
-    return (await browser.windows.getCurrent()).id;
+    if (self) return { fallback: true };
+    return { fallback: false, windowId: (await browser.windows.getCurrent()).id };
   } catch {
-    return undefined;
+    return { fallback: true };
   }
 }
 
 /** Panels are per window; a job for another window is somebody else's. */
 export function jobIsForWindow(job: Job, windowId: number | undefined): boolean {
   return job.windowId == null || windowId == null || job.windowId === windowId;
+}
+
+/**
+ * Whether this panel should run the job. A side panel takes its own window's jobs. The fallback window
+ * takes only jobs routed to it; a job whose producer could not say where it went (no `surface`) is
+ * still taken, as before, so it is never lost.
+ */
+export function jobIsForPanel(job: Job, panel: PanelContext): boolean {
+  if (panel.fallback) return job.surface !== 'side';
+  return job.surface !== 'window' && jobIsForWindow(job, panel.windowId);
 }
 
 const instanceId = crypto.randomUUID();
@@ -65,7 +85,7 @@ export async function takeJob(): Promise<Job | null> {
     await browser.storage.session.remove(KEY);
     return null;
   }
-  if (!jobIsForWindow(parsed.data, await currentWindowId())) return null;
+  if (!jobIsForPanel(parsed.data, await currentPanel())) return null;
   if (!(await claimJob(parsed.data.id))) return null;
   await browser.storage.session.remove(KEY);
   return parsed.data;
@@ -79,7 +99,7 @@ export function onJob(cb: (job: Job) => void): () => void {
     const parsed = JobSchema.safeParse(change.newValue);
     if (!parsed.success) return;
     void (async () => {
-      if (!jobIsForWindow(parsed.data, await currentWindowId())) return;
+      if (!jobIsForPanel(parsed.data, await currentPanel())) return;
       if (!(await claimJob(parsed.data.id))) return;
       void browser.storage.session.remove(KEY);
       cb(parsed.data);

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { INLINE_IMAGE_SENTINEL } from '@/lib/messaging/limits';
 import { domainOf, isHttpUrl } from '@/lib/util/url';
+import { isDateOnly } from './EvidencePanel';
 import { Globe, Image, Lines, Link as LinkIcon } from './Icons';
 
 function ImageFrame({ href, children }: { href?: string; children: React.ReactNode }) {
@@ -22,9 +23,11 @@ function displayUrl(u: string): string {
   return u.length > 120 ? `${u.slice(0, 117)}…` : u;
 }
 
-function formatWhen(s: string): string {
+/** A post's time; a date with no time of day stays that date (no invented midnight, no shift west of UTC). */
+export function formatWhen(s: string): string {
   const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? s : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  if (Number.isNaN(d.getTime())) return s;
+  return isDateOnly(s) ? d.toLocaleDateString([], { dateStyle: 'medium', timeZone: 'UTC' }) : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 /**

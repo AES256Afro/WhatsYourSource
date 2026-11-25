@@ -74,7 +74,7 @@ export function App() {
     const handle = (job: Job) => {
       if (seenJobs.current.has(job.id)) return;
       seenJobs.current.add(job.id);
-      void start(job.input, { tabId: job.tabId });
+      void start(job.input, { tabId: job.tabId, incognito: job.incognito });
     };
     const off = onJob(handle);
     void takeJob().then((job) => job && handle(job));
@@ -178,16 +178,19 @@ export function App() {
             searchTool={settings.providers.openaiCompat.searchTool !== 'none' ? settings.providers.openaiCompat.searchTool : undefined}
             saved={phase.save.status === 'saved'}
             saveError={phase.save.status === 'failed' ? phase.save.message : null}
+            notSaved={phase.save.status === 'private' ? 'Not saved: private window' : undefined}
             snapshotNote={phase.save.status === 'saved' && phase.save.withSnapshot ? 'Saved with page snapshot' : 'Saved to history'}
           />
         );
-      case 'error':
+      case 'error': {
         if (phase.phase !== 'error') return null;
+        // The same run again: a failed second opinion is retried on that provider, with the earlier answer.
+        const again = { only: phase.only, previous: phase.previous, incognito: phase.incognito };
         return (
           <ErrorView
             input={phase.input}
             error={phase.error}
-            onRetry={() => void start(phase.input)}
+            onRetry={() => void start(phase.input, again)}
             onNewCheck={() => setView('home')}
             onSettings={openSettings}
             webmodeVariant={settings.webmodeVariant}
@@ -195,12 +198,13 @@ export function App() {
               phase.error.code === 'image-permission' && phase.input.kind === 'image'
                 ? async () => {
                     const ok = await requestOrigin(phase.input.kind === 'image' ? phase.input.srcUrl : '');
-                    if (ok) void start(phase.input);
+                    if (ok) void start(phase.input, again);
                   }
                 : undefined
             }
           />
         );
+      }
       case 'settings':
         return (
           <>

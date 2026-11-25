@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { PROVIDER_LABELS } from '@/lib/providers/registry';
 import { AnthropicProvider } from '@/lib/providers/anthropic';
 import { GeminiProvider } from '@/lib/providers/gemini';
-import { providerReady, type ProviderId, type Settings } from '@/lib/storage/settings';
+import { providerReady, withEndpoint, type ProviderId, type Settings } from '@/lib/storage/settings';
 import { Cpu, Globe, Link, Sparkle } from './Icons';
 import { CommitInput, Row, SecretInput, StatusLine, Toggle } from './settings/primitives';
 import { useProviderVerify } from './settings/useProviderVerify';
@@ -226,7 +226,8 @@ export function Onboarding({
             <CommitInput
               id="wys-ob-url"
               value={settings.providers.openaiCompat.baseUrl}
-              onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, openaiCompat: { ...s.providers.openaiCompat, baseUrl: v } } }))}
+              // The card's rule: a new host drops the key, a new server the model and what was learned about it.
+              onCommit={(v) => void update((s) => ({ ...s, providers: { ...s.providers, openaiCompat: withEndpoint(s.providers.openaiCompat, v) } }))}
               placeholder="http://localhost:11434/v1"
             />
             <span className="text-[12px] leading-4 text-ink-2">

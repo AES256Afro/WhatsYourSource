@@ -1,6 +1,6 @@
-# Chrome Web Store developer dashboard — every field, ready to paste (1.1.0)
+# Chrome Web Store developer dashboard — every field, ready to paste (1.2.0)
 
-Dashboard: https://chrome.google.com/webstore/devconsole → your item → **Package** → *Upload new package* for an update (**New item** the first time). Files come from the [v1.1.0 release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.1.0) and the `store/` folder of this repo. Work through the tabs in the order below; the dashboard will not let you submit until every tab shows a tick.
+Dashboard: https://chrome.google.com/webstore/devconsole → your item → **Package** → *Upload new package* for an update (**New item** the first time). Files come from the [v1.2.0 release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.2.0) and the `store/` folder of this repo. Work through the tabs in the order below; the dashboard will not let you submit until every tab shows a tick.
 
 ---
 
@@ -8,9 +8,9 @@ Dashboard: https://chrome.google.com/webstore/devconsole → your item → **Pac
 
 | Field | Entry |
 |---|---|
-| Upload | `whatsyoursource-1.1.0-chrome.zip` (from the GitHub release, or `npm run zip`) |
+| Upload | `whatsyoursource-1.2.0-chrome.zip` (from the GitHub release, or `npm run zip`) |
 
-The dashboard reads the name, version (1.1.0), description and icon from the manifest inside the zip.
+The dashboard reads the name, version (1.2.0), description and icon from the manifest inside the zip.
 
 ---
 
@@ -42,7 +42,7 @@ CHOOSE WHAT TO ASK
 • Timeline: the key events in date order, each with its source.
 • Find the flaws: what is wrong, misleading or badly argued, and what holds up.
 • Ask your own: any question, in your own words.
-Pick one in the side panel for the checks you start there, or set a default for highlighting, the shortcut and right-click. On any result, "Ask instead" puts a different question to the same content.
+Pick one in the side panel for the checks you start there, or set a default for highlighting, the shortcut and the address bar; the right-click menu names the question on each item. On any result, "Ask instead" puts a different question to the same content.
 
 CHECK MORE THAN TEXT
 • Images: right-click → Fact-check this image. Metadata (EXIF, Content Credentials, AI-generator hints) is read on your device first, then the image is checked for its earliest appearance. Reverse image search on Google Lens, TinEye, Bing and Yandex. Images you have checked before are recognised.
@@ -72,7 +72,7 @@ KEEP A LOG
 The file is made in your browser and goes where you put it.
 
 PRIVACY
-• Nothing is sent anywhere until you press Check. Then only the selection (or image, or page URL) and your question go to the provider you configured, with your own key. Every result shows exactly what was sent, and to whom.
+• Nothing is sent anywhere until you start a check. Then only the selection (or image, or page URL) and your question go to the provider you configured, with your own key. Every result shows exactly what was sent, and to whom.
 • No accounts, no servers of our own, no analytics, no telemetry.
 • API keys are stored locally, never synced, and never read by the script that runs on web pages.
 • The chip can be turned off globally or per site.

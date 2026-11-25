@@ -14,6 +14,8 @@ import type { CheckResult } from '@/lib/pipeline/schema';
 import { decideTarget } from '@/lib/pipeline/target';
 import { cheapestModel, createProvider, providerRunLabel } from '@/lib/providers/registry';
 import type { ProviderId, Settings } from '@/lib/storage/settings';
+import { getTargetTab } from '@/lib/tabs';
+import { browser } from 'wxt/browser';
 
 /** The earlier result a new one follows (a second opinion, or another question about the same content), so the new one can point back at it. */
 export interface PreviousResult {
@@ -22,7 +24,21 @@ export interface PreviousResult {
   verdict: string;
 }
 
-export type SaveStatus = { status: 'pending' } | { status: 'saved'; withSnapshot: boolean } | { status: 'failed'; message: string };
+export type SaveStatus =
+  | { status: 'pending' }
+  | { status: 'saved'; withSnapshot: boolean }
+  | { status: 'failed'; message: string }
+  /** Checked from a private (incognito) window: nothing is written to history. */
+  | { status: 'private' };
+
+/** How a run was started, beyond its input: kept on an error so "Try again" repeats the same run. */
+export interface RunOptions {
+  tabId?: number;
+  only?: ProviderId;
+  previous?: PreviousResult;
+  /** The checked tab is in a private window. Unset: looked up from the tab the panel serves. */
+  incognito?: boolean;
+}
 
 /** The one state machine behind the panel's main views. */
 export type PhasePayload =
@@ -30,18 +46,28 @@ export type PhasePayload =
   | { phase: 'setup'; input: CheckInput }
   | { phase: 'checking'; run: RunState }
   | { phase: 'result'; result: CheckResult; save: SaveStatus; previous?: PreviousResult }
-  | { phase: 'error'; input: CheckInput; error: RunError };
+  | ({ phase: 'error'; input: CheckInput; error: RunError } & Pick<RunOptions, 'only' | 'previous' | 'incognito'>);
 /** `seq` changes on every transition so the view can follow transitions, not re-renders. */
 export type Phase = PhasePayload & { seq: number };
 
 export interface CheckRunDeps {
   settings: () => Settings | null;
-  /** Called on every transition, so the panel can show the matching view. */
+  /** Called when the phase changes kind (and when a run starts), so the panel can show the matching view. */
   onPhase: (p: PhasePayload) => void;
   openGoogleAiMode: (input: CheckInput) => void;
   /** A check with a working provider means the user is set up, whatever the onboarding flag says. */
   onOnboarded: () => void;
   onSaved: () => void;
+}
+
+/** Whether the tab a check applies to is in a private window (the job's tab, else the one the panel serves). */
+async function tabIsIncognito(tabId: number | undefined): Promise<boolean> {
+  try {
+    const t = tabId != null ? await browser.tabs.get(tabId) : await getTargetTab();
+    return !!t?.incognito;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -57,13 +83,13 @@ export function useCheckRun(deps: CheckRunDeps) {
   const seq = useRef(0);
   const runSeq = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
-  const currentInput = useRef<CheckInput | null>(null);
+  const currentInput = useRef<{ input: CheckInput; opts: RunOptions } | null>(null);
   const depsRef = useRef(deps);
   useEffect(() => {
     depsRef.current = deps;
   });
 
-  const start = useCallback(async (raw: CheckInput, opts: { tabId?: number; only?: ProviderId; previous?: PreviousResult } = {}) => {
+  const start = useCallback(async (raw: CheckInput, opts: RunOptions = {}) => {
     const { tabId, only, previous } = opts;
     const s = depsRef.current.settings();
     if (!s) return;
@@ -72,15 +98,27 @@ export function useCheckRun(deps: CheckRunDeps) {
     const input: CheckInput = { ...raw, ask: normalizeAsk(raw.ask ?? defaultAsk(s)) };
     const myRun = ++runSeq.current;
     const stale = () => runSeq.current !== myRun;
+    // The phase kind last shown by this run: the view follows changes of kind (checking → result),
+    // not every progress update, so History and Settings stay usable while a check runs.
+    let shownKind: PhasePayload['phase'] | null = null;
     const setPhase = (p: PhasePayload, opts: { quiet?: boolean } = {}) => {
       if (stale()) return;
       setPhaseState({ ...p, seq: ++seq.current });
       // Later updates to a result (saved, evidence attached) must not pull the user back to it
       // from History or Settings; only transitions navigate.
-      if (!opts.quiet) depsRef.current.onPhase(p);
+      if (!opts.quiet && p.phase !== shownKind) depsRef.current.onPhase(p);
+      shownKind = p.phase;
     };
     abortRef.current?.abort();
-    currentInput.current = input;
+    currentInput.current = { input, opts };
+    // A private window's check is never written to history: no row, no page copy, no screenshot.
+    const incognitoPromise = opts.incognito != null ? Promise.resolve(opts.incognito) : tabIsIncognito(tabId);
+    // What "Try again" needs to repeat this run (the second-opinion provider, the earlier answer).
+    const retry: Pick<RunOptions, 'only' | 'previous' | 'incognito'> = { only, previous, incognito: opts.incognito };
+    void incognitoPromise.then((v) => {
+      retry.incognito = v;
+      if (currentInput.current?.input === input) currentInput.current.opts = { ...currentInput.current.opts, incognito: v };
+    });
 
     const target = decideTarget(s, only);
     if (target.kind === 'webmode') {
@@ -96,13 +134,20 @@ export function useCheckRun(deps: CheckRunDeps) {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    // The lookups outlive the run's own controller once the result is on screen: a next check aborts
+    // this run, but the evidence for the result already shown (and saved) must still arrive.
+    const lookupsController = new AbortController();
+    const abortLookups = () => lookupsController.abort();
+    controller.signal.addEventListener('abort', abortLookups, { once: true });
     const { order } = target;
     const first = createProvider(order[0]!, s)!;
     const firstLabel = providerRunLabel(order[0]!, s);
 
     // The page as it is now, beside everything else; only the page the input came from.
     const pageOfInput = input.kind === 'page' ? input.url : input.pageUrl;
-    const snapshotPromise = s.privacy.snapshots ? captureFromTab(tabId, input.kind === 'text' ? input.text : undefined, pageOfInput) : Promise.resolve(null);
+    const snapshotPromise = s.privacy.snapshots
+      ? incognitoPromise.then((incognito) => (incognito ? null : captureFromTab(tabId, input.kind === 'text' ? input.text : undefined, pageOfInput)))
+      : Promise.resolve(null);
 
     // Two-pass: list the claims first so each gets its own lookup and the main pass knows what to verify.
     const twoPass = s.twoPass && input.kind !== 'image';
@@ -113,7 +158,7 @@ export function useCheckRun(deps: CheckRunDeps) {
     const listing = new AbortController();
     controller.signal.addEventListener('abort', () => listing.abort(), { once: true });
     const claimsPromise = twoPass ? extractClaims(input, lister, listing.signal) : Promise.resolve([] as string[]);
-    const lookups = startLookups(input, s, controller.signal, twoPass ? claimsPromise : undefined);
+    const lookups = startLookups(input, s, lookupsController.signal, twoPass ? claimsPromise : undefined);
     let preReady: PreRunLookups | null = null;
     void lookups.all.then((v) => (preReady = v)).catch(() => undefined);
     let run = emptyRunState(input, firstLabel, twoPass ? ['Listing the claims to check…'] : []);
@@ -167,7 +212,7 @@ export function useCheckRun(deps: CheckRunDeps) {
       );
       if (stale()) return;
       if (!prepared.ok) {
-        setPhase({ phase: 'error', input, error: prepared.error });
+        setPhase({ phase: 'error', input, error: prepared.error, ...retry });
         return;
       }
       image = prepared.image;
@@ -207,7 +252,7 @@ export function useCheckRun(deps: CheckRunDeps) {
           finished = ev.result;
         } else if (ev.type === 'failed') {
           if (flushTimer) clearTimeout(flushTimer);
-          setPhase({ phase: 'error', input, error: ev.error });
+          setPhase({ phase: 'error', input, error: ev.error, ...retry });
           return;
         } else {
           run = reduceProgress(run, ev);
@@ -219,6 +264,8 @@ export function useCheckRun(deps: CheckRunDeps) {
       if (flushTimer) clearTimeout(flushTimer);
     }
     if (!finished) return;
+    // The result is on screen from here on; a later run no longer stops its lookups.
+    controller.signal.removeEventListener('abort', abortLookups);
 
     // Whatever lookups have resolved go into the first render, so the banner is there when focus lands.
     if (preReady) finished = attachLookups(finished, preReady, { credibility: {}, mixNotes: [] });
@@ -227,13 +274,20 @@ export function useCheckRun(deps: CheckRunDeps) {
     // Save first, enrich later: a result the user has seen is in history even if they start the
     // next check (a second opinion, say) while the slow lookups are still running.
     let snap: Awaited<typeof snapshotPromise> = null;
+    let save: SaveStatus;
     try {
-      // A tab that never finishes loading never answers; the result is saved without a page copy then.
-      snap = await Promise.race([snapshotPromise, new Promise<null>((r) => setTimeout(() => r(null), 4000))]);
-      await saveCheck(finished, snap);
-      depsRef.current.onSaved();
-      void enforceSnapshotCap(s.history.maxMb * 1024 * 1024);
-      setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous }, { quiet: true });
+      if (await incognitoPromise) {
+        save = { status: 'private' };
+        setPhase({ phase: 'result', result: finished, save, previous }, { quiet: true });
+      } else {
+        // A tab that never finishes loading never answers; the result is saved without a page copy then.
+        snap = await Promise.race([snapshotPromise, new Promise<null>((r) => setTimeout(() => r(null), 4000))]);
+        await saveCheck(finished, snap);
+        depsRef.current.onSaved();
+        enforceSnapshotCap(s.history.maxMb * 1024 * 1024).catch((e: unknown) => console.warn('[wys] could not trim saved pages', e));
+        save = { status: 'saved', withSnapshot: !!snap };
+        setPhase({ phase: 'result', result: finished, save, previous }, { quiet: true });
+      }
     } catch (e) {
       console.warn('[wys] could not save to history', e);
       setPhase(
@@ -253,15 +307,15 @@ export function useCheckRun(deps: CheckRunDeps) {
       );
       if (Object.keys(rated.credibility).length || rated.mixNotes.length) {
         finished = { ...finished, credibility: rated.credibility, mixNotes: rated.mixNotes.length ? rated.mixNotes : undefined };
-        setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous }, { quiet: true });
+        setPhase({ phase: 'result', result: finished, save, previous }, { quiet: true });
       }
-      const [pre, originalCapture] = await Promise.all([lookups.all, originalSourceCapture(originalUrl, s, controller.signal)]);
+      const [pre, originalCapture] = await Promise.all([lookups.all, originalSourceCapture(originalUrl, s, lookupsController.signal)]);
       finished = attachLookups(finished, pre, { ...rated, originalCapture });
       // The row exists; attach the evidence to it even if a newer run has taken the view. An update,
       // not a second save: a note typed meanwhile is kept and a deleted check stays deleted.
-      await updateCheckResult(finished);
+      if (save.status === 'saved') await updateCheckResult(finished);
       if (stale()) return;
-      setPhase({ phase: 'result', result: finished, save: { status: 'saved', withSnapshot: !!snap }, previous }, { quiet: true });
+      setPhase({ phase: 'result', result: finished, save, previous }, { quiet: true });
     } catch (e) {
       console.warn('[wys] lookups failed', e);
     }
@@ -271,10 +325,12 @@ export function useCheckRun(deps: CheckRunDeps) {
   const cancel = useCallback(() => {
     abortRef.current?.abort();
     runSeq.current++;
-    const input = currentInput.current;
-    if (input) {
-      setPhaseState({ phase: 'error', input, error: { code: 'cancelled', message: 'Cancelled.' }, seq: ++seq.current });
-      depsRef.current.onPhase({ phase: 'error', input, error: { code: 'cancelled', message: 'Cancelled.' } });
+    const cur = currentInput.current;
+    if (cur) {
+      const { only, previous, incognito } = cur.opts;
+      const p: PhasePayload = { phase: 'error', input: cur.input, error: { code: 'cancelled', message: 'Cancelled.' }, only, previous, incognito };
+      setPhaseState({ ...p, seq: ++seq.current });
+      depsRef.current.onPhase(p);
     }
   }, []);
   const clearSetup = useCallback(() => setPhaseState((p) => (p.phase === 'setup' ? { phase: 'idle', seq: ++seq.current } : p)), []);

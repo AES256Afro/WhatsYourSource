@@ -4,7 +4,7 @@ import { clampSelection, INLINE_IMAGE_SENTINEL, LIMITS } from '@/lib/messaging/l
 import type { SelectionInfo } from '@/lib/messaging/protocol';
 import { extractPost } from '@/lib/post/extract';
 import { shortcutLabelForPlatform } from '@/lib/shortcut';
-import { pageTriggerTarget, readPublicSettings, SETTINGS_KEY, SHORTCUT_KEY, type PublicSettings } from '@/lib/storage/publicSettings';
+import { pageTriggerTarget, readPublicSettings, SETTINGS_KEY, SHORTCUT_KEY, siteAllowed, type PublicSettings } from '@/lib/storage/publicSettings';
 
 /**
  * Runs on every page, does three small things and nothing else:
@@ -184,8 +184,7 @@ export default defineContentScript({
 
     function chipAllowed(): boolean {
       if (!settings.chip) return false;
-      const host = location.hostname.replace(/^www\./, '');
-      return !settings.disabledSites.some((s) => host === s || host.endsWith(`.${s}`));
+      return siteAllowed(location.hostname, settings.disabledSites);
     }
   },
 });

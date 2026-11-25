@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { clearHistory, eachCheck, exportAll, listChecks, storageStats, type StoredCheck } from '@/lib/history/db';
 import { CSV_HEAD, csvLine, downloadBlob } from '@/lib/history/export';
+import { localDay } from '@/lib/history/row';
+import { dayLabel } from './RecentList';
 import { useActionError } from '../hooks/useActionError';
 import type { CheckInput } from '@/lib/messaging/protocol';
 import { Label } from './common';
@@ -15,6 +17,8 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
   const [kind, setKind] = useState<KindFilter>('all');
   const [withSnapshot, setWithSnapshot] = useState(false);
   const [items, setItems] = useState<StoredCheck[] | null>(null);
+  // A failed read (the database could not open) shows a line with a retry, never "Loading…" forever.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const filterSeq = useRef(0);
@@ -35,11 +39,18 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
   useEffect(() => {
     let alive = true;
     filterSeq.current++;
-    void listChecks({ query: debouncedQuery, kind, withSnapshot, limit: PAGE + 1 }).then((r) => {
-      if (!alive) return;
-      setHasMore(r.length > PAGE);
-      setItems(r.slice(0, PAGE));
-    });
+    listChecks({ query: debouncedQuery, kind, withSnapshot, limit: PAGE + 1 }).then(
+      (r) => {
+        if (!alive) return;
+        setLoadError(null);
+        setHasMore(r.length > PAGE);
+        setItems(r.slice(0, PAGE));
+      },
+      (e: unknown) => {
+        console.warn('[wys] could not read history', e);
+        if (alive) setLoadError('Couldn’t read your history.');
+      },
+    );
     return () => {
       alive = false;
     };
@@ -47,13 +58,17 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
 
   useEffect(() => {
     let alive = true;
-    void storageStats().then((s) => alive && setStats(s));
+    storageStats().then(
+      (s) => alive && setStats(s),
+      () => undefined, // the footer line is optional; the list reports a failed read
+    );
     return () => {
       alive = false;
     };
   }, [tick, refreshKey]);
 
-  const loadMore = async () => {
+  const { error: actionError, guard } = useActionError();
+  const loadMore = guard('Loading older checks', async () => {
     const last = items?.[items.length - 1];
     if (!last || loadingMore) return;
     const seq = filterSeq.current; // the filters this request belongs to
@@ -66,11 +81,10 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
     } finally {
       setLoadingMore(false);
     }
-  };
+  });
 
   const groups = useMemo(() => groupByDay(items ?? []), [items]);
 
-  const { error: actionError, guard } = useActionError();
   const [exported, setExported] = useState<string | null>(null);
   const clearAll = guard('Clear all', async () => {
     if (!confirm('Delete all saved checks and page snapshots? This cannot be undone.')) return;
@@ -94,10 +108,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
     if (batch) parts.push(new Blob([batch]));
     // Say so when the search or a filter narrowed it: the file looks the same either way.
     const filtered = !!debouncedQuery.trim() || kind !== 'all' || withSnapshot;
-    downloadBlob(
-      new Blob(parts, { type: 'text/csv;charset=utf-8' }),
-      `whatsyoursource-checks${filtered ? '-filtered' : ''}-${new Date().toISOString().slice(0, 10)}.csv`,
-    );
+    downloadBlob(new Blob(parts, { type: 'text/csv;charset=utf-8' }), `whatsyoursource-checks${filtered ? '-filtered' : ''}-${localDay()}.csv`);
     setExported(
       filtered && stats
         ? `Exported ${n} matching check${n === 1 ? '' : 's'} (of ${stats.checks})`
@@ -106,7 +117,7 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
     setTimeout(() => setExported(null), 4000);
   });
   const exportJson = guard('Export', async () => {
-    downloadBlob(await exportAll(), `whatsyoursource-history-${new Date().toISOString().slice(0, 10)}.json`);
+    downloadBlob(await exportAll(), `whatsyoursource-history-${localDay()}.json`);
   });
 
   return (
@@ -155,7 +166,14 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
           </button>
         </div>
 
-        {items === null ? (
+        {loadError && items === null ? (
+          <div role="alert" className="flex items-center gap-2 text-[13px] text-bad">
+            <span className="grow">{loadError}</span>
+            <button className="wys-btn h-8 px-3 text-[12px]" onClick={() => setTick((t) => t + 1)}>
+              Try again
+            </button>
+          </div>
+        ) : items === null ? (
           <div className="text-[13px] text-ink-2">Loading…</div>
         ) : items.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line-strong p-4 text-center text-[13px] text-ink-2">
@@ -178,8 +196,8 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
         )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-t border-line bg-paper px-3.5 py-2.5 text-[11px] text-ink-2">
-        <span role="status" className={`min-w-0 basis-full truncate ${actionError ? 'text-bad' : ''}`}>
-          {actionError ?? exported ?? (stats ? `${fmtBytes(stats.snapshotBytes)} of saved pages` : '')}
+        <span role="status" className={`min-w-0 basis-full truncate ${actionError || loadError ? 'text-bad' : ''}`}>
+          {actionError ?? (items !== null ? loadError : null) ?? exported ?? (stats ? `${fmtBytes(stats.snapshotBytes)} of saved pages` : '')}
         </span>
         <span className="grow" />
         <button
@@ -195,10 +213,10 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
           className="wys-btn h-8 px-3 text-[12px]"
           onClick={exportJson}
           disabled={!(stats?.checks ?? items?.length)}
-          title="Everything, with saved pages, as one JSON file."
-          aria-label="Backup: all checks as JSON"
+          title="Every saved check, with the text of its saved page, as one JSON file. Screenshots and settings are not included, and the file can’t be imported back yet."
+          aria-label="Export all checks as JSON"
         >
-          Backup
+          Export all (JSON)
         </button>
         <button className="wys-btn h-8 px-3 text-[12px] text-bad" onClick={clearAll} disabled={!(stats?.checks ?? items?.length)}>
           Clear all
@@ -209,25 +227,9 @@ export function HistoryView({ onOpen, refreshKey }: { onOpen: (id: string) => vo
 }
 
 function groupByDay(items: StoredCheck[]): { label: string; items: StoredCheck[] }[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const y = new Date(today);
-  y.setDate(y.getDate() - 1); // calendar day, so DST changes don't shift the boundary
-  const yesterday = y.getTime();
   const groups = new Map<string, StoredCheck[]>();
   for (const c of items) {
-    const d = new Date(c.createdAt);
-    const label =
-      c.createdAt >= today.getTime()
-        ? 'Today'
-        : c.createdAt >= yesterday
-          ? 'Yesterday'
-          : d.toLocaleDateString([], {
-              weekday: 'short',
-              day: 'numeric',
-              month: 'short',
-              ...(d.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}),
-            });
+    const label = dayLabel(c.createdAt);
     groups.set(label, [...(groups.get(label) ?? []), c]);
   }
   return Array.from(groups, ([label, items]) => ({ label, items }));

@@ -47,3 +47,28 @@ export function readPublicSettings(raw: unknown): PublicSettings {
 export function pageTriggerTarget(s: Pick<PublicSettings, 'shortcutAction' | 'defaultProvider'>): 'panel' | 'webmode' {
   return s.shortcutAction === 'webmode' || s.defaultProvider === 'webmode' ? 'webmode' : 'panel';
 }
+
+/**
+ * A "never show the chip here" entry as the content script compares it: the host name the browser
+ * itself would report (lower case, punycode for international names, no port, no scheme or path),
+ * without a leading "www.". '' for anything that is not a host.
+ */
+export function normalizeSiteEntry(raw: string): string {
+  const t = raw.trim();
+  if (!t) return '';
+  try {
+    const host = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(t) ? t : `https://${t}`).hostname;
+    return host.replace(/^www\./, '').replace(/\.$/, '');
+  } catch {
+    return '';
+  }
+}
+
+/** Whether the chip may show on `hostname`, given the user's list. Compared in lower case, so entries saved by older builds match too. */
+export function siteAllowed(hostname: string, disabledSites: readonly string[]): boolean {
+  const host = hostname.toLowerCase().replace(/^www\./, '');
+  return !disabledSites.some((raw) => {
+    const s = raw.toLowerCase();
+    return !!s && (host === s || host.endsWith(`.${s}`));
+  });
+}

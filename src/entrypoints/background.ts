@@ -15,7 +15,7 @@ import {
 } from '@/lib/storage/settings';
 import { SHORTCUT_KEY } from '@/lib/storage/publicSettings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
-import { askForMenu, MENU_SELECTION_WEB, menuItems, parseMenuId } from '@/lib/menus';
+import { askForMenu, customQuestionChanged, MENU_SELECTION_WEB, menuItems, parseMenuId } from '@/lib/menus';
 import { cleanCustomQuestion, type AskId } from '@/lib/pipeline/question';
 
 /**
@@ -36,12 +36,16 @@ export default defineBackground(() => {
     settings = s;
   };
   void loadSettingsWithoutSecrets().then(adopt, (e: unknown) => console.warn('[wys] settings unreadable', e));
+  // The custom question the menu items were last built from; null until built in this worker's life.
+  let menusBuiltFrom: string | null = null;
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes[SETTINGS_KEY]) return;
-    const before = cleanCustomQuestion(settings.ask.custom);
+    // Compared with what the menu shows (or the stored old value after a wake), never with the
+    // in-memory copy, which may still be the defaults or already the new value.
+    const rebuild = customQuestionChanged(changes[SETTINGS_KEY], menusBuiltFrom);
     adopt(mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue));
     // The menu offers the user's own question by its words; a new wording needs new items.
-    if (cleanCustomQuestion(settings.ask.custom) !== before) createMenus();
+    if (rebuild) createMenus();
   });
 
   // onInstalled and onStartup can both fire in one worker start (an update applied at launch); the
@@ -54,6 +58,7 @@ export default defineBackground(() => {
       .then(() => loadSettingsWithoutSecrets().then(adopt, () => undefined))
       .then(() => browser.contextMenus.removeAll())
       .then(() => {
+        menusBuiltFrom = cleanCustomQuestion(settings.ask.custom);
         const items = menuItems(settings.ask.custom) as Browser.contextMenus.CreateProperties[];
         // Each create takes a callback that reads lastError: a duplicate id (two registrations in one
         // worker start) is then a handled condition, not an "Unchecked runtime.lastError" entry.
@@ -94,7 +99,7 @@ export default defineBackground(() => {
     // The in-memory copy may still be the defaults right after the worker woke up: decide the panel
     // synchronously from it (the gesture cannot wait), then re-read before anything irreversible.
     const panelOpened = settings.defaultProvider !== 'webmode';
-    if (panelOpened) openPanel(tab);
+    let surface = panelOpened ? openPanel(tab) : null;
     void (async () => {
       adopt(await loadSettingsWithoutSecrets());
       const input: CheckInput = { ...(resolve ? await resolve() : quick), ask: askForMenu(askId, settings.ask.custom) };
@@ -102,8 +107,8 @@ export default defineBackground(() => {
         await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant, defaultAsk(settings)) });
         return;
       }
-      if (!panelOpened) openPanel(tab); // the stale copy said web mode; a late panel is better than a lost check
-      await enqueueJob(input, tab?.id, tab?.windowId);
+      surface ??= openPanel(tab); // the stale copy said web mode; a late panel is better than a lost check
+      await enqueueJob(input, tab?.id, tab?.windowId, { incognito: tab?.incognito, surface: await surface });
     })().catch((e: unknown) => console.warn('[wys] could not route the check', e));
   }
 
@@ -146,6 +151,9 @@ export default defineBackground(() => {
         return;
       }
       case 'post': {
+        // Only a web page has a post or a page to check: a file:, about: or view-source: address would
+        // send a local path (with the user's name in it) to the provider and check nothing.
+        if (!/^https?:/i.test(pageUrl)) return;
         const page: CheckInput = { kind: 'page', url: pageUrl, title: pageTitle };
         route(tab, askId, page, async () => {
           if (tab?.id == null) return page;
@@ -161,6 +169,7 @@ export default defineBackground(() => {
         return;
       }
       case 'page': {
+        if (!/^https?:/i.test(pageUrl)) return; // as for 'post': nothing on the web to check
         route(tab, askId, { kind: 'page', url: pageUrl, title: pageTitle });
         return;
       }
@@ -186,8 +195,8 @@ export default defineBackground(() => {
         return;
       }
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-      openPanel(tab);
-      await enqueueJob(input, undefined, tab?.windowId);
+      const surface = await openPanel(tab);
+      await enqueueJob(input, undefined, tab?.windowId, { incognito: tab?.incognito, surface });
     })().catch((e: unknown) => console.warn('[wys] omnibox check failed', e));
   });
   void browser.omnibox.setDefaultSuggestion({ description: 'Check whether this is true and find its source: %s' });
@@ -196,14 +205,14 @@ export default defineBackground(() => {
     if (command !== COMMAND_ID) return;
     let target = pageTriggerTarget(settings);
     // Synchronously, while the gesture is fresh. Firefox passes the tab; Chrome may not.
-    if (target === 'panel' && tab) openPanel(tab);
+    let surface = target === 'panel' && tab ? openPanel(tab) : null;
     void (async () => {
       // The in-memory copy may still be the defaults right after the worker woke up; re-read now
       // that we are async anyway. (The panel may have opened needlessly; harmless.)
       adopt(await loadSettingsWithoutSecrets());
       target = pageTriggerTarget(settings);
       const activeTab = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
-      if (target === 'panel' && !tab) openPanel(activeTab);
+      if (target === 'panel' && !tab) surface = openPanel(activeTab);
       const sel = await resolveSelection(activeTab, '');
       const pageUrl = sel.pageUrl || activeTab?.url || '';
       if (!sel.text && !/^https?:/i.test(pageUrl)) return; // nothing selected, on a page we cannot read
@@ -216,7 +225,7 @@ export default defineBackground(() => {
       if (target === 'webmode') {
         await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant, defaultAsk(settings)) });
       } else {
-        await enqueueJob(input, activeTab?.id, activeTab?.windowId);
+        await enqueueJob(input, activeTab?.id, activeTab?.windowId, { incognito: activeTab?.incognito, surface: (await surface) ?? undefined });
       }
     })().catch((e: unknown) => console.warn('[wys] shortcut check failed', e));
   });
@@ -243,11 +252,13 @@ export default defineBackground(() => {
     switch (msg.type) {
       case 'wys:check': {
         if (!fromChip(sender)) return false;
-        openPanel(sender.tab);
-        void enqueueJob(msg.input, sender.tab?.id, sender.tab?.windowId).then(
-          () => sendResponse({ ok: true }),
-          (e: unknown) => sendResponse({ ok: false, error: String(e) }),
-        );
+        const tab = sender.tab;
+        void openPanel(tab)
+          .then((surface) => enqueueJob(msg.input, tab?.id, tab?.windowId, { incognito: tab?.incognito, surface }))
+          .then(
+            () => sendResponse({ ok: true }),
+            (e: unknown) => sendResponse({ ok: false, error: String(e) }),
+          );
         return true;
       }
       case 'wys:open-webmode': {
@@ -264,7 +275,7 @@ export default defineBackground(() => {
         return true;
       }
       case 'wys:open-panel': {
-        openPanel(sender.tab);
+        void openPanel(sender.tab);
         sendResponse({ ok: true });
         return false;
       }
@@ -273,8 +284,27 @@ export default defineBackground(() => {
     }
   });
 
-  function openPanel(tab: MaybeTab) {
-    void openPanelSync(tab);
+  /**
+   * Opens the panel (synchronously, inside the gesture) and resolves to where it went: the window's
+   * side panel, or the fallback popup window `openPanelSync` focuses or opens when the side panel is
+   * refused. The job records it, so a fallback window left open never takes a side panel's job.
+   */
+  function openPanel(tab: MaybeTab): Promise<'side' | 'window'> {
+    return openPanelSync(tab).then(
+      () => fallbackWindowFocused().then((fallback) => (fallback ? 'window' : 'side')),
+      () => 'side' as const,
+    );
+  }
+
+  /** The fallback ends with its popup `sidepanel.html` window focused; a side panel leaves the user's window focused. */
+  async function fallbackWindowFocused(): Promise<boolean> {
+    try {
+      const win = await browser.windows.getLastFocused({ populate: true });
+      const url = browser.runtime.getURL('/sidepanel.html');
+      return win.type === 'popup' && !!win.tabs?.some((t) => t.url?.startsWith(url));
+    } catch {
+      return false;
+    }
   }
 
   /**

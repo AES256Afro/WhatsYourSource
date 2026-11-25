@@ -17,17 +17,31 @@ export function normalizeUrl(input: string): string {
   try {
     const u = new URL(input);
     u.hash = '';
-    for (const k of [...u.searchParams.keys()]) {
-      if (/^(utm_|fbclid|gclid|ref$|ref_|igshid|mc_)/i.test(k)) u.searchParams.delete(k);
-    }
-    u.hostname = u.hostname.replace(/\.$/, '');
+    // Filter the raw query by key, keeping each kept pair exactly as written: going through
+    // searchParams would re-encode the query only when a tracker was removed, so two spellings of
+    // one page would compare unequal.
+    const kept = u.search
+      .slice(1)
+      .split('&')
+      .filter((pair) => pair && !/^(utm_|fbclid|gclid|ref$|ref_|igshid|mc_)/i.test(decodeKey(pair.split('=')[0] ?? '')));
+    u.search = kept.length ? `?${kept.join('&')}` : '';
+    u.hostname = u.hostname.replace(/\.+$/, '');
     // Percent-escapes compare case-insensitively (%ed = %ED).
     let s = u.toString().replace(/%[0-9a-f]{2}/gi, (m) => m.toUpperCase());
-    if (s.endsWith('/')) s = s.slice(0, -1);
+    // Trailing slashes of the path only (all of them, so the result normalises to itself), never of the query.
+    if (!u.search) s = s.replace(/\/+$/, '');
     // One scheme and no www for comparison; only the host is case-insensitive (video ids and short links are not).
-    return s.replace(/^https?:\/\/(www\.)?[^/?#]*/i, (m) => m.toLowerCase().replace(/^https?:\/\/(www\.)?/, 'https://'));
+    return s.replace(/^https?:\/\/(www\.)*[^/?#]*/i, (m) => m.toLowerCase().replace(/^https?:\/\/(www\.)*/, 'https://'));
   } catch {
     return input.trim().toLowerCase();
+  }
+}
+
+function decodeKey(k: string): string {
+  try {
+    return decodeURIComponent(k.replace(/\+/g, ' '));
+  } catch {
+    return k;
   }
 }
 

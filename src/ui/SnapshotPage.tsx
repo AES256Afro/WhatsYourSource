@@ -27,13 +27,17 @@ export function SnapshotPage() {
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line bg-paper px-4">
-        <Logo size={22} className="text-accent" />
-        <span className="text-[14px] font-semibold tracking-tight">Saved page</span>
-        {check && <span className="truncate text-[13px] text-ink-2">· {check.title}</span>}
-        <span className="grow" />
+      {/* Wraps instead of clipping: in a narrow window the image switch and its IP warning drop to a line of their own. */}
+      <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-line bg-paper px-4 py-2">
+        <Logo size={22} className="shrink-0 text-accent" />
+        <span className="shrink-0 text-[14px] font-semibold tracking-tight whitespace-nowrap">Saved page</span>
+        {check && (
+          <span dir="auto" className="min-w-0 flex-1 truncate text-[13px] text-ink-2">
+            · {check.title}
+          </span>
+        )}
         {snapshot && (
-          <label className="flex items-center gap-2 text-[12px] text-ink-2">
+          <label className="ml-auto flex items-center gap-2 text-[12px] text-ink-2">
             Load images from the web (reveals your IP to those hosts)
             <Toggle checked={loadImages} onChange={setLoadImages} />
           </label>

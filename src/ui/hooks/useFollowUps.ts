@@ -79,6 +79,11 @@ export function useFollowUps(result: CheckResult, settings: Settings | undefined
       const s = settingsRef.current;
       const question = cleanFollowUpQuestion(raw);
       if (!s || !question || abort.current) return false;
+      // At the cap a new question is refused, visibly: keeping it would silently drop the first one.
+      if (itemsRef.current.length >= MAX_FOLLOW_UPS) {
+        setError(FOLLOW_UPS_FULL);
+        return false;
+      }
       const pid = followUpProvider(resultRef.current, s);
       const provider = pid ? createProvider(pid, s) : null;
       if (!provider) return false;
@@ -106,7 +111,7 @@ export function useFollowUps(result: CheckResult, settings: Settings | undefined
             run = { ...run, status: ev.message };
             timer ??= setTimeout(flush, 40);
           } else if (ev.type === 'done') {
-            const next = [...itemsRef.current, ev.followUp].slice(-MAX_FOLLOW_UPS);
+            const next = [...itemsRef.current, ev.followUp];
             threads.set(id, next);
             itemsRef.current = next;
             setItems(next);
@@ -143,7 +148,11 @@ export function useFollowUps(result: CheckResult, settings: Settings | undefined
     stop,
     /** Who will answer, for the box's label; null when no model is set up. */
     providerLabel: settings && providerId ? providerRunLabel(providerId, settings) : null,
+    /** The thread holds as many follow-ups as a check keeps; no more can be asked. */
+    full: items.length >= MAX_FOLLOW_UPS,
   };
 }
+
+export const FOLLOW_UPS_FULL = `This check already has ${MAX_FOLLOW_UPS} follow-up questions, the most it keeps. Start a new check to ask more.`;
 
 export type FollowUpThread = ReturnType<typeof useFollowUps>;

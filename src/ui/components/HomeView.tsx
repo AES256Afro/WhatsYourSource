@@ -122,14 +122,16 @@ export function HomeView({
         />
         {picked !== effectiveDefault && ask.id === picked && (
           <span className="text-[11px] leading-[15px] text-ink-2">
-            Only for checks you start in this panel. Highlighting and right-click still ask {nameOf(effectiveDefault)}.{' '}
+            Only for checks you start in this panel. Highlighting, the shortcut and the address bar still ask {nameOf(effectiveDefault)}.{' '}
             <TextAction onClick={() => makeDefault(picked, effectiveDefault)}>Always ask {nameOf(picked)}</TextAction>
           </span>
         )}
         <span role="status" className="text-[11px] leading-[15px] text-ink-2 empty:hidden">
           {madeDefault && (
             <>
-              {madeDefault.now === 'custom' ? 'Your question is now asked everywhere.' : `${askIdLabel(madeDefault.now)} is now the question everywhere.`}{' '}
+              {madeDefault.now === 'custom'
+                ? 'Your question is now the default for highlighting, the shortcut and the address bar.'
+                : `${askIdLabel(madeDefault.now)} is now the default for highlighting, the shortcut and the address bar.`}{' '}
               <TextAction onClick={() => makeDefault(madeDefault.was, madeDefault.was)}>Undo</TextAction>
             </>
           )}
@@ -141,7 +143,9 @@ export function HomeView({
           <Label right={<span className="text-[12px] text-ink-2">{domainOf(selection.pageUrl)}</span>}>
             <span className="text-accent">Selected on this page</span>
           </Label>
-          <p className="m-0 line-clamp-3 text-[13px] leading-[18px]">“{selection.text}”</p>
+          <p dir="auto" className="m-0 line-clamp-3 text-[13px] leading-[18px] wrap-anywhere">
+            “{selection.text}”
+          </p>
           {!webmode && ready && (
             <span className="text-[11px] leading-[15px] text-ink-2">
               Sends the selection{selection.surrounding ? `, ${selection.surrounding.length.toLocaleString()} characters around it` : ''} and the page address
@@ -182,14 +186,31 @@ export function HomeView({
           tabIndex={-1}
           className="rounded-xl border border-dashed border-line-strong p-3 text-[12px] leading-4 text-ink-2 outline-none"
         >
-          Highlight text on the page and a <strong className="text-ink">Check source</strong> chip appears
-          {shortcut ? (
+          {settings.privacy.chip ? (
             <>
-              {' '}
-              — or press <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">{shortcut}</kbd>
+              Highlight text on the page and a <strong className="text-ink">Check source</strong> chip appears
+              {shortcut ? (
+                <>
+                  {' '}
+                  — or press <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">{shortcut}</kbd>
+                </>
+              ) : null}
+              .
             </>
-          ) : null}
-          . Right-click an image to check it, or type <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">wys</kbd> and your text or link in the
+          ) : (
+            <>
+              Highlight text on the page, then{' '}
+              {shortcut ? (
+                <>
+                  press <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">{shortcut}</kbd> or right-click it
+                </>
+              ) : (
+                'right-click it'
+              )}
+              . The <strong className="text-ink">Check source</strong> chip is off in Settings.
+            </>
+          )}{' '}
+          Right-click an image to check it, or type <kbd className="rounded bg-surface-2 px-1 font-semibold text-ink">wys</kbd> and your text or link in the
           address bar.
         </div>
       )}
@@ -197,7 +218,7 @@ export function HomeView({
       <div className="flex flex-col gap-1.5">
         <Label>Or check</Label>
         <button
-          className={`wys-card flex items-center gap-3 px-3 py-2.5 text-left hover:bg-surface ${pageInput ? '' : 'opacity-60'}`}
+          className={`wys-card flex items-center gap-3 px-3 py-2.5 text-left ${pageInput ? 'hover:bg-surface' : 'opacity-60'}`}
           aria-disabled={!pageInput}
           onClick={() => pageInput && run(pageInput)}
         >

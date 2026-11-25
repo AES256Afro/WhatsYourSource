@@ -1,4 +1,5 @@
 import { ASK_PRESETS, cleanCustomQuestion, normalizeAsk, type Ask, type AskId, type PresetAskId } from './pipeline/question';
+import { truncate } from './util/url';
 
 /**
  * The right-click menu: for each thing under the cursor (a selection, an image, a post, the page, a
@@ -42,10 +43,29 @@ const TITLE: Record<PresetAskId, (noun: string) => string> = {
   flaws: (n) => `Find flaws and inaccuracies in ${n}`,
 };
 
-/** The user's own question, short enough for a menu row. */
-function customTitle(custom: string, noun: string): string {
-  const q = custom.length > 48 ? `${custom.slice(0, 47).trimEnd()}…` : custom;
+/**
+ * The user's own question, short enough for a menu row (cut without splitting an emoji). A menu
+ * title treats `&` as an access-key marker (`&&` is a literal one) and replaces `%s` with the
+ * selection, so both are neutralised: the row shows the words as typed.
+ */
+export function customTitle(custom: string, noun: string): string {
+  const q = truncate(custom, 48).replaceAll('&', '&&').replaceAll('%s', '%⁠s');
   return `Ask about ${noun}: “${q}”`;
+}
+
+/** The custom question as stored under the settings key (raw storage value, possibly absent or malformed). */
+export function storedCustomQuestion(stored: unknown): string {
+  const ask = typeof stored === 'object' && stored !== null ? (stored as { ask?: unknown }).ask : undefined;
+  const custom = typeof ask === 'object' && ask !== null ? (ask as { custom?: unknown }).custom : undefined;
+  return cleanCustomQuestion(typeof custom === 'string' ? custom : undefined);
+}
+
+/**
+ * Whether a settings change needs the menu rebuilt: the custom question differs from the one the
+ * menu was last built from, or (when that is unknown, after the worker woke) from the stored old value.
+ */
+export function customQuestionChanged(change: { oldValue?: unknown; newValue?: unknown }, builtFrom: string | null): boolean {
+  return storedCustomQuestion(change.newValue) !== (builtFrom ?? storedCustomQuestion(change.oldValue));
 }
 
 export function menuId(target: MenuTarget, ask: AskId): string {

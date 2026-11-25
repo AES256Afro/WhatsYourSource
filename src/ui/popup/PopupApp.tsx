@@ -5,7 +5,7 @@ import type { CheckInput } from '@/lib/messaging/protocol';
 import { providerRunLabel } from '@/lib/providers/labels';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { askLabel, availableAsks, DEFAULT_ASK, questionFor, type AskId } from '@/lib/pipeline/question';
-import { defaultAsk } from '@/lib/storage/settings';
+import { defaultAsk, providerReady } from '@/lib/storage/settings';
 import { useTargetSelection } from '../hooks/useTargetSelection';
 import { domainOf } from '@/lib/util/url';
 import { useSettings } from '../hooks/useSettings';
@@ -54,14 +54,14 @@ export function PopupApp() {
         <Label right={<span className="text-[12px] text-ink-2">{tab ? domainOf(tab.url) : ''}</span>}>
           {selection ? 'Selected on this page' : 'This page'}
         </Label>
-        <div className="line-clamp-4 rounded-lg border border-line bg-surface px-3 py-2.5 text-[13px] leading-[18px]">
+        <div dir="auto" className="line-clamp-4 rounded-lg border border-line bg-surface px-3 py-2.5 text-[13px] leading-[18px] wrap-anywhere">
           {selection ? `“${selection.text}”` : input ? tab?.title || tab?.url : 'Nothing to check on this tab. Highlight some text first.'}
         </div>
 
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <label htmlFor="wys-default-ask" className="text-[13px]">
-              Question (all checks)
+              Default question
             </label>
             <span className="grow" />
             <select
@@ -82,7 +82,8 @@ export function PopupApp() {
             </select>
           </div>
           <span className="px-1 text-[11px] leading-[15px] text-ink-2">
-            Asks: “{questionFor(ask, input?.kind ?? 'text')}” Changes the question for every check. To write your own, open the side panel.
+            Asks: “{questionFor(ask, input?.kind ?? 'text')}” Used by these buttons, the chip, the shortcut and the address bar; right-click items name their
+            own question. To write your own, open the side panel.
           </span>
         </div>
 
@@ -103,8 +104,9 @@ export function PopupApp() {
                 <Sparkle size={15} /> Check in side panel
               </button>
               <span className="px-1 text-[11px] leading-[15px] text-ink-2">
-                {settings ? `Uses ${providerRunLabel(settings.defaultProvider, settings)}` : 'Uses your configured provider'} · answer and sources appear in the
-                panel · saved to history
+                {settings && !providerReady(settings)
+                  ? 'No key or model set yet. The panel will ask you to set one up, or use Google AI Mode below (no key).'
+                  : `${settings ? `Uses ${providerRunLabel(settings.defaultProvider, settings)}` : 'Uses your configured provider'} · answer and sources appear in the panel · saved to history`}
               </span>
             </div>
             <div className="flex flex-col gap-1.5">

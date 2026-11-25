@@ -2,6 +2,7 @@ import type { GenerateRequest, LlmProvider, RawSource, Usage } from '../provider
 import { toProviderError } from '../providers/types';
 import { domainOf, truncate } from '../util/url';
 import { buildRequest, untrusted } from './prompts';
+import { detailFor, questionFor } from './question';
 import type { CheckErrorCode } from './runCheck';
 import { extractJsonBlock, stripThinking, type CheckResult, type FollowUp } from './schema';
 
@@ -68,13 +69,17 @@ function earlierAnswer(r: CheckResult): string {
 export function buildFollowUpRequest(result: CheckResult, question: string): GenerateRequest {
   const q = cleanFollowUpQuestion(question);
   const input = result.input;
-  // The content exactly as the check put it to the model (already wrapped as untrusted data).
+  // The content as the check put it to the model (already wrapped as untrusted data), without the
+  // original question's line: its instructions ("fill the timeline field", "list each as a claim")
+  // contradict the prose a follow-up asks for. The question is restated once, as history.
+  const questionLine = `${questionFor(input.ask, input.kind)} ${detailFor(input.ask, input.kind)}`;
   const original = buildRequest(input)
-    .parts.map((p) => ('text' in p ? p.text : ''))
+    .parts.map((p) => ('text' in p ? p.text.replace(`\n\n${questionLine}`, '').replace(questionLine, '') : ''))
     .filter(Boolean)
     .join('\n\n');
   const parts = [
-    `The check began with this request:\n\n${original}`,
+    `The check began with this content:\n\n${original}`,
+    `The original question was: "${questionFor(input.ask, input.kind)}" (already answered below).`,
     input.kind === 'image' ? 'The image itself is not attached this time; rely on what the earlier answer says about it.' : '',
     `Your earlier answer, as the user sees it:\n${untrusted('earlier-answer', {}, earlierAnswer(result))}`,
   ];

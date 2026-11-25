@@ -309,3 +309,34 @@ export function providerOrder(s: Settings): ProviderId[] {
 }
 
 export { pageTriggerTarget } from './publicSettings';
+
+/** True for a server on this machine (localhost, 127.0.0.1, [::1]). Mirrors `localServer` in providers/localModels. */
+const isLocalUrl = (u: string) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(u);
+const hostOfUrl = (u: string) => {
+  try {
+    return new URL(u).host;
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * The OpenAI-style settings after the endpoint changes to `rawUrl`, the one rule every writer of the
+ * endpoint uses (the Server select, the Endpoint field, the first-run screen). A key belongs to the
+ * host it was entered for: a different host or a move between this machine and the network starts
+ * without one. A new server means a new model list: the model and what was learned about it go too.
+ */
+export function withEndpoint(o: Settings['providers']['openaiCompat'], rawUrl: string): Settings['providers']['openaiCompat'] {
+  const baseUrl = rawUrl.trim().replace(/\/+$/, '');
+  if (baseUrl === o.baseUrl.trim().replace(/\/+$/, '')) return { ...o, baseUrl };
+  const sameHost = hostOfUrl(baseUrl) === hostOfUrl(o.baseUrl) && isLocalUrl(baseUrl) === isLocalUrl(o.baseUrl);
+  return {
+    ...o,
+    baseUrl,
+    apiKey: sameHost ? o.apiKey : '',
+    model: '',
+    modelVision: null,
+    modelTools: null,
+    modelContext: null,
+  };
+}

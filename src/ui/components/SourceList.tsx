@@ -3,7 +3,10 @@ import { browser } from 'wxt/browser';
 import type { Credibility } from '@/lib/lookups';
 import type { Source } from '@/lib/pipeline/schema';
 import { Count, Label, TextAction } from './common';
-import { Check, Copy, External } from './Icons';
+import { Check, Copy, External, Shield } from './Icons';
+
+const PERENNIAL_URL = 'https://en.wikipedia.org/wiki/Wikipedia:Reliable_sources/Perennial_sources';
+const CC_BY_SA_URL = 'https://creativecommons.org/licenses/by-sa/4.0/';
 
 export function SourceList({
   sources,
@@ -51,7 +54,15 @@ export function SourceList({
       ))}
       {credibility && Object.keys(credibility).length > 0 && (
         <p className="m-0 text-[11px] leading-[15px] text-ink-2">
-          Outlet ratings are Wikipedia editors’ consensus on the outlet as a whole (CC BY-SA), not a verdict on these pages.
+          Outlet ratings are Wikipedia editors’ consensus on the outlet as a whole, not a verdict on these pages. Adapted from{' '}
+          <a href={PERENNIAL_URL} target="_blank" rel="noopener noreferrer">
+            Wikipedia: Reliable sources/Perennial sources
+          </a>
+          , licensed{' '}
+          <a href={CC_BY_SA_URL} target="_blank" rel="noopener noreferrer">
+            CC BY-SA 4.0
+          </a>
+          .
         </p>
       )}
     </div>
@@ -68,21 +79,26 @@ const RATING_SHORT: Record<Credibility['status'], string> = {
   blacklisted: 'Blacklisted',
 };
 
+/**
+ * Outlet ratings are outlined, never filled in the verdict tones: "Reliable" beside a source must not read as the
+ * claim status "Supported" a few rows up. Only the warnings keep a colour.
+ */
 const RATING_TONE: Record<Credibility['status'], string> = {
-  reliable: 'bg-ok-soft text-ok',
-  'no-consensus': 'bg-muted-soft text-ink-2',
-  mixed: 'bg-muted-soft text-ink-2',
-  unreliable: 'bg-warn-soft text-warn',
-  deprecated: 'bg-bad-soft text-bad',
-  blacklisted: 'bg-bad-soft text-bad',
+  reliable: 'border border-line-strong text-ink-2',
+  'no-consensus': 'border border-line-strong text-ink-2',
+  mixed: 'border border-line-strong text-ink-2',
+  unreliable: 'border border-warn-line text-warn',
+  deprecated: 'border border-bad-line text-bad',
+  blacklisted: 'border border-bad-line text-bad',
 };
 
 function RatingPill({ rating }: { rating: Credibility }) {
   return (
     <span
-      className={`wys-pill shrink-0 px-1.5 py-0 text-[11px] ${RATING_TONE[rating.status]}`}
+      className={`wys-pill shrink-0 gap-1 px-1.5 py-0 text-[11px] ${RATING_TONE[rating.status]}`}
       title={`Wikipedia: ${rating.name} is rated "${rating.statusLabel}" by editors' consensus. ${rating.summary}`}
     >
+      {rating.status === 'reliable' && <Shield size={11} className="shrink-0" />}
       {RATING_SHORT[rating.status]}
     </span>
   );
