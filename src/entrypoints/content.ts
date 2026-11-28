@@ -34,21 +34,56 @@ export default defineContentScript({
       settings = readPublicSettings(r[PUBLIC_KEY]);
       if (typeof r[SHORTCUT_KEY] === 'string') binding = r[SHORTCUT_KEY];
     });
-    browser.storage.onChanged.addListener((changes, area) => {
+    const onStorage = (changes: Record<string, { newValue?: unknown }>, area: string) => {
       if (area !== 'local') return;
       if (changes[PUBLIC_KEY]) settings = readPublicSettings(changes[PUBLIC_KEY].newValue);
-      if (changes[SHORTCUT_KEY] && typeof changes[SHORTCUT_KEY].newValue === 'string') {
-        binding = changes[SHORTCUT_KEY].newValue;
+      const sc = changes[SHORTCUT_KEY]?.newValue;
+      if (typeof sc === 'string') {
+        binding = sc;
         chip.setShortcut(binding);
       }
-    });
+    };
+    browser.storage.onChanged.addListener(onStorage);
+
+    // Page listeners hang on this script's own controller, not WXT's context: WXT ends the context when
+    // a "newer script started" event arrives on the document, and a page that knows the extension id
+    // can send that event itself. Only a dead extension (an update or a disable) retires the script.
+    const life = new AbortController();
+    const on = (target: EventTarget, type: string, handler: (e: Event) => void, opts: AddEventListenerOptions = {}) =>
+      target.addEventListener(type, handler, { ...opts, signal: life.signal });
+    const alive = (): boolean => {
+      try {
+        return browser.runtime?.id != null;
+      } catch {
+        return false;
+      }
+    };
+
+    // The selection the chip was shown for, and the last real input at that moment. A click counts only
+    // if the selection is still that one: a page can swap or extend it after the chip appears.
+    let shownFor: { anchor: Node | null; anchorOffset: number; focus: Node | null; focusOffset: number } | null = null;
+    let inputAtShow = 0;
+    const sameAsShown = (sel: Selection | null): boolean =>
+      !!sel &&
+      !!shownFor &&
+      sel.anchorNode === shownFor.anchor &&
+      sel.anchorOffset === shownFor.anchorOffset &&
+      sel.focusNode === shownFor.focus &&
+      sel.focusOffset === shownFor.focusOffset;
+    const hideChip = () => {
+      shownFor = null;
+      chip.hide();
+    };
 
     const chip = createChip(
       () => binding,
       () => {
-        const sel = currentSelection();
+        const live = window.getSelection();
+        const untouched = sameAsShown(live);
         window.clearTimeout(timer);
-        chip.hide();
+        hideChip();
+        if (!untouched) return;
+        const sel = currentSelection();
         if (!sel) return;
         const type = settings.trigger === 'webmode' ? 'wys:open-webmode' : 'wys:check';
         try {
@@ -67,27 +102,38 @@ export default defineContentScript({
     // It must then do nothing at all: no chip, no timers, nothing of ours left in the page.
     let retired = false;
     const retire = () => {
+      if (retired) return;
       retired = true;
       window.clearTimeout(timer);
+      life.abort();
       chip.destroy();
+      try {
+        browser.storage.onChanged.removeListener(onStorage);
+        browser.runtime.onMessage.removeListener(onMessage);
+      } catch {
+        /* the extension is gone; so are its listeners */
+      }
     };
-    ctx.onInvalidated(retire);
+    ctx.onInvalidated(() => {
+      if (!alive()) retire();
+    });
 
     // A page can set a selection itself (getSelection().addRange) and park it under the pointer so a
     // click meant for the page lands on the chip. Only selections that follow real input count.
     let lastUserInput = 0;
     const noteInput = (e: Event) => {
       if (!e.isTrusted || retired) return;
+      // Input on the chip is the click being judged, not a new selection by the user.
+      if (chip.contains(e.target as Node | null)) return;
       lastUserInput = Date.now();
       // A slow drag-select ends with pointerup but no further selectionchange: re-evaluate now.
       // Keyboard selection already fires selectionchange per move, so no key (and never a copy or
       // paste shortcut) schedules work here.
-      // Not the click on the chip itself: that would bring the chip back 220 ms after it was used.
-      if (e.type === 'pointerup' && !chip.contains(e.target as Node | null)) schedule();
+      if (e.type === 'pointerup') schedule();
     };
     // pointerdown/keydown as well as the *up* events: a held shift+arrow repeats keydown for as long
     // as the user extends the selection, and a drag-select is a pointerdown long before its pointerup.
-    for (const ev of ['pointerdown', 'pointerup', 'keydown', 'keyup'] as const) ctx.addEventListener(document, ev, noteInput, { capture: true, passive: true });
+    for (const ev of ['pointerdown', 'pointerup', 'keydown', 'keyup'] as const) on(document, ev, noteInput, { capture: true, passive: true });
 
     // Everything in here runs on the page's main thread after every selection change, so it must
     // stay cheap on any page: no serialising the selection (`toString()` of a select-all on a long
@@ -98,37 +144,42 @@ export default defineContentScript({
       if (retired) return;
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
-        if (ctx.isInvalid) return retire();
-        if (!chipAllowed()) return chip.hide();
-        if (Date.now() - lastUserInput > 1500) return chip.hide();
+        if (!alive()) return retire();
+        if (!chipAllowed()) return hideChip();
+        if (Date.now() - lastUserInput > 1500) return hideChip();
         const sel = window.getSelection();
-        if (!sel || sel.isCollapsed || sel.rangeCount === 0) return chip.hide();
+        // The selection moved while the chip was up and nobody touched a key or the pointer: the page
+        // moved it. Take the chip away rather than offer to check the page's pick.
+        if (shownFor && lastUserInput === inputAtShow && !sameAsShown(sel)) return hideChip();
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) return hideChip();
         if (chip.contains(sel.anchorNode)) return;
-        if (isEditable(sel.anchorNode) || isEditable(sel.focusNode)) return chip.hide();
+        if (isEditable(sel.anchorNode) || isEditable(sel.focusNode)) return hideChip();
         const range = sel.getRangeAt(0);
         // A select-all is a page, not a highlight: the panel's "This page" covers it, and the chip
         // would sit at the bottom of the document anyway.
         const top = selectionTop(range);
-        if (top === document || top === document.documentElement || top === document.body) return chip.hide();
-        if (!likelyLongEnough(range)) return chip.hide();
-        chip.show(selectionEndRect(sel, range), settings.askName);
+        if (top === document || top === document.documentElement || top === document.body) return hideChip();
+        if (!likelyLongEnough(range)) return hideChip();
+        if (!chip.show(selectionEndRect(sel, range), settings.askName)) return hideChip();
+        shownFor = { anchor: sel.anchorNode, anchorOffset: sel.anchorOffset, focus: sel.focusNode, focusOffset: sel.focusOffset };
+        inputAtShow = lastUserInput;
       }, 220);
     };
 
-    ctx.addEventListener(document, 'selectionchange', schedule);
-    ctx.addEventListener(window, 'scroll', () => chip.hide(), { capture: true, passive: true });
-    ctx.addEventListener(window, 'resize', () => chip.hide());
-    ctx.addEventListener(document, 'keydown', (e) => {
-      if (e.key === 'Escape') chip.hide();
+    on(document, 'selectionchange', schedule);
+    on(window, 'scroll', hideChip, { capture: true, passive: true });
+    on(window, 'resize', hideChip);
+    on(document, 'keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Escape') hideChip();
     });
-    ctx.addEventListener(document, 'pointerdown', (e) => {
-      if (!chip.contains(e.target as Node | null)) chip.hide();
+    on(document, 'pointerdown', (e) => {
+      if (!chip.contains(e.target as Node | null)) hideChip();
     });
     // Remember what was under the cursor when the context menu opened, for the "… this post" items.
     // Capture phase (a site that stops propagation must not leave a stale target), real clicks only,
     // and the innermost element even when it sits inside a web component's open shadow root.
     let lastContextTarget: Element | null = null;
-    ctx.addEventListener(
+    on(
       document,
       'contextmenu',
       (e) => {
@@ -139,7 +190,7 @@ export default defineContentScript({
       { capture: true, passive: true },
     );
 
-    browser.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
+    const onMessage = (raw: unknown, _sender: unknown, sendResponse: (r: unknown) => void): false => {
       // Only our own extension can message a content script; a plain shape check keeps zod out of every page.
       const msg = raw as { type?: unknown; srcUrl?: unknown } | null;
       const type = msg && typeof msg.type === 'string' ? msg.type : '';
@@ -181,7 +232,8 @@ export default defineContentScript({
         default:
           return false;
       }
-    });
+    };
+    browser.runtime.onMessage.addListener(onMessage);
 
     function chipAllowed(): boolean {
       if (!settings.chip) return false;
@@ -347,10 +399,53 @@ function logoSvg(): SVGSVGElement {
   return svg;
 }
 
+/** Properties that let a page hide, fade, cover-through or move an element without touching its own box. */
+const UNTOUCHED: [string, string][] = [
+  ['opacity', '1'],
+  ['visibility', 'visible'],
+  ['filter', 'none'],
+  ['clip-path', 'none'],
+  ['mask-image', 'none'],
+  ['transform', 'none'],
+  ['translate', 'none'],
+  ['scale', 'none'],
+  ['rotate', 'none'],
+  ['mix-blend-mode', 'normal'],
+  ['zoom', '1'],
+];
+
+/** The chip host and the root element it hangs from show it as drawn: nothing fades, hides, moves or zooms it. */
+function drawnAsIs(host: Element): boolean {
+  for (const el of [host, document.documentElement]) {
+    const cs = getComputedStyle(el);
+    // '' = a property this browser does not have.
+    for (const [prop, want] of UNTOUCHED) {
+      const v = cs.getPropertyValue(prop);
+      if (v !== '' && v !== want) return false;
+    }
+  }
+  return true;
+}
+
+// IntersectionObserver v2 (Chromium) reports whether an element is really visible: not covered, faded,
+// filtered or transformed by anything on the page, including the top layer. Firefox lacks it.
+const HAS_IO_V2 = typeof IntersectionObserverEntry !== 'undefined' && 'isVisible' in IntersectionObserverEntry.prototype;
+
 function createChip(binding: () => string | null, onClick: () => void) {
   // Nothing touches the page's DOM until the first selection that deserves a chip: most page views never get one.
-  let built: { host: HTMLDivElement; root: ShadowRoot; btn: HTMLButtonElement; kbd: HTMLSpanElement; ask: HTMLSpanElement } | null = null;
+  let built: {
+    host: HTMLDivElement;
+    root: ShadowRoot;
+    btn: HTMLButtonElement;
+    kbd: HTMLSpanElement;
+    ask: HTMLSpanElement;
+    watch: MutationObserver;
+    io: IntersectionObserver | null;
+  } | null = null;
   let shown = false;
+  // Where show() put the button, and whether the browser has confirmed it is visible there.
+  let placed = { left: 0, top: 0 };
+  let seenVisible = false;
   const build = () => {
     const host = document.createElement('div');
     host.setAttribute('data-wys', 'chip');
@@ -362,6 +457,7 @@ function createChip(binding: () => string | null, onClick: () => void) {
     const style = document.createElement('style');
     style.textContent = `
     :host { all: initial; }
+    :host::before, :host::after { content: none !important; display: none !important; }
     .chip { position: fixed; display: none; align-items: center; gap: 8px; padding: 7px 11px 7px 9px;
       background: #15181C; color: #fff; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.14);
       font: 600 13px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; cursor: pointer; pointer-events: auto;
@@ -381,21 +477,39 @@ function createChip(binding: () => string | null, onClick: () => void) {
     const kbd = textSpan('', 'kbd');
     const ask = textSpan('', 'ask');
     btn.append(logoSvg(), textSpan('Check source'), ask, kbd);
-    built = { host, root, btn, kbd, ask };
+    // Our own code never changes the host after this point, so any attribute change is the page's.
+    // Throw the chip away; the next selection builds a fresh one.
+    const watch = new MutationObserver(() => api.destroy());
+    const io = HAS_IO_V2
+      ? new IntersectionObserver(
+          (entries) => {
+            const e = entries[entries.length - 1] as IntersectionObserverEntry & { isVisible?: boolean };
+            seenVisible = e.isVisible === true && e.intersectionRatio > 0.99;
+            if (!seenVisible) api.hide();
+          },
+          { threshold: [0, 1], trackVisibility: true, delay: 100 } as IntersectionObserverInit,
+        )
+      : null;
+    built = { host, root, btn, kbd, ask, watch, io };
     setKbd(binding());
     btn.addEventListener('pointerdown', (e) => e.preventDefault()); // keep the selection alive
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       // Only a real click on a chip that looks like one: not a scripted click, and not a chip the
-      // page has managed to stretch or hide.
-      if (!e.isTrusted) return;
-      const r = btn.getBoundingClientRect();
-      if (r.width > 420 || r.height > 80 || getComputedStyle(host).opacity !== '1') return;
+      // page has managed to stretch, move, cover or hide.
+      if (!e.isTrusted || !intact()) return;
       onClick();
     });
     root.append(style, btn);
     return built;
+  };
+  const intact = (): boolean => {
+    if (!built || !shown || !seenVisible) return false;
+    const r = built.btn.getBoundingClientRect();
+    if (r.width > 420 || r.height > 80) return false;
+    if (Math.abs(r.left - placed.left) > 1 || Math.abs(r.top - placed.top) > 1) return false;
+    return drawnAsIs(built.host);
   };
   // The host is in the page only while the chip is visible. Hidden, nothing of ours is in the DOM,
   // so nothing of ours can end up inside a selection, a copy, or a page's own DOM walk.
@@ -409,9 +523,10 @@ function createChip(binding: () => string | null, onClick: () => void) {
     built.kbd.style.display = b === '' ? 'none' : '';
   };
 
-  return {
-    show(rect: DOMRect, askName = '') {
-      const { btn, host, ask } = built ?? build();
+  const api = {
+    /** False when the page has the chip faded, filtered, zoomed or moved; the caller hides it then. */
+    show(rect: DOMRect, askName = ''): boolean {
+      const { btn, host, ask, watch, io } = built ?? build();
       // The chip says what it will ask when that is not the ordinary fact-check.
       ask.textContent = askName ? `· ${askName}` : '';
       btn.setAttribute('aria-label', askName ? `Check source of selected text (${askName})` : 'Check source of selected text');
@@ -428,16 +543,32 @@ function createChip(binding: () => string | null, onClick: () => void) {
       if (top < 8) top = 8;
       btn.style.left = `${Math.round(left)}px`;
       btn.style.top = `${Math.round(top)}px`;
+      placed = { left: Math.round(left), top: Math.round(top) };
+      watch.observe(host, { attributes: true });
+      // Without IntersectionObserver v2 the checks at click time are all there is.
+      seenVisible = !io;
+      if (io) {
+        io.unobserve(btn);
+        io.observe(btn);
+      }
+      return drawnAsIs(host);
     },
     hide() {
       if (!shown || !built) return; // scroll fires constantly; nothing to do while hidden
       shown = false;
+      seenVisible = false;
       built.btn.classList.remove('on');
+      built.io?.unobserve(built.btn);
       built.host.remove();
     },
     destroy() {
       shown = false;
-      built?.host.remove();
+      seenVisible = false;
+      if (built) {
+        built.watch.disconnect();
+        built.io?.disconnect();
+        built.host.remove();
+      }
       built = null;
     },
     setShortcut(b: string | null) {
@@ -447,4 +578,5 @@ function createChip(binding: () => string | null, onClick: () => void) {
       return !!node && !!built && (node === built.host || built.host.contains(node) || built.root.contains(node));
     },
   };
+  return api;
 }

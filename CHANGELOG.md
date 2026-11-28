@@ -2,6 +2,14 @@
 
 All notable changes to WhatsYourSource. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Security
+- A right-click check uses the words the browser reported when the menu opened. The page's own copy of the selection (its line breaks and the surrounding paragraph) is used only when it holds exactly those words. Before, a page could swap, extend or (in a frame) replace the selection after the right-click and have its own text checked under the user's pick.
+- The "Check source" chip sends only the selection it was shown for. A selection the page changes while the chip is up takes the chip away, and one swapped in as the chip is pressed is refused.
+- The chip refuses a click when the page has moved, faded, filtered or zoomed it or the page root, and is thrown away when the page touches its element. In Chromium it also refuses when anything covers it, including a click-through overlay in the top layer.
+- A page can no longer switch the chip off by sending WXT's "newer script started" event; only an extension that has been updated or disabled retires it.
+
 ## [1.3.1] - 2026-11-27
 
 ### Security

@@ -239,3 +239,176 @@ test('the popup offers both modes for the current selection', async ({ context, 
   await expect(popup.getByRole('button', { name: /Check in side panel/ })).toBeEnabled();
   await expect(popup.getByRole('button', { name: /Open in Google AI Mode/ })).toBeEnabled();
 });
+
+// ---- Selection trust: the page must not choose what the chip sends, nor hide or kill the chip. ----
+
+/** Drag-select the start of the paragraph the way a user would. */
+async function selectWithMouse(page: import('@playwright/test').Page): Promise<void> {
+  const box = (await page.locator('#p').boundingBox())!;
+  await page.mouse.move(box.x + 1, box.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 320, box.y + 6, { steps: 6 });
+  await page.mouse.up();
+}
+
+/** The chip lives in a closed shadow root; find it by hit-testing for its host. */
+async function chipPoint(page: import('@playwright/test').Page): Promise<{ x: number; y: number } | null> {
+  return page.evaluate(() => {
+    const host = document.querySelector('[data-wys="chip"]');
+    if (!host) return null;
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let y = 0; y < innerHeight; y += 3)
+      for (let x = 0; x < innerWidth; x += 3)
+        if (document.elementFromPoint(x, y) === host) {
+          xs.push(x);
+          ys.push(y);
+        }
+    if (!xs.length) return null;
+    return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  });
+}
+
+async function waitForChip(page: import('@playwright/test').Page): Promise<{ x: number; y: number }> {
+  await expect.poll(() => chipPoint(page), { timeout: 5_000 }).not.toBeNull();
+  await page.waitForTimeout(300); // past IntersectionObserver v2's 100 ms visibility delay
+  return (await chipPoint(page))!;
+}
+
+/** Record every check the chip sends, as the background receives it. */
+async function recordChipMessages(sw: Worker): Promise<() => Promise<{ type: string; input: { text: string } }[]>> {
+  await sw.evaluate(() => {
+    const g = globalThis as unknown as { __chip: unknown[] };
+    g.__chip = [];
+    chrome.runtime.onMessage.addListener((m: { type?: string }) => {
+      if (m?.type === 'wys:check' || m?.type === 'wys:open-webmode') g.__chip.push(m);
+    });
+  });
+  return () => sw.evaluate(() => (globalThis as unknown as { __chip: { type: string; input: { text: string } }[] }).__chip);
+}
+
+async function addPageChoice(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    const s = document.createElement('span');
+    s.id = 'pick';
+    s.textContent = 'PAGE-CHOSEN: the bridge passed every inspection.';
+    s.style.cssText = 'position:absolute;left:-9999px;top:0';
+    document.body.append(s);
+  });
+}
+
+test('a real click on the chip sends the selection the user made', async ({ context, sw }) => {
+  const seen = await recordChipMessages(sw);
+  const page = await context.newPage();
+  await page.goto('http://example.test/article');
+  await selectWithMouse(page);
+  const at = await waitForChip(page);
+  await page.mouse.click(at.x, at.y);
+  await expect.poll(async () => (await seen()).length).toBe(1);
+  expect((await seen())[0]!.input.text).toContain('As Einstein put it');
+});
+
+test('a selection the page swaps in as the chip is pressed is not sent', async ({ context, sw }) => {
+  const seen = await recordChipMessages(sw);
+  const page = await context.newPage();
+  await page.goto('http://example.test/article');
+  await addPageChoice(page);
+  await page.evaluate(() => {
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (!(e.target instanceof Element) || e.target.getAttribute('data-wys') !== 'chip') return;
+        const r = document.createRange();
+        r.selectNodeContents(document.getElementById('pick')!);
+        getSelection()!.removeAllRanges();
+        getSelection()!.addRange(r);
+      },
+      true,
+    );
+  });
+  await selectWithMouse(page);
+  const at = await waitForChip(page);
+  await page.mouse.click(at.x, at.y);
+  await page.waitForTimeout(1_000);
+  expect(await seen()).toHaveLength(0);
+});
+
+test('a selection the page swaps in while the chip is up takes the chip away', async ({ context, sw }) => {
+  const seen = await recordChipMessages(sw);
+  const page = await context.newPage();
+  await page.goto('http://example.test/article');
+  await addPageChoice(page);
+  await selectWithMouse(page);
+  const at = await waitForChip(page);
+  await page.evaluate(() => {
+    const r = document.createRange();
+    r.selectNodeContents(document.getElementById('pick')!);
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(r);
+  });
+  await expect.poll(() => chipPoint(page)).toBeNull();
+  await page.mouse.click(at.x, at.y);
+  await page.waitForTimeout(800);
+  expect(await seen()).toHaveLength(0);
+});
+
+test('a chip the page has faded from the root element sends nothing', async ({ context, sw }) => {
+  const seen = await recordChipMessages(sw);
+  const page = await context.newPage();
+  await page.goto('http://example.test/article');
+  await selectWithMouse(page);
+  const at = await waitForChip(page);
+  // The host is untouched; the root element it hangs from makes it all but invisible.
+  await page.evaluate(() => document.documentElement.style.setProperty('filter', 'opacity(0.02)'));
+  await page.mouse.click(at.x, at.y);
+  await page.waitForTimeout(1_000);
+  expect(await seen()).toHaveLength(0);
+});
+
+test('a chip the page has moved sends nothing', async ({ context, sw }) => {
+  const seen = await recordChipMessages(sw);
+  const page = await context.newPage();
+  await page.goto('http://example.test/article');
+  await selectWithMouse(page);
+  const at = await waitForChip(page);
+  // Moved somewhere the user will click for another reason.
+  await page.evaluate(() => document.querySelector<HTMLElement>('[data-wys="chip"]')!.style.setProperty('translate', '0 200px', 'important'));
+  await page.waitForTimeout(300);
+  await page.mouse.click(at.x, at.y + 200);
+  await page.waitForTimeout(1_000);
+  expect(await seen()).toHaveLength(0);
+});
+
+test('a chip the page covers with a click-through overlay sends nothing', async ({ context, sw }) => {
+  const seen = await recordChipMessages(sw);
+  const page = await context.newPage();
+  await page.goto('http://example.test/article');
+  await selectWithMouse(page);
+  const at = await waitForChip(page);
+  // A top-layer popover paints above any z-index and lets the click fall through to the chip.
+  await page.evaluate(({ x, y }) => {
+    const d = document.createElement('div');
+    d.popover = 'manual';
+    d.textContent = 'Close';
+    d.style.cssText = `margin:0;position:fixed;left:${x - 120}px;top:${y - 40}px;width:240px;height:80px;background:#fff;pointer-events:none;border:0`;
+    document.body.append(d);
+    d.showPopover();
+  }, at);
+  await page.waitForTimeout(400);
+  await page.mouse.click(at.x, at.y);
+  await page.waitForTimeout(1_000);
+  expect(await seen()).toHaveLength(0);
+});
+
+test("a forged 'newer script started' event does not switch the chip off", async ({ context, sw, extensionId }) => {
+  const seen = await recordChipMessages(sw);
+  const page = await context.newPage();
+  await page.goto('http://example.test/article');
+  await page.evaluate((id) => {
+    document.dispatchEvent(new CustomEvent(`${id}:content:wxt:content-script-started`, { detail: { contentScriptName: 'content', messageId: 'forged' } }));
+  }, extensionId);
+  await selectWithMouse(page);
+  const at = await waitForChip(page);
+  await page.mouse.click(at.x, at.y);
+  await expect.poll(async () => (await seen()).length).toBe(1);
+});

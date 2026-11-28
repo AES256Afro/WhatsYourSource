@@ -16,6 +16,7 @@ import {
 import { createSettingsRecord, readMenusBuiltFrom, writeMenusBuiltFrom } from '@/lib/storage/settingsStore';
 import { PUBLIC_KEY, SHORTCUT_KEY } from '@/lib/storage/publicSettings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
+import { pickFrameSelection, sameSelection } from '@/lib/messaging/selectionTrust';
 import { askForMenu, MENU_SELECTION_WEB, menuItems, parseMenuId, savedQuestionsChanged } from '@/lib/menus';
 import type { AskId } from '@/lib/pipeline/question';
 
@@ -344,24 +345,25 @@ export default defineBackground(() => {
   /**
    * Ask the content script for the richer selection (context paragraph); fall back to the menu's text.
    * `frameId` (from the context menu) names the frame the user right-clicked; the top-frame script
-   * cannot see selections in other frames.
+   * cannot see selections in other frames. With the menu's text known, a reply that does not hold the
+   * same words is the page's choice, not the user's, and is ignored (see selectionTrust.ts).
    */
-  async function resolveSelection(tab: MaybeTab, fallbackText: string, frameId?: number): Promise<SelectionInfo> {
-    const base: SelectionInfo = clampSelection({ text: fallbackText, pageUrl: tab?.url ?? '', pageTitle: tab?.title ?? '' });
+  async function resolveSelection(tab: MaybeTab, menuText: string, frameId?: number): Promise<SelectionInfo> {
+    const base: SelectionInfo = clampSelection({ text: menuText, pageUrl: tab?.url ?? '', pageTitle: tab?.title ?? '' });
     if (tab?.id == null) return base;
     try {
       if (frameId) {
         // Right-clicked inside an iframe: read that frame, nothing else.
         // The page is still the tab's page, not the frame's own address (about:srcdoc, an embed URL).
-        const inFrame = await readSelectionFromFrames(tab.id, { frameIds: [frameId] }, fallbackText);
+        const inFrame = await readSelectionFromFrames(tab.id, { frameIds: [frameId] }, menuText);
         if (inFrame) return { ...inFrame, pageUrl: base.pageUrl || inFrame.pageUrl, pageTitle: base.pageTitle || inFrame.pageTitle };
       }
       const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:get-selection' });
       const parsed = SelectionInfoSchema.safeParse(reply);
-      if (parsed.success && parsed.data.text.trim()) return parsed.data;
-      // The top frame answered but has no selection: the selection may live in an iframe (a comments
-      // widget, an embedded editor), which the content script does not run in. Ask every frame.
-      const inFrame = await readSelectionFromFrames(tab.id, { allFrames: true }, fallbackText);
+      if (parsed.success && parsed.data.text.trim() && (!menuText || sameSelection(menuText, parsed.data.text))) return parsed.data;
+      // The top frame has no selection (or not the one the menu reported): the selection may live in
+      // an iframe (a comments widget, an embedded editor), which the content script does not run in.
+      const inFrame = await readSelectionFromFrames(tab.id, { allFrames: true }, menuText);
       if (inFrame)
         return {
           ...inFrame,
@@ -371,7 +373,7 @@ export default defineBackground(() => {
     } catch {
       // No content script on this page (loaded before install, or a restricted URL). Try injecting a one-off reader.
       try {
-        const r = await readSelectionFromFrames(tab.id, frameId ? { frameIds: [frameId] } : { allFrames: false }, fallbackText);
+        const r = await readSelectionFromFrames(tab.id, frameId ? { frameIds: [frameId] } : { allFrames: false }, menuText);
         if (r) return frameId ? { ...r, pageUrl: base.pageUrl || r.pageUrl, pageTitle: base.pageTitle || r.pageTitle } : r;
       } catch {
         /* restricted page */
@@ -382,9 +384,10 @@ export default defineBackground(() => {
 
   /**
    * Inject a one-off selection reader. Selections persist per document, so when several frames have
-   * one, the frame whose text matches what the browser reported (`prefer`) wins; else the first.
+   * one, only the frame whose text matches what the browser reported (`menuText`) counts; with no
+   * reported text (the shortcut), the first.
    */
-  async function readSelectionFromFrames(tabId: number, where: { allFrames?: boolean; frameIds?: number[] }, prefer = ''): Promise<SelectionInfo | null> {
+  async function readSelectionFromFrames(tabId: number, where: { allFrames?: boolean; frameIds?: number[] }, menuText = ''): Promise<SelectionInfo | null> {
     const target: Browser.scripting.InjectionTarget = where.frameIds ? { tabId, frameIds: where.frameIds } : { tabId, allFrames: where.allFrames ?? false };
     const results = await browser.scripting.executeScript({
       target,
@@ -403,7 +406,6 @@ export default defineBackground(() => {
       const parsed = SelectionInfoSchema.safeParse(r.result);
       if (parsed.success && parsed.data.text.trim()) found.push(parsed.data);
     }
-    const want = prefer.replace(/\s+/g, ' ').trim();
-    return found.find((f) => want && f.text.replace(/\s+/g, ' ').trim() === want) ?? found[0] ?? null;
+    return pickFrameSelection(found, menuText);
   }
 });
