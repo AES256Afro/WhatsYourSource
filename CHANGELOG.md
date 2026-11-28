@@ -2,7 +2,7 @@
 
 All notable changes to WhatsYourSource. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.2.1] - 2026-11-27
 
 ### Added
 - `THIRD_PARTY_NOTICES.txt` ships in every build: the licence of each bundled package (React, ReactDOM, scheduler, zod, idb, DOMPurify, Readability, exifr, Tailwind CSS, WXT) and the CC BY-SA 4.0 attribution for the Wikipedia outlet ratings. `npm run notices` regenerates it.

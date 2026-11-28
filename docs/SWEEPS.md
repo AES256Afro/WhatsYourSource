@@ -496,3 +496,5 @@ Recorded, not done (owner decisions or larger work):
 - **Selection trust**: a page can swap the selection after a right-click (top frame and frames) or at chip click, or hide and move the chip (S7-01, P5S4-01, P5S6-01/02, S10-01, S10-02).
 - **History restore** (the JSON export cannot be imported), settings export, the HTML export missing fact-checks/evidence/ratings (one result rendered four ways), and the run engine living inside a React hook (largest test gap).
 - Post extraction on feeds and embedded posts, the follow-up box taking 21–29 % of the panel, onboarding button/provider mismatch, and the long tail of Low items.
+
+Released as 1.2.1 on 2026-11-27 (PR #1 merged; tag v1.2.1).
