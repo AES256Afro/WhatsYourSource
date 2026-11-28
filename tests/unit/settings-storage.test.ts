@@ -162,7 +162,7 @@ describe('settings live in the extension database, not storage.local', () => {
       providers: { openaiCompat: { baseUrl: 'http://evil.test/v1' } },
     };
     await fakeBrowser.storage.local.set({ [PUBLIC_KEY]: forged });
-    await tick();
+    await vi.waitFor(() => expect(seen.length).toBeGreaterThan(0));
     expect(await loadSettings()).toEqual(before);
     expect(seen.at(-1)).toEqual(before); // the change only caused a reload from the database
     off();
@@ -179,12 +179,12 @@ describe('settings live in the extension database, not storage.local', () => {
     const off = onSettingsChanged((s) => seen.push(s));
     await updateSettings((s) => ({ ...s, privacy: { ...s.privacy, chip: false } }));
     await saveSettings({ ...DEFAULT_SETTINGS, privacy: { ...DEFAULT_SETTINGS.privacy, chip: false } }); // same content, still a change
-    await tick();
+    // Each listener call reloads from IndexedDB, so a single tick can end before the second reload does.
+    await vi.waitFor(() => expect(seen).toHaveLength(2));
     off();
     const mirror = (await fakeBrowser.storage.local.get(PUBLIC_KEY))[PUBLIC_KEY] as { rev: number; chip: boolean };
     expect(mirror.rev).toBe(rev1 + 2);
     expect(mirror.chip).toBe(false);
-    expect(seen).toHaveLength(2);
     expect(seen.every((s) => !s.privacy.chip)).toBe(true);
   });
 });
