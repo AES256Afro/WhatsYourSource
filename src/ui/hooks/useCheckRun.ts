@@ -6,7 +6,7 @@ import { captureFromTab } from '@/lib/history/snapshot';
 import { prepareImageForCheck, type PreparedImage } from '@/lib/image/prepare';
 import { attachLookups, LOOKUP_BUDGET_MS, originalSourceCapture, sourceRatings, startLookups, type PreRunLookups } from '@/lib/lookups';
 import type { CheckInput } from '@/lib/messaging/protocol';
-import { claimsForPrompt, extractClaims } from '@/lib/pipeline/claims';
+import { claimsForPrompt, extractClaims, wantsClaimListing } from '@/lib/pipeline/claims';
 import { emptyRunState, reduceProgress, type RunState } from '@/lib/pipeline/progress';
 import type { RunError } from '@/lib/pipeline/runCheck';
 import { runProviders } from '@/lib/pipeline/runProviders';
@@ -150,7 +150,7 @@ export function useCheckRun(deps: CheckRunDeps) {
       : Promise.resolve(null);
 
     // Two-pass: list the claims first so each gets its own lookup and the main pass knows what to verify.
-    const twoPass = s.twoPass && input.kind !== 'image';
+    const twoPass = s.twoPass && wantsClaimListing(input);
     // The listing pass needs no tools or search, so the cheapest model of the same provider does it.
     const lister = twoPass ? (createProvider(order[0]!, s, { model: cheapestModel(order[0]!) }) ?? first) : first;
     // Its own controller, so a lister that runs out of time is stopped rather than left generating

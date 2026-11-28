@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export { clampInput, clampSelection, INLINE_IMAGE_SENTINEL, LIMITS, MAX_INLINE_IMAGE_URL } from './limits';
-import { LIMITS, MAX_INLINE_IMAGE_URL } from './limits';
+export { clampInput, clampSelection, INLINE_IMAGE_SENTINEL, isDirectQuestion, LIMITS, MAX_DIRECT_QUESTION, MAX_INLINE_IMAGE_URL } from './limits';
+import { LIMITS, MAX_DIRECT_QUESTION, MAX_INLINE_IMAGE_URL } from './limits';
 import { ASK_IDS, MAX_CUSTOM_QUESTION } from '../pipeline/question';
 
 /**
@@ -20,15 +20,22 @@ const httpUrl = url.refine((u) => /^https?:\/\//i.test(u), 'http(s) only');
 export const AskSchema = z.object({ id: z.enum(ASK_IDS), custom: z.string().max(MAX_CUSTOM_QUESTION).optional() });
 const ask = AskSchema.optional();
 
-export const TextInputSchema = z.object({
-  kind: z.literal('text'),
-  text: z.string().min(1).max(LIMITS.text),
-  pageUrl: url,
-  pageTitle: z.string().max(LIMITS.title),
-  /** A little context around the selection (same paragraph), to help disambiguate. */
-  surrounding: z.string().max(LIMITS.surrounding).optional(),
-  ask,
-});
+export const TextInputSchema = z
+  .object({
+    kind: z.literal('text'),
+    text: z.string().min(1).max(LIMITS.text),
+    pageUrl: url,
+    pageTitle: z.string().max(LIMITS.title),
+    /** A little context around the selection (same paragraph), to help disambiguate. */
+    surrounding: z.string().max(LIMITS.surrounding).optional(),
+    ask,
+    /**
+     * The user typed this text into the side panel as a question to the model, with nothing selected
+     * (`pageUrl` and `pageTitle` are ''). Set only by the extension's own pages; see `isDirectQuestion`.
+     */
+    question: z.literal(true).optional(),
+  })
+  .refine((v) => !v.question || v.text.length <= MAX_DIRECT_QUESTION, { message: 'question too long', path: ['text'] });
 
 export const ImageInputSchema = z.object({
   kind: z.literal('image'),

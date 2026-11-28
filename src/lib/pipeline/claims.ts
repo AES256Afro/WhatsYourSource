@@ -1,3 +1,4 @@
+import { isDirectQuestion } from '../messaging/limits';
 import type { CheckInput } from '../messaging/protocol';
 import type { GenerateRequest, LlmProvider } from '../providers/types';
 import { truncate } from '../util/url';
@@ -51,8 +52,15 @@ export function parseClaims(text: string): string[] {
   return [];
 }
 
+/** Whether a claim-listing pass makes sense for this input: not for an image, nor for a question the user asked directly. */
+export function wantsClaimListing(input: CheckInput): boolean {
+  return input.kind !== 'image' && !isDirectQuestion(input);
+}
+
 /** Run the extraction; an empty list (model failure, no claims) is a normal outcome, not an error. */
 export async function extractClaims(input: CheckInput, provider: LlmProvider, signal: AbortSignal): Promise<string[]> {
+  // A question the user asked directly is not content that makes claims; there is nothing to list.
+  if (isDirectQuestion(input)) return [];
   if (input.kind === 'image' && !input.alt && !input.nearbyText) return [];
   if (input.kind === 'page' && !input.excerpt) return [];
   let text = '';

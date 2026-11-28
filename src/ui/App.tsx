@@ -30,7 +30,7 @@ import type { View } from './views';
 /** The other questions the same content could be asked: every one on offer but the current one. */
 function otherAsks(current: Ask | undefined, settings: Settings): Ask[] {
   const cur = normalizeAsk(current);
-  return availableAsks(settings.ask.custom).filter((a) => a.id !== cur.id || (a.id === 'custom' && a.custom !== cur.custom));
+  return availableAsks(settings.ask.saved).filter((a) => a.id !== cur.id || (a.id === 'custom' && a.custom !== cur.custom));
 }
 
 /** The panel: which view is up, and the check run that drives the checking/result/error views. */

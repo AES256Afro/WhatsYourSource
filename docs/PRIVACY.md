@@ -9,7 +9,11 @@ When you check something, the extension sends to your chosen provider:
 - the highlighted text (plus the surrounding paragraph for context), **or** the image bytes (downscaled), **or** the page URL and title, **or** a post's text with its links and image addresses;
 - the address and title of the page it came from;
 - if the first provider fails and you configured a second one, the same content goes to that one instead; "Second opinion" sends it to the provider you pick;
-- an instruction prompt with the question you chose: one of the built-in ones (fact-check, explain it, timeline, find the flaws) or the question you wrote yourself.
+- an instruction prompt with the question you chose: one of the built-in ones (fact-check, explain it, summarize, timeline, find the flaws, find more sources) or a question you saved or wrote yourself.
+
+When you ask a question from the box on the home screen, only that question goes to the provider (there is no page or selection).
+
+A follow-up question under a result sends your new question, the checked content and the earlier answers in that thread to the provider that answered the check, or, if that provider is no longer set up, to the first one that is.
 
 Providers you can choose:
 
@@ -18,14 +22,14 @@ Providers you can choose:
 | Google AI (Gemini) | `generativelanguage.googleapis.com`, with your own API key | Google's free tier may use prompts to improve its products; a paid key does not. Grounded searches are run by Google. |
 | Google AI Mode (web) | A new tab on `google.com` with your text as the query | Nothing is captured by the extension; this is ordinary browsing. |
 | Anthropic (Claude) | `api.anthropic.com`, with your own key | Web searches are run by Anthropic. |
-| OpenAI-compatible | The endpoint you typed (your own machine for Ollama/LM Studio, or e.g. `api.openai.com`) | A local model never sends anything off your device. If you add a search tool, your search queries go to that tool (SearXNG instance, Brave, Tavily), and pages the model asks to read are fetched by the extension. |
+| OpenAI-compatible | The endpoint you typed (your own machine for Ollama/LM Studio, or e.g. `api.openai.com`) | A local model never sends anything off your device. If you add a search tool, your search queries go to that tool (SearXNG instance, Brave, Tavily). Pages the model asks to read are fetched by the extension only after you allow the page reader (access to all sites); without it the model works from the search results' snippets. |
 
 Two optional lookups run beside the AI during a check and can be turned off in Settings → Extra evidence:
 
 | Lookup | Where data goes | What is sent |
 |---|---|---|
 | Published fact-checks | `factchecktools.googleapis.com`, with your own Google Cloud key | A short query: the first sentence (up to ~24 words) of the checked text, the page title or the image's caption, and, with two-pass checking on, up to three of the claims found in it |
-| Wayback Machine dates | `web.archive.org` | The address of the page the content came from, and of the original source the AI found |
+| Wayback Machine dates | `web.archive.org` | The address of the page the content came from, and of the original source the AI found: scheme, host and path only, never the query string or fragment (an address that needs its query to identify the page is not looked up) |
 
 Outlet reputation ratings are shipped inside the extension (Wikipedia's perennial-sources list, CC BY-SA) and involve no network request.
 
@@ -39,8 +43,8 @@ The extension never sends data to any other party on its own. Links you click in
 
 ## What the extension can see
 
-- The content script runs on pages to show the *Check source* chip and read your selection when asked. It does not read or transmit pages on its own.
-- Host access to arbitrary sites (`<all_urls>`) is **optional** and requested only when needed: to download an image a site blocks, or so a local model can read pages it finds. You can decline; a screenshot of the visible image is used instead.
+- The content script runs on pages to show the *Check source* chip and read your selection when asked. It does not read or transmit pages on its own. It is declared for all sites so the chip can appear on any page, which is why the browser shows access to all sites at install.
+- The extension itself downloads a page or an image file only from the page you started the check on, or from a site you allowed: per site (asked in a click, for an image on another site), or all sites ("Allow all sites" in the local-model settings, so a local model can read the pages its search finds). You can decline or remove it: an image is then read from a screenshot of the visible tab, and the local model works from search snippets only.
 - `activeTab` lets the extension take a screenshot of the current tab for snapshots, and only after you used the extension's right-click menu, shortcut or toolbar button on that tab. A check started from the on-page chip is saved without a page copy unless you have granted access to that site.
 
 ## Firefox data-collection disclosure

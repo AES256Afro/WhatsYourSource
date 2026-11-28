@@ -14,7 +14,7 @@ Chrome (≤132 characters), also used for Edge:
 
 AMO summary (≤250 characters):
 
-> Highlight text, right-click an image or a post, and choose what to ask: fact-check it, explain it, build a timeline, find the flaws, or your own question. Answers come with the sources that were read. Uses Google AI with your own free key, Google AI Mode with no key, Claude/GPT, or a local model. Nothing is sent until you start a check.
+> Highlight text, right-click an image or a post, and choose what to ask: fact-check it, explain it, summarize it, build a timeline, find the flaws, find more sources, or one of your own saved questions. You can also ask the model a question directly from the side panel. Answers come with the sources that were read. Uses Google AI with your own free key, Google AI Mode with no key, Claude/GPT, or a local model. Nothing is sent until you start a check.
 
 ## Detailed description
 
@@ -34,12 +34,13 @@ WhatsYourSource has one purpose: to check the origin and reliability of content 
 
 See `docs/PERMISSIONS.md` for the full table. Short forms:
 
-- `contextMenus`: adds "Fact-check / Explain / Timeline behind / Find flaws and inaccuracies in" items for the selection, image, post, page or link to the right-click menu.
+- `contextMenus`: adds "Fact-check / Explain / Summarize / Timeline behind / Find flaws and inaccuracies in / Find more sources for" items and the user's saved questions for the selection, image, post, page or link to the right-click menu.
 - `storage` + `unlimitedStorage`: settings and API keys (local only, never synced); the local history of checks with page snapshots can exceed the default quota.
 - `activeTab` + `scripting`: read the current selection (in the frame the user right-clicked, or on pages opened before the extension was installed) and, when a check starts from the menu or shortcut, inject the script that makes the saved copy of the page and take a visible-area screenshot of that tab.
 - `sidePanel`: the results UI.
 - Host permissions for `generativelanguage.googleapis.com`, `api.anthropic.com`, `api.openai.com`, `api.search.brave.com`, `api.tavily.com`: direct calls to the provider the user picked, with the user's own key. `factchecktools.googleapis.com`, `web.archive.org`: the two optional evidence lookups (published fact-checks, first-archived dates). `localhost` / `127.0.0.1`: local models.
-- Optional `<all_urls>` (requested per site, in a click, with an explanation): download an image whose host blocks cross-origin reads, or let a local model fetch a page it found via its search tool. Declining falls back to a screenshot or search snippets.
+- Content script on all sites: declared for all sites so the chip can appear on any page, which is why the browser shows site access at install.
+- Optional `<all_urls>` (requested in a click, with an explanation): per site, to download the file of an image on another site than the page; all sites, so a local model can read the pages its search found. The extension downloads a page or image file only from the page the check started on or from a site the user allowed; without that it uses a screenshot or search snippets.
 
 Data-use disclosures: the extension does not collect or transmit user data to the developer. Website content the user selects is sent to the third-party AI provider the user configured, using the user's own credentials, only when the user starts a check. Not sold, not used for unrelated purposes, not used for creditworthiness or lending.
 
@@ -68,11 +69,11 @@ Generated at 1280×800 (Chrome, Edge) and reused for AMO by `npm run screenshots
 
 Promo images (Chrome): small tile 440×280 (`promo-440x280.png`), marquee 1400×560 (`promo-1400x560.png`): the icon and the name, nothing else.
 
-## Submission checklist (1.2.1)
+## Submission checklist (1.3.0)
 
-Everything below is done in the store dashboards, signed in as the developer; the files are on the [v1.2.1 GitHub release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.2.1).
+Everything below is done in the store dashboards, signed in as the developer; the files are on the [v1.3.0 GitHub release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.3.0).
 
-1. **Chrome Web Store** (https://chrome.google.com/webstore/devconsole, one-time $5 registration): New item → upload `whatsyoursource-1.2.1-chrome.zip`. Store listing: name, the one-line description, the detailed description, category Productivity → Tools, the five `store/0*.png` screenshots (1280×800), `promo-440x280.png` small tile, `promo-1400x560.png` marquee. Privacy practices: the single-purpose statement, the permission justifications above, data-use disclosures (collects website content only as described; not sold; not for unrelated purposes), privacy policy URL. Distribution: unlisted first if a beta is wanted, then public.
-2. **Firefox Add-ons** (https://addons.mozilla.org/developers/): Submit a New Add-on → "On this site" → upload `whatsyoursource-1.2.1-firefox.zip`; when asked for source code, upload `whatsyoursource-1.2.1-sources.zip` with the build instructions from the README (Node 22.12+, 24 or 26+, `npm ci`, `npm run build:firefox`). Fill the AMO summary, description, categories Search Tools + Social & Communication, tags, license MIT, privacy policy and support URLs; the data-collection disclosure is already in the manifest. The reviewer notes above explain the nine linter warnings.
+1. **Chrome Web Store** (https://chrome.google.com/webstore/devconsole, one-time $5 registration): New item → upload `whatsyoursource-1.3.0-chrome.zip`. Store listing: name, the one-line description, the detailed description, category Productivity → Tools, the five `store/0*.png` screenshots (1280×800), `promo-440x280.png` small tile, `promo-1400x560.png` marquee. Privacy practices: the single-purpose statement, the permission justifications above, data-use disclosures (collects website content only as described; not sold; not for unrelated purposes), privacy policy URL. Distribution: unlisted first if a beta is wanted, then public.
+2. **Firefox Add-ons** (https://addons.mozilla.org/developers/): Submit a New Add-on → "On this site" → upload `whatsyoursource-1.3.0-firefox.zip`; when asked for source code, upload `whatsyoursource-1.3.0-sources.zip` with the build instructions from the README (Node 22.12+, 24 or 26+, `npm ci`, `npm run build:firefox`). Fill the AMO summary, description, categories Search Tools + Social & Communication, tags, license MIT, privacy policy and support URLs; the data-collection disclosure is already in the manifest. The reviewer notes above explain the nine linter warnings.
 3. **Edge Add-ons** (https://partner.microsoft.com/dashboard/microsoftedge): upload the same Chrome zip; copy the Chrome listing; category Productivity.
 4. After approval: add the store links to the README install section and tag the next version from `package.json`.

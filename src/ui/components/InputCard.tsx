@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import type { CheckInput } from '@/lib/messaging/protocol';
-import { INLINE_IMAGE_SENTINEL } from '@/lib/messaging/limits';
+import { INLINE_IMAGE_SENTINEL, isDirectQuestion } from '@/lib/messaging/limits';
 import { domainOf, isHttpUrl } from '@/lib/util/url';
 import { isDateOnly } from './EvidencePanel';
-import { Globe, Image, Lines, Link as LinkIcon } from './Icons';
+import { Globe, Image, Lines, Link as LinkIcon, Search } from './Icons';
 
 function ImageFrame({ href, children }: { href?: string; children: React.ReactNode }) {
   const cls = 'block overflow-hidden rounded-lg border border-line bg-surface-2';
@@ -37,12 +37,22 @@ export function formatWhen(s: string): string {
 export function InputCard({ input, when, clamp, deferImages }: { input: CheckInput; when?: string; clamp?: boolean; deferImages?: boolean }) {
   const [showImage, setShowImage] = useState(!deferImages);
   const [expanded, setExpanded] = useState(false);
-  const site = input.kind === 'post' ? input.site : domainOf(input.kind === 'page' ? input.url : input.pageUrl);
-  const label = input.kind === 'text' ? 'Checked text' : input.kind === 'image' ? 'Checked image' : input.kind === 'post' ? 'Checked post' : 'Checked page';
+  // A question asked directly in the panel: the user's own words, with no page behind them.
+  const question = isDirectQuestion(input);
+  const site = question ? '' : input.kind === 'post' ? input.site : domainOf(input.kind === 'page' ? input.url : input.pageUrl);
+  const label = question
+    ? 'Your question'
+    : input.kind === 'text'
+      ? 'Checked text'
+      : input.kind === 'image'
+        ? 'Checked image'
+        : input.kind === 'post'
+          ? 'Checked post'
+          : 'Checked page';
   const meta = [label, site, when].filter(Boolean).join(' · ');
   const long = input.kind === 'text' ? input.text.length > 280 : input.kind === 'post' ? input.text.length > 360 : false;
   const clamped = !expanded && (clamp || long);
-  const Icon = input.kind === 'text' ? Lines : input.kind === 'image' ? Image : input.kind === 'post' ? LinkIcon : Globe;
+  const Icon = question ? Search : input.kind === 'text' ? Lines : input.kind === 'image' ? Image : input.kind === 'post' ? LinkIcon : Globe;
 
   return (
     <div className="flex flex-col gap-1">
@@ -88,7 +98,7 @@ export function InputCard({ input, when, clamp, deferImages }: { input: CheckInp
         </div>
       ) : (
         <p className={`m-0 min-w-0 text-[13px] leading-[18px] text-ink-2 wrap-break-word ${clamped ? 'line-clamp-3' : ''}`}>
-          {input.kind === 'text' && <span className="text-ink">{/^["“]/.test(input.text) ? input.text : `“${input.text}”`}</span>}
+          {input.kind === 'text' && <span className="text-ink">{question || /^["“]/.test(input.text) ? input.text : `“${input.text}”`}</span>}
           {input.kind === 'image' && (input.alt ? `${input.alt} — ${displayUrl(input.srcUrl)}` : displayUrl(input.srcUrl))}
           {input.kind === 'page' && (input.title ? `${input.title} — ${input.url}` : input.url)}
         </p>

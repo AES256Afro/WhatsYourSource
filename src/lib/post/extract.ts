@@ -1,5 +1,6 @@
 import { LIMITS } from '../messaging/limits';
 import type { PostInput } from '../messaging/protocol';
+import { stripTracking } from '../util/url';
 
 /**
  * Generic post extraction: from the element the user right-clicked, walk up to the nearest
@@ -170,7 +171,8 @@ function absolute(href: string | null | undefined): string | undefined {
   try {
     const u = new URL(href, location.href);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return undefined;
-    const s = u.toString();
+    // Links in a post go to the model and into history: send them without click trackers.
+    const s = stripTracking(u.toString());
     return s.length <= LIMITS.url ? s : undefined;
   } catch {
     return undefined;

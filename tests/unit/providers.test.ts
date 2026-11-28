@@ -57,7 +57,13 @@ describe('OpenAICompatProvider', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const p = new OpenAICompatProvider({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'qwen3:8b', search: fakeSearch });
+    const p = new OpenAICompatProvider({
+      baseUrl: 'http://localhost:11434/v1',
+      apiKey: '',
+      model: 'qwen3:8b',
+      search: fakeSearch,
+      pageAccess: async () => true,
+    });
     const { result, error } = await collectCheck(INPUT, p);
     expect(error).toBeUndefined();
     expect(fakeSearch.search).toHaveBeenCalledWith('einstein insanity quote origin', expect.anything());

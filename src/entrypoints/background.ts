@@ -15,8 +15,8 @@ import {
 } from '@/lib/storage/settings';
 import { SHORTCUT_KEY } from '@/lib/storage/publicSettings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
-import { askForMenu, customQuestionChanged, MENU_SELECTION_WEB, menuItems, parseMenuId } from '@/lib/menus';
-import { cleanCustomQuestion, type AskId } from '@/lib/pipeline/question';
+import { askForMenu, MENU_SELECTION_WEB, menuItems, parseMenuId, savedQuestionsChanged } from '@/lib/menus';
+import type { AskId } from '@/lib/pipeline/question';
 
 /**
  * The background is a router only: it owns the context menus and the keyboard command,
@@ -36,15 +36,15 @@ export default defineBackground(() => {
     settings = s;
   };
   void loadSettingsWithoutSecrets().then(adopt, (e: unknown) => console.warn('[wys] settings unreadable', e));
-  // The custom question the menu items were last built from; null until built in this worker's life.
-  let menusBuiltFrom: string | null = null;
+  // The saved questions the menu items were last built from; null until built in this worker's life.
+  let menusBuiltFrom: string[] | null = null;
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes[SETTINGS_KEY]) return;
     // Compared with what the menu shows (or the stored old value after a wake), never with the
     // in-memory copy, which may still be the defaults or already the new value.
-    const rebuild = customQuestionChanged(changes[SETTINGS_KEY], menusBuiltFrom);
+    const rebuild = savedQuestionsChanged(changes[SETTINGS_KEY], menusBuiltFrom);
     adopt(mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue));
-    // The menu offers the user's own question by its words; a new wording needs new items.
+    // The menu offers the user's own questions by their words and place; any change to the list needs new items.
     if (rebuild) createMenus();
   });
 
@@ -58,8 +58,8 @@ export default defineBackground(() => {
       .then(() => loadSettingsWithoutSecrets().then(adopt, () => undefined))
       .then(() => browser.contextMenus.removeAll())
       .then(() => {
-        menusBuiltFrom = cleanCustomQuestion(settings.ask.custom);
-        const items = menuItems(settings.ask.custom) as Browser.contextMenus.CreateProperties[];
+        menusBuiltFrom = [...settings.ask.saved];
+        const items = menuItems(settings.ask.saved) as Browser.contextMenus.CreateProperties[];
         // Each create takes a callback that reads lastError: a duplicate id (two registrations in one
         // worker start) is then a handled condition, not an "Unchecked runtime.lastError" entry.
         for (const item of items)
@@ -93,16 +93,20 @@ export default defineBackground(() => {
    * Where a context-menu check goes: the web tab when Google AI Mode is the default provider,
    * otherwise the panel (opened synchronously here, while the gesture is fresh) plus a queued job.
    * `resolve` may be slow (asking the page); the panel decision cannot wait for it.
-   * `askId` is the question the clicked item names: the user's choice, so it goes on the input here.
+   * `askId` (and `index` for a saved question) is the question the clicked item names: the user's
+   * choice, so it goes on the input here. A saved question removed since the menu was built is not
+   * asked: the click is dropped (the panel may already be open, which is harmless).
    */
-  function route(tab: MaybeTab, askId: AskId, quick: CheckInput, resolve?: () => Promise<CheckInput>): void {
+  function route(tab: MaybeTab, item: { askId: AskId; index?: number }, quick: CheckInput, resolve?: () => Promise<CheckInput>): void {
     // The in-memory copy may still be the defaults right after the worker woke up: decide the panel
     // synchronously from it (the gesture cannot wait), then re-read before anything irreversible.
     const panelOpened = settings.defaultProvider !== 'webmode';
     let surface = panelOpened ? openPanel(tab) : null;
     void (async () => {
       adopt(await loadSettingsWithoutSecrets());
-      const input: CheckInput = { ...(resolve ? await resolve() : quick), ask: askForMenu(askId, settings.ask.custom) };
+      const ask = askForMenu(item.askId, settings.ask.saved, item.index);
+      if (!ask) return;
+      const input: CheckInput = { ...(resolve ? await resolve() : quick), ask };
       if (settings.defaultProvider === 'webmode') {
         await browser.tabs.create({ url: googleAiModeUrl(input, settings.webmodeVariant, defaultAsk(settings)) });
         return;
@@ -133,13 +137,13 @@ export default defineBackground(() => {
     }
     const item = parseMenuId(info.menuItemId);
     if (!item) return;
-    const { askId } = item;
+    const pick = { askId: item.askId, index: item.index };
     switch (item.target) {
       case 'selection': {
         const text = (info.selectionText ?? '').trim();
         if (!text) return;
         const quick: CheckInput = { kind: 'text', text, pageUrl, pageTitle };
-        route(tab, askId, quick, async () => {
+        route(tab, pick, quick, async () => {
           const sel = await resolveSelection(tab, text, info.frameId);
           return { kind: 'text', text: sel.text, pageUrl: sel.pageUrl || pageUrl, pageTitle: sel.pageTitle || pageTitle, surrounding: sel.surrounding };
         });
@@ -147,7 +151,7 @@ export default defineBackground(() => {
       }
       case 'image': {
         if (!info.srcUrl) return;
-        route(tab, askId, { kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle });
+        route(tab, pick, { kind: 'image', srcUrl: info.srcUrl, pageUrl, pageTitle });
         return;
       }
       case 'post': {
@@ -155,7 +159,7 @@ export default defineBackground(() => {
         // send a local path (with the user's name in it) to the provider and check nothing.
         if (!/^https?:/i.test(pageUrl)) return;
         const page: CheckInput = { kind: 'page', url: pageUrl, title: pageTitle };
-        route(tab, askId, page, async () => {
+        route(tab, pick, page, async () => {
           if (tab?.id == null) return page;
           try {
             const reply: unknown = await browser.tabs.sendMessage(tab.id, { type: 'wys:extract-post' });
@@ -170,12 +174,12 @@ export default defineBackground(() => {
       }
       case 'page': {
         if (!/^https?:/i.test(pageUrl)) return; // as for 'post': nothing on the web to check
-        route(tab, askId, { kind: 'page', url: pageUrl, title: pageTitle });
+        route(tab, pick, { kind: 'page', url: pageUrl, title: pageTitle });
         return;
       }
       case 'link': {
         if (!info.linkUrl || !/^https?:/i.test(info.linkUrl)) return;
-        route(tab, askId, { kind: 'page', url: info.linkUrl, title: '' });
+        route(tab, pick, { kind: 'page', url: info.linkUrl, title: '' });
         return;
       }
     }
@@ -248,7 +252,8 @@ export default defineBackground(() => {
     if (!parsed.success) return false;
     const msg = parsed.data;
     // The question is the user's, never the page's: a content script cannot choose it.
-    if ('input' in msg) msg.input = { ...msg.input, ask: undefined };
+    // Nor can it claim its text is the user's own question.
+    if ('input' in msg) msg.input = { ...msg.input, ask: undefined, ...(msg.input.kind === 'text' ? { question: undefined } : {}) };
     switch (msg.type) {
       case 'wys:check': {
         if (!fromChip(sender)) return false;

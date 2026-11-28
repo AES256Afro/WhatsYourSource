@@ -2,6 +2,25 @@
 
 All notable changes to WhatsYourSource. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.0] - 2026-11-27
+
+### Added
+- Ask the model a question directly: a box on the side panel's home screen sends a question with nothing selected, and the answer comes with sources, is saved to history and takes follow-up questions like any check. In Google AI Mode it opens a search for the question.
+- Saved questions: add, edit and remove up to eight questions of your own in Settings → Your questions, or save the one typed under "Ask your own" on the home screen. Each appears on the right-click menu (under "Your questions about …" when there are two or more), on the home screen's picker and in the popup, and any of them can be the default. A question saved in 1.2.x becomes the first one.
+- Two new questions: **Summarize** (selection, post, article) and **Find more sources** (selection, post, article: other reporting, the original or primary source, and what confirms or contradicts it).
+
+### Changed
+- **Explain it** now asks what they are talking about and explains it in plain terms with the background needed to follow it.
+- Right-click items for a whole page say "this article" (for example "Fact-check this article", "Summarize this article").
+- Source links are stored, shown, copied and exported without tracking parameters (`utm_*`, `fbclid`, `gclid`, `msclkid`, mail and analytics ids, YouTube and Spotify share ids), and common redirect wrappers (Google, Facebook, Instagram, LinkedIn, YouTube) are unwrapped to the real address. Checks already in history are cleaned when read. Gemini's grounding links are redirect tokens and stay as they are.
+- The local model's page reader is called "Page reader" in Settings, shows whether it is allowed, and can be removed.
+- Privacy policy, permissions document and store texts describe host access as it now works, and the privacy policy covers direct questions and follow-ups.
+
+### Fixed
+- Host access is enforced by the extension. The content script runs on every site so the chip can appear, and Chrome treats that as access for the extension's own pages too, so the optional "all sites" permission gated nothing. Now a local model reads pages only after you allow the page reader (otherwise it works from search snippets), and an image file is downloaded only from the page's own site or a site you allowed; otherwise the image is read from a screenshot and the result offers "Allow <site> and check again".
+- The "Ask instead" buttons under a result list every saved question by its own words.
+- The privacy line in Settings no longer mentions a Check button that does not exist, and says the Extra evidence lookups also send the claim or address.
+
 ## [1.2.1] - 2026-11-27
 
 ### Added

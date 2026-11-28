@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { browser } from 'wxt/browser';
-import { ASK_IDS, MAX_CUSTOM_QUESTION, normalizeAsk, type Ask } from '../pipeline/question';
+import { ASK_IDS, cleanCustomQuestion, MAX_CUSTOM_QUESTION, normalizeAsk, normalizeAskSettings, type Ask } from '../pipeline/question';
 
 /** `'webmode'` is Google AI Mode on google.com: chosen like a provider, but never an LLM call (`createProvider` returns null for it). */
 export const PROVIDER_IDS = ['gemini', 'openai-compat', 'anthropic', 'webmode'] as const;
@@ -33,10 +33,16 @@ export const SettingsSchema = z.object({
   shortcutAction: z.enum(['panel', 'webmode']),
   /** Google on the web: AI Mode (a conversational answer) or a normal search page with its AI Overview. */
   webmodeVariant: z.enum(['ai-mode', 'overview']),
-  /** The question a check asks unless one is picked for it: a preset, or the user's own (`custom`). */
+  /** The question a check asks unless one is picked for it: a preset, or one of the user's own (`custom`). */
   ask: z.object({
     default: z.enum(ASK_IDS),
+    /** The user's question used as the default when `default` is `'custom'` (one of `saved`, normally). */
     custom: z.string().max(MAX_CUSTOM_QUESTION),
+    /**
+     * The user's own questions, at most `MAX_SAVED_QUESTIONS`, each cleaned, no repeats. The schema
+     * takes any list of strings so one bad entry never resets the rest; `normalizeAskSettings` trims it.
+     */
+    saved: z.array(z.string()),
   }),
   /** Extract the claims first (a cheap extra call) so each one can be looked up and checked on its own. */
   twoPass: z.boolean(),
@@ -97,7 +103,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fallback: false,
   shortcutAction: 'panel',
   webmodeVariant: 'ai-mode',
-  ask: { default: 'factcheck', custom: '' },
+  ask: { default: 'factcheck', custom: '', saved: [] },
   twoPass: true,
   providers: {
     gemini: { apiKey: '', model: 'gemini-3.8-flash', grounding: true, urlContext: true },
@@ -186,9 +192,10 @@ function deepMerge(b: Plain, p: Plain): Plain {
 export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (!isPlain(patch)) return base;
   const merged = deepMerge(base, patch);
+  migrateAsk(merged, patch);
   for (let attempt = 0; attempt < 32; attempt++) {
     const parsed = SettingsSchema.safeParse(merged);
-    if (parsed.success) return parsed.data;
+    if (parsed.success) return withNormalizedAsk(parsed.data);
     let changed = false;
     for (const issue of parsed.error.issues) {
       const path = issue.path.filter((p): p is string | number => typeof p === 'string' || typeof p === 'number');
@@ -207,6 +214,29 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
     if (!changed) return base;
   }
   return base;
+}
+
+/**
+ * Settings stored by 1.2.x have one custom question (`ask.custom`) and no `ask.saved`: that question
+ * becomes the first saved one. Entries that are not strings are dropped here, before the schema
+ * check, so one bad entry does not reset the whole list.
+ */
+function migrateAsk(merged: Plain, patch: Plain): void {
+  const ask = merged.ask;
+  if (!isPlain(ask)) return;
+  const storedAsk = patch.ask;
+  if (!isPlain(storedAsk)) return;
+  if (storedAsk.saved === undefined) {
+    const custom = cleanCustomQuestion(typeof ask.custom === 'string' ? ask.custom : '');
+    ask.saved = custom ? [custom] : [];
+  } else if (Array.isArray(ask.saved)) {
+    ask.saved = ask.saved.filter((q): q is string => typeof q === 'string');
+  }
+}
+
+/** The settings with the question settings made consistent (see `normalizeAskSettings`). */
+export function withNormalizedAsk(s: Settings): Settings {
+  return { ...s, ask: normalizeAskSettings(s.ask) };
 }
 
 /** The settings object with every secret blanked, which is what goes under `settings` in storage. */
@@ -254,7 +284,7 @@ export async function loadSettingsWithoutSecrets(): Promise<Settings> {
 }
 
 export async function saveSettings(next: Settings): Promise<void> {
-  const parsed = SettingsSchema.parse(next);
+  const parsed = withNormalizedAsk(SettingsSchema.parse(next));
   await browser.storage.local.set({ [SETTINGS_KEY]: stripSecrets(parsed), [SECRETS_KEY]: collectSecrets(parsed) });
 }
 
@@ -264,7 +294,7 @@ let updateQueue: Promise<unknown> = Promise.resolve();
 export function updateSettings(mutate: (s: Settings) => Settings): Promise<Settings> {
   const run = updateQueue.then(async () => {
     const current = await loadSettings();
-    const next = mutate(structuredClone(current));
+    const next = withNormalizedAsk(SettingsSchema.parse(mutate(structuredClone(current))));
     await saveSettings(next);
     return next;
   });

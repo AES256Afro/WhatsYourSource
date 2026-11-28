@@ -1,4 +1,4 @@
-import { truncate } from '../util/url';
+import { stripTracking, truncate } from '../util/url';
 
 /**
  * Published fact-checks via Google's Fact Check Tools API (ClaimReview markup aggregated from
@@ -45,7 +45,7 @@ export function parseFactChecks(json: unknown): FactCheck[] {
         claimDate: c.claimDate,
         publisher: (r.publisher?.name || r.publisher?.site || 'Fact-checker').slice(0, 80),
         publisherSite: r.publisher?.site,
-        url: r.url,
+        url: stripTracking(r.url),
         title: r.title?.slice(0, 200),
         rating: (r.textualRating ?? 'Reviewed').slice(0, 60),
         reviewDate: r.reviewDate,

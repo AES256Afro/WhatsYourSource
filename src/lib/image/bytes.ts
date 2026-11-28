@@ -1,12 +1,14 @@
 import { browser } from 'wxt/browser';
 import { LocateImageReplySchema } from '../messaging/protocol';
+import { hasHostAccess } from '../permissions';
 import { isPublicHttpUrl } from '../util/url';
 import { safeImageMime, UNRECOGNISED_FORMAT } from './provenance';
 
 /**
  * Getting the pixels of "that image the user right-clicked" is the fiddly part of image checks:
  * CDNs may refuse cross-origin reads, URLs may be signed and expire, the image may be a CSS
- * background. Strategy: fetch → (caller may request host permission and retry) → screenshot crop.
+ * background. Strategy: fetch (only from a site the user let the extension reach, see
+ * imageDownloadGranted) → screenshot crop → the caller may offer to grant that site and check again.
  */
 export interface ImageBytes {
   bytes: Uint8Array;
@@ -19,6 +21,8 @@ export class ImageFetchError extends Error {
   constructor(
     public kind: 'permission' | 'http' | 'not-image' | 'unknown',
     message: string,
+    /** Set when the file was not downloaded because the user has not granted access to this host. */
+    public noAccessHost?: string,
   ) {
     super(message);
     this.name = 'ImageFetchError';
@@ -75,18 +79,57 @@ export function imageFetchAllowed(srcUrl: string, pageUrl?: string): boolean {
   }
 }
 
+const hostOf = (url: string): string | null => {
+  try {
+    const u = new URL(url);
+    return /^https?:$/.test(u.protocol) ? u.hostname.toLowerCase().replace(/\.$/, '') : null;
+  } catch {
+    return null;
+  }
+};
+
+/** The manifest's fixed local hosts (host_permissions), always granted. */
+const FIXED_LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+
+/**
+ * May the extension download this http(s) image file? Only from a site the user let it reach:
+ * - a site granted per site or through "Allow all sites" (hasHostAccess), or
+ * - the host of the page the check came from (the right-click or toolbar click grants that tab's origin), or
+ * - localhost / 127.0.0.1 when the page itself is local (fixed in host_permissions).
+ * Anything else goes to the screenshot of the image instead. data: and blob: are not downloads.
+ */
+export async function imageDownloadGranted(srcUrl: string, pageUrl: string | undefined, hasAccess: (url: string) => Promise<boolean>): Promise<boolean> {
+  const src = hostOf(srcUrl);
+  if (!src) return false;
+  const page = pageUrl ? hostOf(pageUrl) : null;
+  if (page && src === page) return true;
+  if (FIXED_LOCAL_HOSTS.has(src) && page && FIXED_LOCAL_HOSTS.has(page)) return true;
+  return hasAccess(srcUrl);
+}
+
 /** The format by fixed label: the sniffed bytes, else the declared type through the allowlist. */
 function mimeFor(buf: Uint8Array, declared: string | null): string {
   return sniffMime(buf) ?? safeImageMime(declared);
 }
 
-export async function fetchImageBytes(srcUrl: string, signal?: AbortSignal, pageUrl?: string): Promise<ImageBytes> {
+export async function fetchImageBytes(
+  srcUrl: string,
+  signal?: AbortSignal,
+  pageUrl?: string,
+  hasAccess: (url: string) => Promise<boolean> = hasHostAccess,
+): Promise<ImageBytes> {
   if (srcUrl.startsWith('data:')) {
     const res = await fetch(srcUrl);
     const buf = new Uint8Array(await res.arrayBuffer());
     return { bytes: buf, mime: mimeFor(buf, res.headers.get('content-type') ?? 'image/png'), via: 'fetch' };
   }
   if (!imageFetchAllowed(srcUrl, pageUrl)) throw new ImageFetchError('unknown', 'The image is on a private or local address, so it is not downloaded.');
+  // blob: URLs are the extension reading a page's in-memory object, not a download from a site.
+  if (/^https?:/i.test(srcUrl) && !(await imageDownloadGranted(srcUrl, pageUrl, hasAccess))) {
+    const host = hostOf(srcUrl) ?? srcUrl;
+    throw new ImageFetchError('permission', `The extension has no access to ${host}, so the file is not downloaded.`, host);
+  }
+  if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new DOMException('Cancelled.', 'AbortError');
   const timeout = AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS);
   const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
   let res: Response;

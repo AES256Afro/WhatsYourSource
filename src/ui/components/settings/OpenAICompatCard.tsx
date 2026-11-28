@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { hasAllUrls, hasOrigin, requestAllUrls, requestOrigin } from '@/lib/permissions';
+import { hasAllUrls, hasOrigin, removeAllUrls, requestAllUrls, requestOrigin } from '@/lib/permissions';
 import { OPENAI_COMPAT_PRESETS, openaiCompatLabel, PROVIDER_LABELS } from '@/lib/providers/registry';
 import { describeLocalModels, localServer, type LocalModelInfo } from '@/lib/providers/localModels';
 import { OpenAICompatProvider } from '@/lib/providers/openaiCompat';
@@ -76,6 +76,12 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
     setOriginOk(ok);
   };
   const allowAll = async () => setAllUrls(await requestAllUrls());
+  const removeAll = async () => {
+    setAllUrls(!(await removeAllUrls()));
+    // Giving back all sites can take per-site grants with it in some browsers: show what is left.
+    void hasOrigin(o.baseUrl).then(setOriginOk);
+    if (o.searchTool === 'searxng' && o.searxngUrl) void hasOrigin(o.searxngUrl).then(setSearxngOk);
+  };
   // One real query through the configured backend: a SearXNG without JSON output or a bad key fails here, not mid-check.
   const [searchStatus, setSearchStatus] = useState<Status>({ kind: 'idle' });
   const testSearch = async () => {
@@ -212,7 +218,9 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         <span className="text-[12px] leading-4 text-warn-ink">
           {o.searchTool === 'none'
             ? 'This model can’t search the web by itself. Pick a search tool below so it can find sources; without one it answers from memory and says so.'
-            : 'With a search tool the model can search the web and read the pages it finds, and only those pages become links.'}
+            : allUrls
+              ? 'With a search tool the model can search the web and read the pages it finds, and only those pages become links.'
+              : 'With a search tool the model can search the web and work from the result snippets, and only those results become links.'}
         </span>
       </div>
       <Row label="Search tool" hint="How the local model finds sources.">
@@ -286,10 +294,22 @@ export function OpenAICompatCard({ settings, update }: { settings: Settings; upd
         </div>
       )}
       {o.searchTool !== 'none' && (
-        <Row label="Let the model read the pages it finds" hint={allUrls ? 'Allowed for all sites.' : 'Needs permission to fetch pages on your behalf.'}>
+        <Row
+          label="Page reader"
+          hint={
+            allUrls
+              ? 'Allowed for all sites: the local model can open the search results it finds and read the page text.'
+              : 'Not allowed: the local model sees search result snippets only. Allowing all sites lets it open the results it finds and read the page text.'
+          }
+        >
           {(id) =>
             allUrls ? (
-              <span className="text-[12px] text-ink-2">Allowed</span>
+              <span className="inline-flex items-center gap-2">
+                <span className="text-[12px] text-ink-2">Allowed</span>
+                <button className="wys-btn h-8 px-2.5 text-[12px]" aria-describedby={id} onClick={() => void removeAll()}>
+                  Remove
+                </button>
+              </span>
             ) : (
               <button className="wys-btn h-8 px-2.5 text-[12px]" aria-describedby={id} onClick={() => void allowAll()}>
                 Allow all sites

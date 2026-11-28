@@ -1,5 +1,6 @@
 import { untrusted } from '../pipeline/prompts';
 import { formatHits } from '../search/backends';
+import { hasAllUrls } from '../permissions';
 import { fetchPageText } from '../search/fetchPage';
 import type { SearchBackend, SearchHit } from '../search/types';
 import { parseSse } from '../util/sse';
@@ -37,6 +38,8 @@ export interface OpenAICompatConfig {
   vision?: boolean;
   /** The selected model can call tools; `false` (the server said so) skips the doomed tool round and searches up front. */
   tools?: boolean;
+  /** Whether the user granted "Allow all sites" (the page reader); defaults to asking the browser. For tests. */
+  pageAccess?: () => Promise<boolean>;
 }
 
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
@@ -48,24 +51,28 @@ type Msg =
   | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] }
   | { role: 'tool'; tool_call_id: string; content: string };
 
-const TOOLS = [
-  {
-    type: 'function',
-    function: {
-      name: 'web_search',
-      description: 'Search the web. Returns titles, URLs and snippets. Use specific queries; search more than once if needed.',
-      parameters: { type: 'object', properties: { query: { type: 'string', description: 'The search query' } }, required: ['query'] },
-    },
+const WEB_SEARCH_TOOL = {
+  type: 'function',
+  function: {
+    name: 'web_search',
+    description: 'Search the web. Returns titles, URLs and snippets. Use specific queries; search more than once if needed.',
+    parameters: { type: 'object', properties: { query: { type: 'string', description: 'The search query' } }, required: ['query'] },
   },
-  {
-    type: 'function',
-    function: {
-      name: 'fetch_page',
-      description: 'Fetch a web page by URL and return its readable text (truncated). Use it to read a promising search result in full.',
-      parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
-    },
+} as const;
+const FETCH_PAGE_TOOL = {
+  type: 'function',
+  function: {
+    name: 'fetch_page',
+    description: 'Fetch a web page by URL and return its readable text (truncated). Use it to read a promising search result in full.',
+    parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
   },
-] as const;
+} as const;
+/** fetch_page is offered only when the user granted "Allow all sites"; otherwise the model works from search snippets. */
+const TOOLS_WITH_READER = [WEB_SEARCH_TOOL, FETCH_PAGE_TOOL] as const;
+const TOOLS_SEARCH_ONLY = [WEB_SEARCH_TOOL] as const;
+/** The tool reply when fetch_page is called without the grant (it is not offered then, but a model may try). */
+export const NO_PAGE_ACCESS_REPLY =
+  'fetch_page is not available: the user has not allowed this extension to read sites. Work from the search result snippets only.';
 
 const MAX_ROUNDS = 6;
 /** Tool calls per check, across all rounds: a model (or injected text) can ask for many calls in one round. */
@@ -160,8 +167,11 @@ export class OpenAICompatProvider implements LlmProvider {
   }
 
   private async *toolLoop(req: GenerateRequest, userContent: UserContent, search: SearchBackend, signal: AbortSignal): AsyncGenerator<GenEvent> {
+    // Checked once per run: Chromium lets the extension's pages read any site because of the content
+    // script's match, so the user's grant is enforced here rather than by the browser.
+    const canReadPages = await (this.cfg.pageAccess ?? hasAllUrls)();
     const messages: Msg[] = [
-      { role: 'system', content: `${req.system}\n\n${TOOL_GUIDANCE}` },
+      { role: 'system', content: `${req.system}\n\n${canReadPages ? TOOL_GUIDANCE : TOOL_GUIDANCE_SEARCH_ONLY}` },
       { role: 'user', content: userContent },
     ];
     const seen = new Set<string>();
@@ -180,7 +190,15 @@ export class OpenAICompatProvider implements LlmProvider {
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const res = await this.post(
         '/chat/completions',
-        { model: this.cfg.model, messages, tools: TOOLS, tool_choice: 'auto', temperature: 0.2, max_tokens: MAX_TOKENS, stream: false },
+        {
+          model: this.cfg.model,
+          messages,
+          tools: canReadPages ? TOOLS_WITH_READER : TOOLS_SEARCH_ONLY,
+          tool_choice: 'auto',
+          temperature: 0.2,
+          max_tokens: MAX_TOKENS,
+          stream: false,
+        },
         signal,
       );
       const j = (await readJson(res)) as {
@@ -240,7 +258,8 @@ export class OpenAICompatProvider implements LlmProvider {
           }
         } else if (name === 'fetch_page') {
           const url = str(args.url).trim();
-          if (!/^https?:\/\//i.test(url)) content = 'Invalid URL.';
+          if (!canReadPages) content = NO_PAGE_ACCESS_REPLY;
+          else if (!/^https?:\/\//i.test(url)) content = 'Invalid URL.';
           else if (!readable.has(readKey(url)))
             content = 'Only pages returned by web_search, or linked from the checked content, can be read. Search for it first.';
           else {
@@ -254,7 +273,7 @@ export class OpenAICompatProvider implements LlmProvider {
                 yield { type: 'sources', sources: [{ url: stored, title: page.title || domainOf(stored), domain: domainOf(stored) }] };
               }
             } catch (e) {
-              content = `Could not fetch (${e instanceof Error ? e.message : String(e)}). The extension may lack permission for this site.`;
+              content = `Could not fetch (${e instanceof Error ? e.message : String(e)}).`;
             }
           }
         } else {
@@ -415,6 +434,8 @@ export class OpenAICompatProvider implements LlmProvider {
     }
   }
 }
+
+const TOOL_GUIDANCE_SEARCH_ONLY = `You have one tool: web_search(query). Start by putting the user's question to the search engine: the key phrase from the content plus whether it is true (for example the phrase with "fact check") and where its source is (the phrase with "original source"). Search at least once before answering, search again with a different query when the snippets are not enough, and cite only URLs you actually received from the tool.`;
 
 const TOOL_GUIDANCE = `You have two tools: web_search(query) and fetch_page(url). Start by putting the user's question to the search engine: the key phrase from the content plus whether it is true (for example the phrase with "fact check") and where its source is (the phrase with "original source"). Search at least once before answering, read the most promising result with fetch_page when a snippet is not enough, and cite only URLs you actually received from the tools.`;
 

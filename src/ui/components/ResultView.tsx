@@ -6,7 +6,9 @@ import { googleAiModeUrl, type GoogleAiModeVariant } from '@/lib/googleAiMode';
 import { ClaimList } from './ClaimList';
 import { EvidencePanel, FactCheckBanner, localeDate, WhatWasSent } from './EvidencePanel';
 import { savePageUrl } from '@/lib/lookups/wayback';
+import { requestOrigin } from '@/lib/permissions';
 import { Cite, Count, Label, ProviderBadge, TextAction, formatUsd, timeAgo } from './common';
+import { isDirectQuestion } from '@/lib/messaging/protocol';
 import { askLabel, normalizeAsk, questionFor, type Ask } from '@/lib/pipeline/question';
 import { Check, Copy, External, Logo, Refresh } from './Icons';
 import { InputCard } from './InputCard';
@@ -81,6 +83,7 @@ export function ResultView({
 }) {
   const seenBefore = useSeenBefore(result);
   const thread = useFollowUps(result, settings);
+  const direct = isDirectQuestion(result.input);
   // Copy outcome goes into the footer's live region, so it is announced and survives a failed clipboard write.
   const [copyNote, setCopyNote] = useState<{ ok: boolean; text: string } | null>(null);
   const copyText = async (text: string, done: string, failed: string, ms = 3500) => {
@@ -126,22 +129,26 @@ export function ResultView({
       <div className={`flex grow flex-col gap-3.5 p-3.5 ${embedded ? '' : 'overflow-y-auto'}`}>
         {!embedded && <InputCard input={result.input} when={timeAgo(result.createdAt)} clamp />}
         <div className="flex flex-col gap-1.5">
-          <p className="m-0 text-[12px] leading-4 text-ink-2">
-            <span className="font-semibold text-ink">{askLabel(result.input.ask)}:</span> “{questionFor(result.input.ask, result.input.kind)}”
-          </p>
-          {otherAsks && otherAsks.length > 0 && onAsk && (
+          {/* A question asked directly is the input card itself, and asking the same text "instead" means nothing. */}
+          {!direct && (
+            <p className="m-0 text-[12px] leading-4 text-ink-2">
+              <span className="font-semibold text-ink">{askLabel(result.input.ask)}:</span> “{questionFor(result.input.ask, result.input.kind)}”
+            </p>
+          )}
+          {!direct && otherAsks && otherAsks.length > 0 && onAsk && (
             <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2" role="group" aria-label="Ask instead">
               <span aria-hidden="true">Ask instead:</span>
               {otherAsks.map((a) => (
                 <button
-                  key={a.id}
+                  key={`${a.id}:${a.custom ?? ''}`}
                   type="button"
-                  className="wys-btn h-7 px-2 text-[12px]"
+                  className="wys-btn h-7 max-w-[220px] px-2 text-[12px]"
                   title={questionFor(a, result.input.kind)}
                   aria-label={`Ask instead: ${questionFor(a, result.input.kind)}`}
                   onClick={() => onAsk(a)}
                 >
-                  {askLabel(a)}
+                  {/* Saved questions are all "Your question"; their own words tell them apart. */}
+                  <span className="truncate">{a.id === 'custom' && a.custom ? a.custom : askLabel(a)}</span>
                 </button>
               ))}
             </div>
@@ -222,7 +229,17 @@ export function ResultView({
         {askId !== 'timeline' && <Timeline events={result.timeline} />}
         <EvidencePanel result={result} />
 
-        {result.input.kind === 'image' && result.provenance && <ProvenancePanel provenance={result.provenance} srcUrl={result.input.srcUrl} />}
+        {result.input.kind === 'image' && result.provenance && (
+          <ProvenancePanel
+            provenance={result.provenance}
+            srcUrl={result.input.srcUrl}
+            onAllowHost={() => {
+              const src = result.input.kind === 'image' ? result.input.srcUrl : '';
+              // The permission prompt must come straight from this click; the re-check follows a grant.
+              void requestOrigin(src).then((ok) => ok && onRecheck());
+            }}
+          />
+        )}
         {seenBefore && (
           <p className="m-0 rounded-lg bg-accent-soft px-3 py-2 text-[12px] leading-4 text-accent">
             You checked this image before, on {new Date(seenBefore.createdAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}:{' '}
@@ -387,8 +404,10 @@ function fmtK(n: number): string {
 
 function toMarkdown(r: CheckResult, followUps: FollowUp[] = r.followUps ?? []): string {
   const lines: string[] = [];
-  const subject =
-    r.input.kind === 'text'
+  const direct = isDirectQuestion(r.input);
+  const subject = direct
+    ? `Question: ${r.input.kind === 'text' ? r.input.text : ''}`
+    : r.input.kind === 'text'
       ? `> ${r.input.text.replace(/\n/g, '\n> ')}`
       : r.input.kind === 'image'
         ? // An inline image can be over a megabyte of base64: name it, never put it on the clipboard.
@@ -397,7 +416,8 @@ function toMarkdown(r: CheckResult, followUps: FollowUp[] = r.followUps ?? []): 
           ? `Post on ${r.input.site}${r.input.author ? ` by ${r.input.author}` : ''}${r.input.permalink ? ` (${r.input.permalink})` : ''}:\n> ${r.input.text.replace(/\n/g, '\n> ')}`
           : `Page: ${r.input.url}`;
   lines.push(`**${r.verdict.label}** (${r.verdict.confidence} confidence) — ${r.verdict.summary}`, '', subject, '');
-  lines.push(`Question: ${questionFor(r.input.ask, r.input.kind)}`, '', r.narrative, '');
+  if (!direct) lines.push(`Question: ${questionFor(r.input.ask, r.input.kind)}`, '');
+  lines.push(r.narrative, '');
   if (r.timeline?.length) {
     lines.push('Timeline:');
     for (const t of r.timeline) lines.push(`- ${t.date ? `${t.date}: ` : ''}${t.event}${t.sourceId ? ` [${t.sourceId}]` : ''}`);

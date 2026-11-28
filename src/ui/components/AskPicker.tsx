@@ -1,93 +1,138 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ASK_IDS, ASK_PRESETS, MAX_CUSTOM_QUESTION, askIdLabel, questionFor, type AskId, type AskKind } from '@/lib/pipeline/question';
+import {
+  ASK_PRESETS,
+  cleanCustomQuestion,
+  CUSTOM_ASK_BUTTON,
+  MAX_CUSTOM_QUESTION,
+  MAX_SAVED_QUESTIONS,
+  PRESET_ASK_IDS,
+  askIdLabel,
+  questionFor,
+  type AskKind,
+  type PresetAskId,
+} from '@/lib/pipeline/question';
+
+/** One option in the picker: a preset, one of the saved questions (by its words), or "Ask your own". */
+export type AskChoice = { kind: 'preset'; id: PresetAskId } | { kind: 'saved'; text: string } | { kind: 'own' };
+
+/** The option's key in the radio group: the preset id, `saved-<index>`, or `own`. */
+function keyOf(choice: AskChoice, saved: readonly string[]): string {
+  if (choice.kind === 'preset') return choice.id;
+  if (choice.kind === 'saved') {
+    const i = saved.indexOf(choice.text);
+    return i >= 0 ? `saved-${i}` : 'own';
+  }
+  return 'own';
+}
+
+function choiceOf(key: string, saved: readonly string[]): AskChoice {
+  if (key.startsWith('saved-')) return { kind: 'saved', text: saved[Number(key.slice(6))] ?? '' };
+  if (key === 'own') return { kind: 'own' };
+  return { kind: 'preset', id: key as PresetAskId };
+}
 
 /**
- * Picks the question a check asks: one of the presets or the user's own words. `selected` and
- * `custom` are what is shown; the owner decides what a change means (the next check on the home
- * screen, the default in Settings).
+ * Picks the question a check asks: a preset, one of the user's saved questions, or new words typed
+ * under "Ask your own". The owner decides what a choice means (the next check on the home screen).
  */
 export function AskPicker({
   selected,
-  custom,
+  saved,
+  own,
   onSelect,
-  onCustom,
+  onOwn,
+  onSave,
   kind = 'text',
 }: {
-  selected: AskId;
-  custom: string;
-  onSelect: (id: AskId) => void;
-  /** The custom question as typed, a moment after the last keystroke and on blur. */
-  onCustom: (text: string) => void;
+  selected: AskChoice;
+  saved: readonly string[];
+  /** The words under "Ask your own". */
+  own: string;
+  onSelect: (choice: AskChoice) => void;
+  /** The words under "Ask your own" as typed, a moment after the last keystroke and on blur. */
+  onOwn: (text: string) => void;
+  /** When given, typed words can be kept as a saved question ("Save this question"). */
+  onSave?: (text: string) => void;
   kind?: AskKind;
 }) {
   const id = useId();
   // The draft is what is on screen; it is handed up shortly after typing stops, so a click on
   // "Check source" straight after typing asks what was typed.
-  const [draft, setDraft] = useState(custom);
-  const sent = useRef(custom);
+  const [draft, setDraft] = useState(own);
+  const sent = useRef(own);
   useEffect(() => {
-    if (custom !== sent.current) {
-      sent.current = custom;
-      setDraft(custom);
+    if (own !== sent.current) {
+      sent.current = own;
+      setDraft(own);
     }
-  }, [custom]);
+  }, [own]);
   const commit = (text: string) => {
     if (text === sent.current) return;
     sent.current = text;
-    onCustom(text);
+    onOwn(text);
   };
   useEffect(() => {
     const t = setTimeout(() => commit(draft), 300);
     return () => clearTimeout(t);
   }, [draft]); // eslint-disable-line react-hooks/exhaustive-deps -- only the draft restarts the timer
 
+  const keys = [...PRESET_ASK_IDS, ...saved.map((_, i) => `saved-${i}`), 'own'];
+  const current = keyOf(selected, saved);
+
   const box = useRef<HTMLTextAreaElement>(null);
-  // Picking "Ask your own" puts the cursor in its box. The box only exists once `selected` has
-  // changed, which in Settings is after a storage round trip, so the focus waits for it.
+  // Picking "Ask your own" puts the cursor in its box, once the box exists.
   const focusWanted = useRef(false);
   useEffect(() => {
-    if (selected === 'custom' && focusWanted.current) {
+    if (current === 'own' && focusWanted.current) {
       focusWanted.current = false;
       box.current?.focus();
     }
-  }, [selected]);
-  const select = (next: AskId) => {
-    focusWanted.current = next === 'custom';
-    if (next !== selected) onSelect(next);
-    else if (next === 'custom') box.current?.focus();
+  }, [current]);
+  const select = (key: string) => {
+    focusWanted.current = key === 'own';
+    if (key !== current) onSelect(choiceOf(key, saved));
+    else if (key === 'own') box.current?.focus();
   };
   // Arrow keys move between the options, as in any radio group.
   const onKey = (e: React.KeyboardEvent) => {
     const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
-    if (!step) return;
+    if (!step || (e.target as HTMLElement).getAttribute('role') !== 'radio') return;
     focusWanted.current = false; // arrowing through the options never jumps into the text box
     e.preventDefault();
-    const next = ASK_IDS[(ASK_IDS.indexOf(selected) + step + ASK_IDS.length) % ASK_IDS.length]!;
-    if (next !== selected) onSelect(next);
+    const next = keys[(keys.indexOf(current) + step + keys.length) % keys.length]!;
+    if (next !== current) onSelect(choiceOf(next, saved));
     document.getElementById(`${id}-${next}`)?.focus();
   };
+
+  const typed = cleanCustomQuestion(draft);
+  const alreadySaved = !!typed && saved.includes(typed);
+  const full = saved.length >= MAX_SAVED_QUESTIONS;
+
   return (
     <div className="flex flex-col gap-1.5">
       <div role="radiogroup" aria-label="Question to ask" className="flex flex-wrap gap-1.5" onKeyDown={onKey}>
-        {ASK_IDS.map((a) => {
-          const on = a === selected;
+        {keys.map((k) => {
+          const on = k === current;
+          const isSaved = k.startsWith('saved-');
+          const text = isSaved ? (saved[Number(k.slice(6))] ?? '') : k === 'own' ? CUSTOM_ASK_BUTTON : askIdLabel(k as PresetAskId);
           return (
             <button
-              key={a}
-              id={`${id}-${a}`}
+              key={k}
+              id={`${id}-${k}`}
               type="button"
               role="radio"
               aria-checked={on}
               tabIndex={on ? 0 : -1}
-              className={`wys-btn h-8 px-2.5 text-[12px] ${on ? 'border-accent bg-accent-wash font-semibold text-accent' : ''}`}
-              onClick={() => select(a)}
+              title={isSaved ? text : undefined}
+              className={`wys-btn h-8 min-w-0 px-2.5 text-[12px] ${isSaved ? 'max-w-full' : ''} ${on ? 'border-accent bg-accent-wash font-semibold text-accent' : ''}`}
+              onClick={() => select(k)}
             >
-              {askIdLabel(a)}
+              {isSaved ? <span className="block max-w-[220px] truncate">{text}</span> : text}
             </button>
           );
         })}
       </div>
-      {selected === 'custom' ? (
+      {current === 'own' ? (
         <>
           <label htmlFor={`${id}-custom`} className="wys-sr-only">
             Your question
@@ -112,12 +157,34 @@ export function AskPicker({
               {draft.length}/{MAX_CUSTOM_QUESTION}
             </span>
           </span>
+          {onSave && typed && !alreadySaved && (
+            <span className="flex flex-wrap items-center gap-2 text-[11px] leading-[15px] text-ink-2">
+              <button
+                type="button"
+                className="wys-btn h-7 px-2 text-[12px]"
+                disabled={full}
+                onClick={() => {
+                  commit(draft);
+                  onSave(typed);
+                }}
+              >
+                Save this question
+              </button>
+              <span>
+                {full
+                  ? `You have ${MAX_SAVED_QUESTIONS} saved questions, the most there can be. Remove one in Settings to save this one.`
+                  : 'Saved questions appear on the right-click menu and here.'}
+              </span>
+            </span>
+          )}
         </>
-      ) : (
-        <span className="text-[12px] leading-4 text-ink-2" title={`Asks: “${questionFor({ id: selected }, kind)}”`}>
-          {ASK_PRESETS[selected].hint}.
+      ) : selected.kind === 'saved' ? (
+        <span className="text-[12px] leading-4 text-ink-2 wrap-anywhere">Asks your saved question: “{selected.text}”</span>
+      ) : selected.kind === 'preset' ? (
+        <span className="text-[12px] leading-4 text-ink-2" title={`Asks: “${questionFor({ id: selected.id }, kind)}”`}>
+          {ASK_PRESETS[selected.id].hint}.
         </span>
-      )}
+      ) : null}
     </div>
   );
 }

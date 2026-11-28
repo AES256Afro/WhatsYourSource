@@ -125,7 +125,8 @@ describe('KO-a / KO-b: tool loop', () => {
         return json({ choices: [{ message: { content: ANSWER } }] });
       }),
     );
-    await collectCheck(INPUT, openai({ search: hostileSearch() }));
+    // The page reader runs only with "Allow all sites" granted.
+    await collectCheck(INPUT, openai({ search: hostileSearch(), pageAccess: async () => true }));
     const page = last!.messages.filter((m) => m.role === 'tool').pop()!.content!;
     expect(page).toMatch(/^<untrusted_content kind="fetched_page" url="https:\/\/evil.example\/p" title="P">\nInjected page\n<\/untrusted_content>$/);
   });

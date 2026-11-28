@@ -11,7 +11,7 @@ Beside the AI, every check can also show **published fact-checks** (PolitiFact, 
 
 Every in-panel check is kept in a local history (with a saved copy of the page when it was started from the right-click menu or the shortcut). The history exports as a spreadsheet (CSV), and any result can be copied as one spreadsheet row. Nothing leaves the browser until you press **Check**.
 
-**What you can check:** highlighted text (floating chip, right-click, or `Alt+Shift+S`), an image (right-click → *Fact-check this image*; EXIF, Content Credentials and a perceptual hash are read on your device first), a social post (right-click anywhere in it → *Fact-check this post*), or the whole page. The right-click menu offers every question for whatever is under the cursor (fact-check, explain, timeline, find flaws and inaccuracies, or your own), and every result has a box at the bottom for follow-up questions to the same model.
+**What you can check:** highlighted text (floating chip, right-click, or `Alt+Shift+S`), an image (right-click → *Fact-check this image*; EXIF, Content Credentials and a perceptual hash are read on your device first), a social post (right-click anywhere in it → *Fact-check this post*), or the whole page. The right-click menu offers every question for whatever is under the cursor (fact-check, explain, summarize, timeline, find flaws and inaccuracies, find more sources, or one of up to eight questions you save in Settings), and every result has a box at the bottom for follow-up questions to the same model. You can also ask the model a question directly from the side panel's home screen, with nothing selected. Source links are shown without tracking parameters.
 
 ## Screenshots
 

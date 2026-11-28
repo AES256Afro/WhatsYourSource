@@ -115,6 +115,12 @@ export async function installFakes(scenario: string) {
       anthropic: { apiKey: '', model: 'claude-sonnet-5-5' },
     },
     privacy: { snapshots: true, chip: true, disabledSites: ['example.com'] },
+    // Sample saved questions, so the Home picker, the popup and Settings show the list.
+    ask: {
+      default: 'factcheck',
+      custom: '',
+      saved: ['Who is behind this, and who pays for it?', 'What does the other side say?', 'Has this been reported before, and when?'],
+    },
     lookups: { factChecks: true, factCheckKey: 'preview-key', archive: true, credibility: true },
   };
   await fakeBrowser.storage.local.set({ settings: base });

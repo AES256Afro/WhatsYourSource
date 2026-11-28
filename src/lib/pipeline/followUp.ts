@@ -1,7 +1,8 @@
 import type { GenerateRequest, LlmProvider, RawSource, Usage } from '../providers/types';
 import { toProviderError } from '../providers/types';
-import { domainOf, truncate } from '../util/url';
-import { buildRequest, untrusted } from './prompts';
+import { domainOf, stripTracking, truncate } from '../util/url';
+import { isDirectQuestion } from '../messaging/limits';
+import { buildRequest, directQuestionText, untrusted } from './prompts';
 import { detailFor, questionFor } from './question';
 import type { CheckErrorCode } from './runCheck';
 import { extractJsonBlock, stripThinking, type CheckResult, type FollowUp } from './schema';
@@ -17,7 +18,14 @@ const MAX_FOLLOW_UPS_IN_PROMPT = 6;
 /** Kept with a check; the oldest go first. */
 export const MAX_FOLLOW_UPS = 30;
 
-const FOLLOW_UP_SYSTEM = `You are WhatsYourSource, a fact- and source-checking assistant that runs inside a browser extension. You already answered one question about a piece of content for the user. They now have a follow-up question about the same content.
+const FOLLOW_UP_OPENING = {
+  content:
+    'You are WhatsYourSource, a fact- and source-checking assistant that runs inside a browser extension. You already answered one question about a piece of content for the user. They now have a follow-up question about the same content.',
+  direct:
+    'You are WhatsYourSource, a fact- and source-checking assistant that runs inside a browser extension. The user asked you a question directly in the side panel (there was no web page and no selected text), and you already answered it. They now have a follow-up question.',
+};
+
+const followUpSystem = (opening: string) => `${opening}
 
 How to work:
 - Answer the follow-up directly, in the first sentence. Use the earlier answer and its sources, and use web search when it is available and the question needs something the earlier answer does not cover.
@@ -27,6 +35,10 @@ How to work:
 - Keep the tone neutral.
 
 Output format: plain prose for the reader, 2–8 sentences, in short paragraphs. No headings, no JSON, no code block. Name the sources you rely on in the text.`;
+
+const FOLLOW_UP_SYSTEM = followUpSystem(FOLLOW_UP_OPENING.content);
+/** For a check that was a question asked directly: the same rules, without a "piece of content". */
+const FOLLOW_UP_SYSTEM_DIRECT = followUpSystem(FOLLOW_UP_OPENING.direct);
 
 /** A follow-up as it will be sent: one line, bounded, or '' when there is nothing usable. */
 export function cleanFollowUpQuestion(s: string | undefined): string {
@@ -69,17 +81,21 @@ function earlierAnswer(r: CheckResult): string {
 export function buildFollowUpRequest(result: CheckResult, question: string): GenerateRequest {
   const q = cleanFollowUpQuestion(question);
   const input = result.input;
+  const direct = isDirectQuestion(input);
   // The content as the check put it to the model (already wrapped as untrusted data), without the
   // original question's line: its instructions ("fill the timeline field", "list each as a claim")
   // contradict the prose a follow-up asks for. The question is restated once, as history.
   const questionLine = `${questionFor(input.ask, input.kind)} ${detailFor(input.ask, input.kind)}`;
-  const original = buildRequest(input)
-    .parts.map((p) => ('text' in p ? p.text.replace(`\n\n${questionLine}`, '').replace(questionLine, '') : ''))
-    .filter(Boolean)
-    .join('\n\n');
+  const original = direct
+    ? ''
+    : buildRequest(input)
+        .parts.map((p) => ('text' in p ? p.text.replace(`\n\n${questionLine}`, '').replace(questionLine, '') : ''))
+        .filter(Boolean)
+        .join('\n\n');
   const parts = [
-    `The check began with this content:\n\n${original}`,
-    `The original question was: "${questionFor(input.ask, input.kind)}" (already answered below).`,
+    // A direct question has no content: the question, once, is what the check began with.
+    direct ? `The user's original question (already answered below):\n"${directQuestionText(input)}"` : `The check began with this content:\n\n${original}`,
+    direct ? '' : `The original question was: "${questionFor(input.ask, input.kind)}" (already answered below).`,
     input.kind === 'image' ? 'The image itself is not attached this time; rely on what the earlier answer says about it.' : '',
     `Your earlier answer, as the user sees it:\n${untrusted('earlier-answer', {}, earlierAnswer(result))}`,
   ];
@@ -97,7 +113,7 @@ export function buildFollowUpRequest(result: CheckResult, question: string): Gen
   const pageUrl = input.kind === 'page' ? input.url : input.pageUrl;
   const subject = result.title || (input.kind === 'text' || input.kind === 'post' ? input.text : input.kind === 'page' ? input.title : input.pageTitle);
   return {
-    system: FOLLOW_UP_SYSTEM,
+    system: direct ? FOLLOW_UP_SYSTEM_DIRECT : FOLLOW_UP_SYSTEM,
     parts: [{ text: parts.filter(Boolean).join('\n\n') }],
     wantSearch: true,
     urls: [],
@@ -118,9 +134,13 @@ function uniqueSources(raw: RawSource[]): FollowUp['sources'] {
   const seen = new Set<string>();
   const out: FollowUp['sources'] = [];
   for (const s of raw) {
-    if (!/^https?:\/\//i.test(s.url) || seen.has(s.url)) continue;
-    seen.add(s.url);
-    out.push({ title: (s.title || s.domain || s.url).slice(0, 200), url: s.url, domain: s.domain || domainOf(s.url) });
+    // Trackers off and redirect wrappers unwrapped before de-duplicating, so two tagged copies of one page are one source.
+    const url = stripTracking(s.url);
+    if (!/^https?:\/\//i.test(url) || seen.has(url)) continue;
+    seen.add(url);
+    // An unwrapped redirect is named by where it leads, not by the wrapper's host.
+    const domain = url === s.url ? s.domain || domainOf(url) : domainOf(url);
+    out.push({ title: (s.title || domain || url).slice(0, 200), url, domain });
     if (out.length >= 8) break;
   }
   return out;

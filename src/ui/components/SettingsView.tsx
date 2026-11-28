@@ -1,10 +1,21 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useId, useState, useRef } from 'react';
 import { PROVIDER_LABELS } from '@/lib/providers/registry';
 import { searchFactChecks } from '@/lib/lookups/factcheck';
 import type { ProviderId, Settings } from '@/lib/storage/settings';
 import { normalizeSiteEntry } from '@/lib/storage/publicSettings';
-import { AskPicker } from './AskPicker';
-import { Label } from './common';
+import {
+  addSavedQuestion,
+  askIdLabel,
+  cleanCustomQuestion,
+  editSavedQuestion,
+  MAX_CUSTOM_QUESTION,
+  MAX_SAVED_QUESTIONS,
+  PRESET_ASK_IDS,
+  removeSavedQuestion,
+  type PresetAskId,
+} from '@/lib/pipeline/question';
+import { truncate } from '@/lib/util/url';
+import { Label, TextAction } from './common';
 import { Globe, Shield } from './Icons';
 import { AnthropicCard } from './settings/AnthropicCard';
 import { GeminiCard } from './settings/GeminiCard';
@@ -118,15 +129,12 @@ export function SettingsView({
           What highlighting, the shortcut and the address bar ask. Right-click lists every question, so you pick one there. In the side panel you can pick a
           different one for the checks you start there, and a finished result lets you ask something else about the same content.
         </p>
-        <div className="wys-card px-3 py-2.5">
-          <AskPicker
-            selected={settings.ask.default}
-            custom={settings.ask.custom}
-            onSelect={(id) => update((s) => ({ ...s, ask: { ...s.ask, default: id } }))}
-            onCustom={(text) => update((s) => ({ ...s, ask: { ...s.ask, custom: text } }))}
-          />
+        <div className="wys-card flex flex-col px-3">
+          <Row label="Default question">{(id) => <DefaultAskSelect settings={settings} update={update} labelledBy={id} />}</Row>
         </div>
       </div>
+
+      <SavedQuestions settings={settings} update={update} />
 
       <div className="flex flex-col gap-1.5">
         <Label>Behaviour</Label>
@@ -166,7 +174,10 @@ export function SettingsView({
       <div className="flex flex-col gap-1.5">
         <Label>Privacy</Label>
         <div className="wys-card flex flex-col px-3">
-          <Row label="Text or images are sent only when you press Check, only to the Default provider (and the fallback if you turned it on)" hint="Always on">
+          <Row
+            label="Text or images are sent only when you start a check or ask a question, to the Default provider (and the fallback if you turned it on)"
+            hint="Always on. The lookups under Extra evidence also send the claim or the page address to their service."
+          >
             {(id) => <Toggle checked disabled labelledBy={id} />}
           </Row>
           <Row label="Save a copy of the page with each check" hint="Stays on this device.">
@@ -279,5 +290,187 @@ function FactCheckKeyField({ settings, update }: { settings: Settings; update: U
         , pick or create a project, enable “Fact Check Tools API”, then Credentials → Create API key. Free.
       </span>
     </div>
+  );
+}
+
+/**
+ * The default question: a preset or one of the saved questions. Option values are the preset id or
+ * `saved-<index>`; a custom default that is not in the list (only when the list was full) is `own`.
+ */
+function DefaultAskSelect({ settings, update, labelledBy }: { settings: Settings; update: UpdateSettings; labelledBy: string }) {
+  const { saved, custom } = settings.ask;
+  const isCustom = settings.ask.default === 'custom';
+  const value = !isCustom ? settings.ask.default : saved.includes(custom) ? `saved-${saved.indexOf(custom)}` : 'own';
+  return (
+    <select
+      aria-labelledby={labelledBy}
+      className="wys-input h-8 w-auto max-w-[200px] text-[12px]"
+      value={value}
+      onChange={(e) => {
+        // Read now: by the time the updater runs, React has put the old value back in the control.
+        const v = e.target.value;
+        if (v === 'own') return;
+        void update((s) => {
+          if (!v.startsWith('saved-')) return { ...s, ask: { ...s.ask, default: v as PresetAskId } };
+          const q = s.ask.saved[Number(v.slice(6))];
+          return q ? { ...s, ask: { ...s.ask, default: 'custom', custom: q } } : s;
+        });
+      }}
+    >
+      {PRESET_ASK_IDS.map((id) => (
+        <option key={id} value={id}>
+          {askIdLabel(id)}
+        </option>
+      ))}
+      {saved.map((q, i) => (
+        <option key={`saved-${i}`} value={`saved-${i}`}>
+          {truncate(q, 60)}
+        </option>
+      ))}
+      {value === 'own' && <option value="own">{truncate(custom, 60)}</option>}
+    </select>
+  );
+}
+
+/** "Your questions": add, reword and remove the saved questions (the right-click menu and the Home picker offer them). */
+function SavedQuestions({ settings, update }: { settings: Settings; update: UpdateSettings }) {
+  const headingId = useId();
+  const { saved } = settings.ask;
+  const full = saved.length >= MAX_SAVED_QUESTIONS;
+  const [draft, setDraft] = useState('');
+  const [removed, setRemoved] = useState<{ text: string; was: Settings['ask'] } | null>(null);
+  useEffect(() => {
+    if (!removed) return;
+    const t = setTimeout(() => setRemoved(null), 8000);
+    return () => clearTimeout(t);
+  }, [removed]);
+  const typed = cleanCustomQuestion(draft);
+  const duplicate = !!typed && saved.includes(typed);
+  const add = () => {
+    if (!typed || duplicate || full) return;
+    setDraft('');
+    setRemoved(null);
+    void update((s) => ({ ...s, ask: addSavedQuestion(s.ask, typed) }));
+  };
+  const isDefault = (q: string) => settings.ask.default === 'custom' && settings.ask.custom === q;
+  return (
+    <section aria-labelledby={headingId} className="flex flex-col gap-1.5">
+      <Label id={headingId}>Your questions</Label>
+      <p className="m-0 text-[12px] leading-4 text-ink-2">Saved questions appear on the right-click menu and the Home picker.</p>
+      <div className="wys-card flex flex-col gap-2 px-3 py-2.5">
+        {saved.length === 0 ? (
+          <p className="m-0 text-[12px] leading-4 text-ink-2">No saved questions yet.</p>
+        ) : (
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+            {saved.map((q, i) => (
+              <li key={i} className="flex min-w-0 items-center gap-2">
+                <SavedQuestionField
+                  index={i}
+                  value={q}
+                  onCommit={(text) => void update((s) => ({ ...s, ask: editSavedQuestion(s.ask, i, text) }))}
+                  isTaken={(text) => saved.some((other, j) => j !== i && other === text)}
+                />
+                {isDefault(q) && <span className="shrink-0 rounded bg-accent-wash px-1.5 py-0.5 text-[11px] font-semibold text-accent">Default</span>}
+                <button
+                  type="button"
+                  className="wys-btn h-8 shrink-0 px-2 text-[12px]"
+                  aria-label={`Remove question ${i + 1}: ${q}`}
+                  onClick={() => {
+                    setRemoved({ text: q, was: settings.ask });
+                    void update((s) => {
+                      const at = s.ask.saved.indexOf(q);
+                      return at < 0 ? s : { ...s, ask: removeSavedQuestion(s.ask, at) };
+                    });
+                  }}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <span role="status" className="text-[11px] leading-[15px] text-ink-2 wrap-anywhere empty:hidden">
+          {removed && (
+            <>
+              Removed “{truncate(removed.text, 60)}”.{' '}
+              <TextAction
+                onClick={() => {
+                  const was = removed.was;
+                  setRemoved(null);
+                  void update((s) => ({ ...s, ask: was }));
+                }}
+              >
+                Undo
+              </TextAction>
+            </>
+          )}
+        </span>
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            add();
+          }}
+        >
+          <label htmlFor="wys-new-question" className="wys-sr-only">
+            New question
+          </label>
+          <input
+            id="wys-new-question"
+            className="wys-input h-8 min-w-0 grow text-[12px]"
+            value={draft}
+            maxLength={MAX_CUSTOM_QUESTION}
+            disabled={full}
+            placeholder={full ? 'The list is full' : 'e.g. Who is behind this, and who pays for it?'}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <button type="submit" className="wys-btn h-8 shrink-0 px-2.5 text-[12px]" disabled={full || !typed || duplicate}>
+            Add
+          </button>
+        </form>
+        {(full || duplicate) && (
+          <span className="text-[11px] leading-[15px] text-ink-2">
+            {full ? `You can keep up to ${MAX_SAVED_QUESTIONS} questions. Remove one to add another.` : 'That question is already in the list.'}
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** One saved question, edited in place: saved on blur or Enter; empty words or a repeat put the old words back. */
+function SavedQuestionField({
+  index,
+  value,
+  onCommit,
+  isTaken,
+}: {
+  index: number;
+  value: string;
+  onCommit: (v: string) => void;
+  isTaken: (v: string) => boolean;
+}) {
+  const [draft, setDraft] = useState(value);
+  // New words from storage (an edit elsewhere, or a removal above shifting the list) replace the draft.
+  const [shown, setShown] = useState(value);
+  if (shown !== value) {
+    setShown(value);
+    setDraft(value);
+  }
+  const commit = () => {
+    const q = cleanCustomQuestion(draft);
+    if (!q || isTaken(q)) setDraft(value);
+    else if (q !== value) onCommit(q);
+  };
+  return (
+    <input
+      className="wys-input h-8 min-w-0 grow text-[12px]"
+      aria-label={`Question ${index + 1}`}
+      value={draft}
+      maxLength={MAX_CUSTOM_QUESTION}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === 'Enter' && commit()}
+    />
   );
 }

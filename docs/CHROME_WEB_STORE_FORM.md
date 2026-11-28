@@ -1,6 +1,6 @@
-# Chrome Web Store developer dashboard — every field, ready to paste (1.2.1)
+# Chrome Web Store developer dashboard — every field, ready to paste (1.3.0)
 
-Dashboard: https://chrome.google.com/webstore/devconsole → your item → **Package** → *Upload new package* for an update (**New item** the first time). Files come from the [v1.2.1 release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.2.1) and the `store/` folder of this repo. Work through the tabs in the order below; the dashboard will not let you submit until every tab shows a tick.
+Dashboard: https://chrome.google.com/webstore/devconsole → your item → **Package** → *Upload new package* for an update (**New item** the first time). Files come from the [v1.3.0 release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.3.0) and the `store/` folder of this repo. Work through the tabs in the order below; the dashboard will not let you submit until every tab shows a tick.
 
 ---
 
@@ -8,9 +8,9 @@ Dashboard: https://chrome.google.com/webstore/devconsole → your item → **Pac
 
 | Field | Entry |
 |---|---|
-| Upload | `whatsyoursource-1.2.1-chrome.zip` (from the GitHub release, or `npm run zip`) |
+| Upload | `whatsyoursource-1.3.0-chrome.zip` (from the GitHub release, or `npm run zip`) |
 
-The dashboard reads the name, version (1.2.1), description and icon from the manifest inside the zip.
+The dashboard reads the name, version (1.3.0), description and icon from the manifest inside the zip.
 
 ---
 
@@ -38,10 +38,13 @@ HOW IT WORKS
 
 CHOOSE WHAT TO ASK
 • Fact-check: is it accurate, what context is it missing, where is the original source.
-• Explain it: what it is about, who is behind it, where it comes from.
+• Explain it: what they are talking about, in plain terms, with the background needed to follow it.
+• Summarize: the main points, who is saying it and what they want the reader to take away.
 • Timeline: the key events in date order, each with its source.
 • Find the flaws: what is wrong, misleading or badly argued, and what holds up.
-• Ask your own: any question, in your own words.
+• Find more sources: other reporting, the original or primary source, and what confirms or contradicts it.
+• Your own questions: save up to eight in Settings; each one is also on the right-click menu.
+• Ask the model directly: type a question in the side panel with nothing selected; the answer comes with sources.
 Pick one in the side panel for the checks you start there, or set a default for highlighting, the shortcut and the address bar; the right-click menu names the question on each item. On any result, "Ask instead" puts a different question to the same content.
 
 CHECK MORE THAN TEXT
@@ -116,14 +119,14 @@ Paste one per box; the dashboard lists exactly the permissions in the manifest.
 
 | Permission | Justification |
 |---|---|
-| **activeTab** | Reads the current selection and takes a visible-area screenshot of the tab the user acted on, only after the user's own gesture (context menu, keyboard shortcut, toolbar button). The screenshot is used when an image cannot be downloaded (host blocks cross-origin reads) and for the local page copy saved to the user's history. |
-| **contextMenus** | Adds the right-click items "Fact-check", "Explain", "Timeline behind" and "Find flaws and inaccuracies in" for the selection, the image, the post, the page or the linked page (plus your own question when you have written one), and "Open selection in Google AI Mode". |
+| **activeTab** | Reads the current selection and takes a visible-area screenshot of the tab the user acted on, only after the user's own gesture (context menu, keyboard shortcut, toolbar button). The screenshot is used when an image cannot be downloaded (the user has not allowed its site, or the host blocks the download) and for the local page copy saved to the user's history. |
+| **contextMenus** | Adds the right-click items "Fact-check", "Explain", "Summarize", "Timeline behind", "Find flaws and inaccuracies in", "Find more sources for" and the user's saved questions for the selection, the image, the post, the page or the linked page (plus your own question when you have written one), and "Open selection in Google AI Mode". |
 | **scripting** | Injects a one-off script into the tab a check was started from, at the moment of the check, to produce the sanitised copy of the page that is saved locally with the result, and to read the selection on pages that were open before the extension was installed. Never runs without a user-initiated check on that tab. |
 | **sidePanel** | The results, settings and history live in the side panel. |
 | **storage** | Settings and the user's own API keys (stored locally, never synced) and the hand-off of a pending check between the background worker and the side panel (storage.session). |
 | **unlimitedStorage** | The local history keeps a copy of each checked page in IndexedDB; a few hundred checks with page copies exceed the default quota. The user sets the cap and can clear it. |
 | **Host permissions** (generativelanguage.googleapis.com, api.anthropic.com, api.openai.com, api.search.brave.com, api.tavily.com, factchecktools.googleapis.com, web.archive.org, localhost, 127.0.0.1) | Direct calls, with the user's own key, to the AI or search provider the user picked (Google Gemini, Anthropic, OpenAI, Brave Search, Tavily); the Google Fact Check Tools index for published fact-checks of the claim; the Wayback Machine for the first-archived date of the page and the original source; localhost / 127.0.0.1 for a local model server (Ollama, LM Studio). Each is contacted only during a check the user started, and only when that provider or lookup is configured. |
-| **<all_urls>** (optional host permission) and the content script on all sites | The content script shows the "Check source" chip when text is selected, answers "what is selected?" when the panel asks, and extracts the post under the cursor; it does not read or send page content on its own, modifies nothing on the page, and can be turned off globally or per site. The optional all-sites permission is requested per origin, inside a click, with an explanation, for three cases: downloading an image the user right-clicked when its host blocks cross-origin reads; letting a local model fetch a page its own search returned; a custom API endpoint or self-hosted search server the user typed. Declining falls back to a screenshot or to search snippets. |
+| **<all_urls>** (optional host permission) and the content script on all sites | The content script is declared for all sites so the "Check source" chip can appear on any page; this is why the browser shows site access at install. It shows the chip when text is selected, answers "what is selected?" when the panel asks, and extracts the post under the cursor; it does not read or send page content on its own, modifies nothing on the page, and can be turned off globally or per site. The extension itself downloads a page or image file only from the page the user started the check on, or from a site the user allowed; the code checks the grant before each download. The optional permission is requested inside a click, with an explanation, for three cases: per site, downloading an image the user right-clicked that is on another site than the page; all sites, letting a local model read the pages its own search returned; per site, a custom API endpoint or self-hosted search server the user typed. Without the grant the extension uses a screenshot of the image or search snippets. |
 
 ### Remote code
 
@@ -188,7 +191,7 @@ Known risk, so it is not a surprise later: Chrome's user-data policy counts "tra
 ## 6. If the dashboard shows a "Notes for reviewer" or test-instructions field
 
 ```
-The developer collects nothing: no servers, no analytics; settings, keys and history stay on the device. When the user picks a hosted AI provider, the text they selected is sent to that provider with the user's own key, as the privacy policy describes. No account is needed. To test a full check: Settings → Gemini (your key) → paste any free Google AI Studio key (https://aistudio.google.com/apikey), press Verify, then highlight text on any article and press the "Check source" chip or Alt+Shift+S. Without a key, choose "Google AI Mode (web)" on the first-run screen: a check then opens google.com in a new tab. The optional <all_urls> permission is only requested, inside a click, when an image host blocks cross-origin reads or a local model needs to fetch a page; declining falls back to a screenshot or search snippets. Nothing is sent before the user presses Check; every result shows "What was sent, and to whom".
+The developer collects nothing: no servers, no analytics; settings, keys and history stay on the device. When the user picks a hosted AI provider, the text they selected is sent to that provider with the user's own key, as the privacy policy describes. No account is needed. To test a full check: Settings → Gemini (your key) → paste any free Google AI Studio key (https://aistudio.google.com/apikey), press Verify, then highlight text on any article and press the "Check source" chip or Alt+Shift+S. Without a key, choose "Google AI Mode (web)" on the first-run screen: a check then opens google.com in a new tab. The optional <all_urls> permission is only requested, inside a click: per site for an image on another site than the page, or all sites for a local model's page reader; without it the extension uses a screenshot or search snippets. Nothing is sent before the user presses Check; every result shows "What was sent, and to whom".
 ```
 
 ---

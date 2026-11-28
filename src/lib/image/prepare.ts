@@ -4,18 +4,26 @@ import { ImageFetchError, fetchImageBytes, prepareForModel, screenshotImage, typ
 import { phashFromBitmap } from './phash';
 import type { RunError } from '../pipeline/runCheck';
 import { findTabShowing } from '../tabs';
+import { hasHostAccess } from '../permissions';
 import { isHttpUrl } from '../util/url';
 import { provenanceFacts, provenanceMetadata, provenanceSummary, readProvenance } from './provenance';
 
 export interface PreparedImage {
   base64: string;
   mime: string;
-  provenance: LocalProvenance;
+  provenance: ImageProvenance;
   provenanceSummary: string;
   provenanceFacts: string;
   provenanceMetadata: string;
   via: ImageBytes['via'];
 }
+
+/**
+ * What the result keeps about the image. `needsAccessHost` is set when the file could not be
+ * downloaded only because the user has not granted that host, so the screenshot was used instead
+ * and the result can offer to grant it and check again.
+ */
+export type ImageProvenance = LocalProvenance & { needsAccessHost?: string };
 
 export type PrepareStatus = (message: string) => void;
 
@@ -26,6 +34,7 @@ export type PrepareStatus = (message: string) => void;
 async function prepareImage(input: ImageInput, tabId: number | undefined, status: PrepareStatus, signal: AbortSignal): Promise<PreparedImage> {
   status('Fetching the image…');
   let img: ImageBytes;
+  let needsAccessHost: string | undefined;
   try {
     img = await fetchImageBytes(input.srcUrl, signal, input.pageUrl);
   } catch (e) {
@@ -33,7 +42,15 @@ async function prepareImage(input: ImageInput, tabId: number | undefined, status
     if (signal.aborted) throw new CancelledError();
     const err = e instanceof ImageFetchError ? e : new ImageFetchError('unknown', String(e));
     if (tabId == null) throw err;
-    status('Direct download blocked — using a screenshot of the image instead');
+    // A refused cross-origin read (no CORS, site access "On click") also means the host is not granted.
+    if (err.kind === 'permission' && !err.noAccessHost && isHttpUrl(input.srcUrl) && !(await hasHostAccess(input.srcUrl)))
+      err.noAccessHost = hostOf(input.srcUrl);
+    needsAccessHost = err.noAccessHost;
+    status(
+      needsAccessHost
+        ? `No access to ${needsAccessHost} — using a screenshot of the image instead`
+        : 'Direct download blocked — using a screenshot of the image instead',
+    );
     try {
       img = await screenshotImage(tabId, input.srcUrl);
     } catch {
@@ -57,6 +74,7 @@ async function prepareImage(input: ImageInput, tabId: number | undefined, status
     model.bitmap.close(); // decoded pixels can be several MB; let them go now
   }
   if (img.via === 'screenshot') provenance.exif = undefined;
+  if (img.via === 'screenshot' && needsAccessHost) (provenance as ImageProvenance).needsAccessHost = needsAccessHost;
   const note = img.via === 'screenshot' ? '. Note: these are screenshot pixels, so file metadata is unavailable.' : '';
   return {
     base64: model.base64,
@@ -67,6 +85,14 @@ async function prepareImage(input: ImageInput, tabId: number | undefined, status
     provenanceMetadata: provenanceMetadata(provenance),
     via: img.via,
   };
+}
+
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 class CancelledError extends Error {
@@ -101,7 +127,9 @@ export async function prepareImageForCheck(
         code: err?.kind === 'permission' ? 'image-permission' : 'image',
         message:
           err?.kind === 'permission'
-            ? 'The image host blocked a direct download.'
+            ? err.noAccessHost
+              ? `The extension has no access to ${err.noAccessHost}, and a screenshot of the image was not possible.`
+              : 'The image host blocked a direct download.'
             : err?.kind === 'not-image'
               ? 'That link is not an image.'
               : 'Could not load the image.',

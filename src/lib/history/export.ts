@@ -1,4 +1,5 @@
 import type { StoredCheck, StoredSnapshot } from './db';
+import { isDirectQuestion } from '../messaging/limits';
 import { questionFor } from '../pipeline/question';
 import { checkToRow, defuse, TABLE_COLUMNS } from './row';
 import { toneForVerdict } from '../pipeline/schema';
@@ -8,8 +9,11 @@ import { buildSnapshotSrcdoc, escapeHtml } from './snapshot';
 export function checkToStandaloneHtml(check: StoredCheck, snapshot?: StoredSnapshot | null): string {
   const r = check.result;
   const e = escapeHtml;
-  const subject =
-    r.input.kind === 'text'
+  // A question asked directly has no content to show: the question line below is the whole subject.
+  const direct = isDirectQuestion(r.input);
+  const subject = direct
+    ? ''
+    : r.input.kind === 'text'
       ? `<blockquote>${e(r.input.text)}</blockquote>`
       : r.input.kind === 'image'
         ? /^https?:/i.test(r.input.srcUrl)
@@ -57,7 +61,7 @@ small{color:#4B5563}h3{margin-top:24px}
 <h1><span class="verdict ${toneForVerdict(r.verdict.kind)}">${e(r.verdict.label)}</span> <small>${e(r.verdict.confidence)} confidence</small></h1>
 <p><strong>${e(r.verdict.summary)}</strong></p>
 ${subject}
-<p><small>Question: ${e(questionFor(r.input.ask, r.input.kind))}</small></p>
+${direct && r.input.kind === 'text' ? `<p><strong>Your question:</strong> ${e(r.input.text)}</p>` : `<p><small>Question: ${e(questionFor(r.input.ask, r.input.kind))}</small></p>`}
 ${narrative}
 ${timeline}
 ${original}
