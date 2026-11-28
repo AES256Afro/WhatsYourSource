@@ -1,5 +1,5 @@
 import type { RawSource } from '../providers/types';
-import { domainOf, isHttpUrl, normalizeUrl } from '../util/url';
+import { domainOf, isHttpUrl, normalizeUrl, stripTracking } from '../util/url';
 import type { Claim, ModelResult, OriginalSource, Source, TimelineEvent } from './schema';
 
 /**
@@ -16,13 +16,15 @@ export function buildSources(model: ModelResult | null, raw: RawSource[]): Sourc
 
   for (const r of raw) {
     if (!r.url || !isHttpUrl(r.url)) continue;
-    const norm = normalizeUrl(r.url);
+    // Every link the user sees, stores or exports is free of tracking; identity is computed on the clean form.
+    const url = stripTracking(r.url);
+    const norm = normalizeUrl(url);
     if (byNorm.has(norm)) continue;
     const s: Source = {
       id: nextId++,
       title: cleanTitle(r.title, r.domain),
-      url: r.url,
-      domain: r.domain || domainOf(r.url),
+      url,
+      domain: r.domain || domainOf(url),
       // Every raw source came from the search/grounding machinery; only model-named pages (below) are unverified.
       verified: true,
     };
@@ -31,8 +33,9 @@ export function buildSources(model: ModelResult | null, raw: RawSource[]): Sourc
     if (!byDomain.has(s.domain)) byDomain.set(s.domain, s);
   }
 
-  for (const m of model?.sources ?? []) {
-    if (!m.url || !isHttpUrl(m.url)) continue;
+  for (const raw of model?.sources ?? []) {
+    if (!raw.url || !isHttpUrl(raw.url)) continue;
+    const m = { ...raw, url: stripTracking(raw.url) };
     const norm = normalizeUrl(m.url);
     const existing = byNorm.get(norm);
     if (existing) {
@@ -91,7 +94,7 @@ export function resolveOriginal(model: ModelResult | null, sources: Source[]): O
   const match = o.url ? findSource(sources, o.url, { exact: true }) : undefined;
   return {
     title: o.title || match?.title || o.url || '',
-    url: match?.url ?? (o.url && isHttpUrl(o.url) ? o.url : undefined),
+    url: match?.url ?? (o.url && isHttpUrl(o.url) ? stripTracking(o.url) : undefined),
     publisher: o.publisher ?? undefined,
     date: o.date ?? undefined,
     how: o.how ?? undefined,

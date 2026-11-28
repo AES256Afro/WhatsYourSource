@@ -1,10 +1,19 @@
-import type { LocalProvenance } from '@/lib/pipeline/schema';
+import type { ImageProvenance } from '@/lib/image/prepare';
 import { isHttpUrl } from '@/lib/util/url';
 import { Label } from './common';
 import { External, Shield } from './Icons';
 
 /** Facts read from the image file itself, on the user's device — kept visually separate from the AI's opinion. */
-export function ProvenancePanel({ provenance: p, srcUrl }: { provenance: LocalProvenance; srcUrl: string }) {
+export function ProvenancePanel({
+  provenance: p,
+  srcUrl,
+  onAllowHost,
+}: {
+  provenance: ImageProvenance;
+  srcUrl: string;
+  /** Asks for access to the image's host (from the click) and checks again; shown when the screenshot was used for lack of access. */
+  onAllowHost?: () => void;
+}) {
   const rows: [string, string][] = [];
   rows.push(['Content Credentials (C2PA)', p.c2pa ? (p.c2pa.present ? p.c2pa.summary || 'Present' : 'None found') : 'Not checked']);
   const exifKeys = p.exif ? Object.keys(p.exif) : [];
@@ -44,6 +53,18 @@ export function ProvenancePanel({ provenance: p, srcUrl }: { provenance: LocalPr
             </div>
           ))}
         </div>
+        {p.needsAccessHost && (
+          <div className="flex items-center gap-2 rounded-lg border border-accent-line bg-accent-wash px-2.5 py-2 text-[12px] max-[359px]:flex-wrap">
+            <span className="grow text-ink-2">
+              Read from a screenshot: the extension has no access to {p.needsAccessHost}, so the file and its metadata were not read.
+            </span>
+            {onAllowHost && (
+              <button className="wys-btn h-7 shrink-0 px-2.5 text-[12px]" onClick={onAllowHost}>
+                Allow {p.needsAccessHost} and check again
+              </button>
+            )}
+          </div>
+        )}
         <span className="text-[11px] leading-[15px] text-ink-2">
           Missing credentials don’t mean the image is fake — most platforms strip metadata on upload.
         </span>

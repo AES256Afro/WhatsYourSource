@@ -23,7 +23,7 @@ describe('the question is the user’s choice', () => {
   });
 
   it('puts each preset to the model, the system prompt and the search query', () => {
-    for (const id of ['explain', 'timeline', 'flaws'] as const) {
+    for (const id of ['explain', 'summarize', 'timeline', 'flaws', 'sources'] as const) {
       const input = { ...text, ask: { id } };
       const q = ASK_PRESETS[id].question.text;
       expect(userText(input)).toContain(q);
@@ -196,7 +196,7 @@ describe('the chip names a non-default question', () => {
   it('mirrors the picker labels', async () => {
     const { PUBLIC_ASK_NAMES, readPublicSettings } = await import('@/lib/storage/publicSettings');
     const { askIdLabel } = await import('@/lib/pipeline/question');
-    for (const id of ['explain', 'timeline', 'flaws'] as const) expect(PUBLIC_ASK_NAMES[id]).toBe(askIdLabel(id));
+    for (const id of ['explain', 'summarize', 'timeline', 'flaws', 'sources'] as const) expect(PUBLIC_ASK_NAMES[id]).toBe(askIdLabel(id));
     const { CUSTOM_ASK_NAME } = await import('@/lib/pipeline/question');
     expect(PUBLIC_ASK_NAMES.custom).toBe(CUSTOM_ASK_NAME);
     expect(readPublicSettings({ ask: { default: 'timeline', custom: '' } }).askName).toBe('Timeline');
@@ -207,31 +207,68 @@ describe('the chip names a non-default question', () => {
 });
 
 describe('the right-click menu offers every question', () => {
-  it('lists each preset for each target, with unique ids that parse back', async () => {
-    const { menuItems, parseMenuId, MENU_TARGETS } = await import('@/lib/menus');
-    const items = menuItems('');
+  it('lists each target’s presets, with unique ids that parse back', async () => {
+    const { menuItems, parseMenuId, MENU_TARGETS, MENU_PRESETS } = await import('@/lib/menus');
+    const items = menuItems([]);
     expect(new Set(items.map((i) => i.id)).size).toBe(items.length);
-    for (const target of MENU_TARGETS)
-      for (const askId of ['factcheck', 'explain', 'timeline', 'flaws'] as const) expect(parseMenuId(`wys-${target}:${askId}`)).toEqual({ target, askId });
+    for (const target of MENU_TARGETS) for (const askId of MENU_PRESETS[target]) expect(parseMenuId(`wys-${target}:${askId}`)).toEqual({ target, askId });
     expect(items.filter((i) => i.contexts[0] === 'selection').map((i) => i.title)).toEqual([
       'Fact-check selection',
       'Explain selection',
+      'Summarize the selection',
       'Timeline behind selection',
       'Find flaws and inaccuracies in selection',
+      'Find more sources for the selection',
       'Open selection in Google AI Mode',
     ]);
-    expect(items.some((i) => i.id.endsWith(':custom'))).toBe(false);
+    expect(items.some((i) => i.id.includes(':custom'))).toBe(false);
     expect(parseMenuId('wys-page:nope')).toBeNull();
     expect(parseMenuId('wys-selection-web')).toBeNull();
   });
 
   it('adds the user’s own question when there is one, and reads its words from settings at click time', async () => {
     const { menuItems, askForMenu } = await import('@/lib/menus');
-    const own = menuItems('Who pays for this?').filter((i) => i.id.endsWith(':custom'));
+    const own = menuItems(['Who pays for this?']).filter((i) => i.id.includes(':custom'));
     expect(own).toHaveLength(5);
+    expect(own[0]?.id).toBe('wys-selection:custom-0');
     expect(own[0]?.title).toBe('Ask about selection: “Who pays for this?”');
-    expect(askForMenu('custom', 'Who pays for this?')).toEqual({ id: 'custom', custom: 'Who pays for this?' });
-    expect(askForMenu('custom', '')).toEqual({ id: 'factcheck' });
-    expect(askForMenu('flaws', 'ignored')).toEqual({ id: 'flaws' });
+    expect(askForMenu('custom', ['Who pays for this?'], 0)).toEqual({ id: 'custom', custom: 'Who pays for this?' });
+    expect(askForMenu('custom', [], 0)).toBeNull();
+    expect(askForMenu('flaws', ['ignored'])).toEqual({ id: 'flaws' });
+  });
+});
+
+describe('summarize and find more sources', () => {
+  it('are offered for text, posts and articles, not images or links', async () => {
+    const { menuItems } = await import('@/lib/menus');
+    const titles = menuItems([]).map((i) => i.title);
+    expect(titles).toEqual(
+      expect.arrayContaining([
+        'Summarize this post',
+        'Summarize this article',
+        'Find more sources for this post',
+        'Find more sources for this article',
+        'Fact-check this article',
+      ]),
+    );
+    const ids = menuItems([]).map((i) => i.id);
+    for (const t of ['image', 'link']) {
+      expect(ids).not.toContain(`wys-${t}:summarize`);
+      expect(ids).not.toContain(`wys-${t}:sources`);
+    }
+    expect(titles).toContain('Fact-check this image');
+    expect(titles).toContain('Fact-check linked page');
+  });
+  it('ask their own questions and go through the message schema', () => {
+    expect(questionFor({ id: 'summarize' }, 'post')).toMatch(/^Summarize this post: the main points/);
+    expect(questionFor({ id: 'summarize' }, 'page')).toMatch(/^Summarize this article/);
+    expect(questionFor({ id: 'sources' }, 'text')).toMatch(/^Find additional sources on this/);
+    expect(questionFor({ id: 'explain' }, 'text')).toMatch(/^What are they talking about\?/);
+    expect(askLabel({ id: 'sources' })).toBe('Find more sources');
+    expect(askLabel({ id: 'summarize' })).toBe('Summarize');
+    for (const id of ['summarize', 'sources'] as const) {
+      expect(CheckInputSchema.parse({ ...text, ask: { id } }).ask).toEqual({ id });
+      expect(userText({ ...text, ask: { id } })).toContain(ASK_PRESETS[id].question.text);
+    }
   });
 });

@@ -1,3 +1,4 @@
+import { isDirectQuestion } from '../messaging/limits';
 import { askLabel, questionFor } from '../pipeline/question';
 import type { CheckResult } from '../pipeline/schema';
 import { truncate } from '../util/url';
@@ -57,6 +58,8 @@ export function resultToRow(r: CheckResult, note = ''): string[] {
   const i = r.input;
   const what =
     i.kind === 'text' || i.kind === 'post' ? i.text : i.kind === 'image' ? (/^https?:/i.test(i.srcUrl) ? i.srcUrl : i.alt || 'Inline image') : i.title || i.url;
+  // A question asked directly: the question is what was asked, and there was no content or page.
+  const question = isDirectQuestion(i);
   const where = i.kind === 'page' ? i.url : i.kind === 'post' ? i.permalink || i.pageUrl : i.pageUrl;
   const o = r.originalSource;
   // Only an address the provider actually retrieved goes out as the original source's link.
@@ -65,11 +68,11 @@ export function resultToRow(r: CheckResult, note = ''): string[] {
     localStamp(r.createdAt),
     r.title || truncate(what.replace(/\s+/g, ' ').trim(), 90),
     r.topic ? capital(r.topic) : '',
-    truncate(what, 2000),
+    question ? '' : truncate(what, 2000),
     where,
-    KIND_NAME[i.kind],
-    askLabel(i.ask),
-    questionFor(i.ask, i.kind),
+    question ? 'Question' : KIND_NAME[i.kind],
+    question ? 'Question' : askLabel(i.ask),
+    question ? i.text.replace(/\s+/g, ' ').trim() : questionFor(i.ask, i.kind),
     r.verdict.label,
     capital(r.verdict.confidence),
     r.verdict.summary,

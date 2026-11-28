@@ -1,5 +1,6 @@
+import { isDirectQuestion } from './messaging/limits';
 import type { CheckInput } from './messaging/protocol';
-import { questionFor, type Ask } from './pipeline/question';
+import { cleanCustomQuestion, questionFor, type Ask } from './pipeline/question';
 import { truncate } from './util/url';
 
 /**
@@ -17,6 +18,11 @@ export function googleAiModeUrl(input: CheckInput, variant: GoogleAiModeVariant,
   let q: string;
   switch (input.kind) {
     case 'text':
+      // A question asked directly goes to Google as it is, with nothing added.
+      if (isDirectQuestion(input)) {
+        q = cleanCustomQuestion(input.text);
+        break;
+      }
       q = `${questionFor(ask, 'text')} "${truncate(input.text.replace(/\s+/g, ' ').trim(), 900)}"`;
       break;
     case 'image':

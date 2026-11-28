@@ -6,6 +6,8 @@ import { prepareImageForCheck } from '@/lib/image/prepare';
 import { formatExifDate, provenanceFacts, readProvenance, safeImageMime, UNRECOGNISED_FORMAT } from '@/lib/image/provenance';
 import { buildRequest } from '@/lib/pipeline/prompts';
 
+/** The user granted the image's host (the download gate passes). */
+const granted = async () => true;
 const bytes = (...parts: (number[] | string)[]) => new Uint8Array(parts.flatMap((p) => (typeof p === 'string' ? p.split('').map((c) => c.charCodeAt(0)) : p)));
 const u16le = (n: number) => [n & 255, (n >> 8) & 255];
 const u32le = (n: number) => [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >>> 24) & 255];
@@ -87,12 +89,12 @@ describe('S4-01 / P5S6-05: server-written MIME text never reaches the reliable f
       'fetch',
       vi.fn(async () => new Response(icon(2, 48, 48), { headers: { 'Content-Type': hostile } })),
     );
-    expect((await fetchImageBytes('https://cdn.example/a.cur')).mime).toBe('image/x-icon');
+    expect((await fetchImageBytes('https://cdn.example/a.cur', undefined, undefined, granted)).mime).toBe('image/x-icon');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(bytes('II*\0', Array<number>(20).fill(0)), { headers: { 'Content-Type': hostile } })),
     );
-    expect((await fetchImageBytes('https://cdn.example/a.tif')).mime).toBe(UNRECOGNISED_FORMAT);
+    expect((await fetchImageBytes('https://cdn.example/a.tif', undefined, undefined, granted)).mime).toBe(UNRECOGNISED_FORMAT);
   });
   it('the prompt line never echoes it, even from stored provenance', async () => {
     const facts = provenanceFacts({ width: 48, height: 48, mime: hostile, bytes: 2048 });
@@ -121,7 +123,7 @@ describe('S2-01 / C9-04: image download policy', () => {
       return new Response(null, { status: 302, headers: { Location: 'http://127.0.0.1/' } });
     });
     vi.stubGlobal('fetch', fetchMock);
-    await expect(fetchImageBytes('https://cdn.example/a.png')).rejects.toThrow(/redirects/);
+    await expect(fetchImageBytes('https://cdn.example/a.png', undefined, undefined, granted)).rejects.toThrow(/redirects/);
     expect(fetchMock).toHaveBeenCalled();
   });
 });
@@ -137,6 +139,9 @@ describe('P5C3-01: a cancelled image fetch does not take a screenshot', () => {
       }),
     );
     const tabsGet = vi.spyOn(browser.tabs, 'get');
+    // The image's host is granted, so the download is attempted (and cancelled mid-way).
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- the typings list the callback overload; the API returns a promise
+    const contains = vi.spyOn(browser.permissions, 'contains').mockImplementation(() => Promise.resolve(true));
     const r = await prepareImageForCheck(
       { kind: 'image', srcUrl: 'https://cdn.example/a.png', pageUrl: 'https://e.com', pageTitle: 't' },
       1,
@@ -146,6 +151,7 @@ describe('P5C3-01: a cancelled image fetch does not take a screenshot', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe('cancelled');
     expect(tabsGet).not.toHaveBeenCalled();
+    contains.mockRestore();
   });
 });
 

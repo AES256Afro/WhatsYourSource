@@ -1,4 +1,5 @@
-import type { CheckInput, SelectionInfo } from './protocol';
+import { MAX_CUSTOM_QUESTION } from '../pipeline/question';
+import type { CheckInput, SelectionInfo, TextInput } from './protocol';
 
 /**
  * Size limits and clamps for page-derived input. Kept zod-free so the always-on content script can
@@ -27,6 +28,22 @@ export const LIMITS = {
   surroundingForPrompt: 1_200,
 } as const;
 
+/**
+ * A question the user typed into the side panel to ask the model directly, with nothing selected.
+ * The same bound as a custom question: the text and `ask.custom` carry the same words, and
+ * `AskSchema` already caps `custom` at this length. A question is a sentence or two, not a document.
+ */
+export const MAX_DIRECT_QUESTION = MAX_CUSTOM_QUESTION;
+
+/**
+ * Is this a question the user asked the model directly (no page, no selection)? Only a text input
+ * flagged `question: true` that names no web page: the flag on anything carrying a page address is
+ * ignored, so content from a page can never be framed as the user's own words.
+ */
+export function isDirectQuestion(input: CheckInput | null | undefined): input is TextInput & { question: true } {
+  return !!input && input.kind === 'text' && input.question === true && !/^https?:/i.test(input.pageUrl);
+}
+
 const cut = (s: string | undefined, n: number) => (s === undefined ? undefined : s.length > n ? s.slice(0, n) : s);
 const httpOnly = (xs: string[], n: number) => xs.filter((u) => /^https?:\/\//i.test(u) && u.length <= LIMITS.url).slice(0, n);
 
@@ -38,6 +55,20 @@ const httpOnly = (xs: string[], n: number) => xs.filter((u) => /^https?:\/\//i.t
 export function clampInput(input: CheckInput): CheckInput {
   switch (input.kind) {
     case 'text':
+      if (input.question) {
+        const text = input.text.slice(0, MAX_DIRECT_QUESTION);
+        const custom = (input.ask?.id === 'custom' && input.ask.custom ? input.ask.custom : text).slice(0, MAX_DIRECT_QUESTION);
+        // No page and no surrounding text: a direct question is only the user's words.
+        return {
+          ...input,
+          text,
+          pageUrl: '',
+          pageTitle: '',
+          surrounding: undefined,
+          // What is asked is the question itself, whatever else came with it.
+          ask: { id: 'custom', custom },
+        };
+      }
       return {
         ...input,
         text: input.text.slice(0, LIMITS.text),

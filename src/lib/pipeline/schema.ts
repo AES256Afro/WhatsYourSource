@@ -176,6 +176,8 @@ export interface OriginalSource {
 }
 
 export interface LocalProvenance {
+  /** Set when the file was read from a screenshot because the extension has no access to this host. */
+  needsAccessHost?: string;
   c2pa?: { present: boolean; summary?: string };
   exif?: Record<string, string>;
   aiHints?: string[];

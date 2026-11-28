@@ -498,3 +498,7 @@ Recorded, not done (owner decisions or larger work):
 - Post extraction on feeds and embedded posts, the follow-up box taking 21–29 % of the panel, onboarding button/provider mismatch, and the long tail of Low items.
 
 Released as 1.2.1 on 2026-11-27 (PR #1 merged; tag v1.2.1).
+
+### 2026-11-27 · 1.3.0: host access enforced, saved questions, direct questions, trackers stripped
+
+Owner asked for the host-access fix, the ability to ask the panel model questions, several editable right-click questions (plus Summarize and Find more sources, "this article" wording, Explain asking what they are talking about) and tracker-free source links. Host access was measured in real Chromium before and after: `permissions.contains` does not count the `<all_urls>` content-script match, so gating on it makes the optional grant real (without it: no request to search-result pages, image read from a screenshot with an Allow button). Verified: compile, lint, format:check, 304 unit tests, build:all, web-ext lint, Playwright, and the panel in the preview (picker with the new questions and saved ones, the Ask box end to end with follow-ups, the Settings editor). Closes from the 2026-11-25 "Recorded, not done" list: host access not optional on Chrome; follow-ups missing from PRIVACY.md; the Settings privacy line.

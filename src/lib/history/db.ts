@@ -3,7 +3,7 @@ import { askLabel, normalizeAsk } from '../pipeline/question';
 import type { CheckInput } from '../messaging/protocol';
 import type { ProviderId } from '../storage/settings';
 import type { CheckResult, FollowUp, VerdictKind } from '../pipeline/schema';
-import { domainOf, truncate } from '../util/url';
+import { domainOf, stripTracking, truncate } from '../util/url';
 
 /**
  * History lives in IndexedDB (storage.local is too small for page snapshots).
@@ -212,11 +212,15 @@ export function upgradeStoredCheck(c: StoredCheck): StoredCheck {
       narrative: r.narrative ?? '',
       rawText: r.rawText ?? '',
       claims: r.claims ?? [],
-      sources: r.sources ?? [],
+      // Checks saved before 1.3.0 kept links as the search returned them; every reader gets them without trackers.
+      sources: (r.sources ?? []).map((s) => ({ ...s, url: stripTracking(s.url) })),
+      ...(r.originalSource?.url ? { originalSource: { ...r.originalSource, url: stripTracking(r.originalSource.url) } } : {}),
+      ...(r.factChecks ? { factChecks: r.factChecks.map((f) => ({ ...f, url: stripTracking(f.url) })) } : {}),
+      ...(r.followUps ? { followUps: r.followUps.map((f) => ({ ...f, sources: (f.sources ?? []).map((s) => ({ ...s, url: stripTracking(s.url) })) })) } : {}),
       searchQueries: r.searchQueries ?? [],
       verdict: r.verdict ?? { label: 'Assessment', kind: 'unverified', confidence: 'low', summary: '' },
       provider: r.provider ?? { id: providerIdFromLabel(c.providerLabel), label: c.providerLabel, model: c.model ?? '' },
-      input: input.kind === 'post' ? { ...input, images: input.images ?? [], links: input.links ?? [] } : input,
+      input: input.kind === 'post' ? { ...input, images: input.images ?? [], links: (input.links ?? []).map(stripTracking) } : input,
     },
   };
 }

@@ -3,7 +3,7 @@
  * Mode. The user picks one of the presets below or writes their own; "fact-check" is the default.
  * Its own module, with no imports, so the popup and the background can use it cheaply.
  */
-export const ASK_IDS = ['factcheck', 'explain', 'timeline', 'flaws', 'custom'] as const;
+export const ASK_IDS = ['factcheck', 'explain', 'summarize', 'timeline', 'flaws', 'sources', 'custom'] as const;
 export type AskId = (typeof ASK_IDS)[number];
 export type PresetAskId = Exclude<AskId, 'custom'>;
 
@@ -16,6 +16,8 @@ export interface Ask {
 export const DEFAULT_ASK: Ask = { id: 'factcheck' };
 /** A custom question is one sentence or two, not a prompt. */
 export const MAX_CUSTOM_QUESTION = 300;
+/** How many questions of their own the user can keep (each one is a row on every right-click target). */
+export const MAX_SAVED_QUESTIONS = 8;
 
 export type AskKind = 'text' | 'image' | 'page' | 'post';
 
@@ -52,15 +54,28 @@ export const ASK_PRESETS: Record<PresetAskId, Preset> = {
   },
   explain: {
     label: 'Explain it',
-    hint: 'Explains what it is about, who is behind it, and where it comes from',
+    hint: 'Explains what they are talking about, with the background needed to follow it',
     question: {
-      text: 'What is this about, who is behind it, and where does it come from?',
-      image: 'What does this image show, who took or published it, and where does it come from?',
-      page: 'What is this page about, who is behind it, and where does its information come from?',
-      post: 'What is this post about, who is behind it, and where does what it says come from?',
+      text: 'What are they talking about? Explain it in plain terms, with the background needed to follow it.',
+      image: 'What does this image show and what is it about? Explain it in plain terms, with the background needed to follow it.',
+      page: 'What is this page talking about? Explain it in plain terms, with the background needed to follow it.',
+      post: 'What is this post talking about? Explain it in plain terms, with the background needed to follow it.',
     },
     detail: same(
       'Explain it for someone meeting the topic for the first time: the background, the people and organisations involved, and the primary sources to read. Say plainly if any part of it is inaccurate, but the explanation comes first.',
+    ),
+  },
+  summarize: {
+    label: 'Summarize',
+    hint: 'Sums up the main points, who is saying it and what they want you to take away',
+    question: {
+      text: 'Summarize this text: the main points, who is saying it and what they want the reader to take away.',
+      image: 'Summarize what this image shows: the main points, who published it and what they want the viewer to take away.',
+      page: 'Summarize this article: the main points, who is saying it and what they want the reader to take away.',
+      post: 'Summarize this post: the main points, who is saying it and what they want the reader to take away.',
+    },
+    detail: same(
+      'Summarize it faithfully first, in a few short points, without adding to it or arguing with it. Then, as always, say how far it can be trusted and where it comes from.',
     ),
   },
   timeline: {
@@ -87,6 +102,14 @@ export const ASK_PRESETS: Record<PresetAskId, Preset> = {
     },
     detail: same(
       'Go through it part by part. List each inaccurate or misleading statement and each error of reasoning as its own claim, naming the error in plain words (for example: a cherry-picked number, a false comparison, a cause assumed from a coincidence), with the evidence. List what it gets right as well. Do not invent flaws: if it holds up, say so.',
+    ),
+  },
+  sources: {
+    label: 'Find more sources',
+    hint: 'Finds other reporting, the original source, and what confirms or contradicts it',
+    question: same('Find additional sources on this: other reporting, the original or primary source, and anything that confirms or contradicts it.'),
+    detail: same(
+      'List each source you found in the "sources" field and say in the answer what each one adds: whether it is the original, independent reporting, or a confirmation or contradiction. Then, as always, say how far the content can be trusted and where it comes from.',
     ),
   },
 };
@@ -135,10 +158,89 @@ export function askIdLabel(id: AskId): string {
   return id === 'custom' ? CUSTOM_ASK_BUTTON : ASK_PRESETS[id].label;
 }
 
-/** Every question on offer: the presets, and the user's own once they have written one. */
-export function availableAsks(custom: string | undefined): Ask[] {
-  const own = cleanCustomQuestion(custom);
-  return [...(Object.keys(ASK_PRESETS) as PresetAskId[]).map((id): Ask => ({ id })), ...(own ? [{ id: 'custom' as const, custom: own }] : [])];
+/**
+ * The saved questions as kept: each one cleaned, empty ones and repeats dropped, at most
+ * `MAX_SAVED_QUESTIONS`. Anything that is not a list of strings counts as no questions.
+ */
+export function cleanSavedQuestions(saved: unknown): string[] {
+  if (!Array.isArray(saved)) return [];
+  const out: string[] = [];
+  for (const raw of saved) {
+    const q = typeof raw === 'string' ? cleanCustomQuestion(raw) : '';
+    if (q && !out.includes(q)) out.push(q);
+    if (out.length === MAX_SAVED_QUESTIONS) break;
+  }
+  return out;
+}
+
+/** The user's saved questions as asks, in their order. */
+export function savedAsks(saved: readonly string[] | undefined): Ask[] {
+  return cleanSavedQuestions(saved).map((custom): Ask => ({ id: 'custom', custom }));
+}
+
+/** The preset ids, in display order. */
+export const PRESET_ASK_IDS = ASK_IDS.filter((id): id is PresetAskId => id !== 'custom');
+
+/**
+ * Every question on offer: the presets, then the user's saved questions. A single string is read as
+ * a list of one (the 1.2.x single custom question).
+ */
+export function availableAsks(saved: readonly string[] | string | undefined): Ask[] {
+  const list = typeof saved === 'string' ? [saved] : (saved ?? []);
+  return [...PRESET_ASK_IDS.map((id): Ask => ({ id })), ...savedAsks(list)];
+}
+
+/** The question settings as kept in storage (`Settings['ask']`), without the schema library. */
+export interface AskSettings {
+  default: AskId;
+  /** The custom question used as the default when `default` is `'custom'`; '' otherwise. */
+  custom: string;
+  /** The user's own questions, offered on the right-click menu, the Home picker and the popup. */
+  saved: string[];
+}
+
+/**
+ * The question settings made consistent: the saved list cleaned; a custom default that is not saved
+ * is added to the list when there is room; a custom question that is not the default and not saved
+ * is dropped; a custom default with no words falls back to the fact-check.
+ */
+export function normalizeAskSettings(ask: AskSettings): AskSettings {
+  const saved = cleanSavedQuestions(ask.saved);
+  let custom = cleanCustomQuestion(ask.custom);
+  let def = ask.default;
+  if (def === 'custom') {
+    if (!custom) def = 'factcheck';
+    else if (!saved.includes(custom) && saved.length < MAX_SAVED_QUESTIONS) saved.push(custom);
+  } else if (!saved.includes(custom)) custom = '';
+  return { default: def, custom, saved };
+}
+
+/** Adds a question to the end of the saved list (unchanged when it is empty, already saved, or the list is full). */
+export function addSavedQuestion(ask: AskSettings, text: string): AskSettings {
+  const q = cleanCustomQuestion(text);
+  if (!q || ask.saved.includes(q) || ask.saved.length >= MAX_SAVED_QUESTIONS) return ask;
+  return { ...ask, saved: [...ask.saved, q] };
+}
+
+/**
+ * Rewords the saved question at `index`. The default follows the edit. Empty words, a missing index
+ * or the words of another saved question leave everything as it was.
+ */
+export function editSavedQuestion(ask: AskSettings, index: number, text: string): AskSettings {
+  const q = cleanCustomQuestion(text);
+  const old = ask.saved[index];
+  if (old === undefined || !q || q === old || ask.saved.includes(q)) return ask;
+  const saved = ask.saved.map((s, i) => (i === index ? q : s));
+  return { ...ask, saved, custom: ask.custom === old ? q : ask.custom };
+}
+
+/** Removes the saved question at `index`. When it was the default, the default goes back to the fact-check. */
+export function removeSavedQuestion(ask: AskSettings, index: number): AskSettings {
+  const old = ask.saved[index];
+  if (old === undefined) return ask;
+  const saved = ask.saved.filter((_, i) => i !== index);
+  if (ask.custom !== old) return { ...ask, saved };
+  return { default: ask.default === 'custom' ? 'factcheck' : ask.default, custom: '', saved };
 }
 
 /** The default question for each kind, kept under their old names for the places that only ever fact-check. */

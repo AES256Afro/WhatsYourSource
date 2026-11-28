@@ -4,7 +4,7 @@ import { browser } from 'wxt/browser';
 import { deleteCheck, getCheck, getSnapshot, setNote, type StoredCheck, type StoredSnapshot } from '@/lib/history/db';
 import { checkToStandaloneHtml, downloadText, safeFilename } from '@/lib/history/export';
 import { buildSnapshotSrcdoc } from '@/lib/history/snapshot';
-import type { CheckInput } from '@/lib/messaging/protocol';
+import { isDirectQuestion, type CheckInput } from '@/lib/messaging/protocol';
 import type { Ask } from '@/lib/pipeline/question';
 import type { Settings } from '@/lib/storage/settings';
 import { Label, Pill, toneForVerdict } from './common';
@@ -137,7 +137,7 @@ export function DetailView({
           <span className="text-[12px] text-ink-2">Checked {new Date(check.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
         </div>
         <h1 ref={title} tabIndex={-1} className="m-0 line-clamp-2 text-[14px] leading-[18px] font-semibold outline-none">
-          {check.kind === 'text' ? `“${check.title}”` : check.title}
+          {check.kind === 'text' && !isDirectQuestion(check.result.input) ? `“${check.title}”` : check.title}
         </h1>
         <div role="tablist" aria-label="Saved check sections" className="mt-1 flex border-b border-line" onKeyDown={onTabKey}>
           {TABS.map((t) => (

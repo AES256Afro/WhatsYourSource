@@ -1,14 +1,17 @@
 import type { StoredCheck } from '@/lib/history/db';
+import { isDirectQuestion } from '@/lib/messaging/limits';
 import { askLabel, normalizeAsk } from '@/lib/pipeline/question';
 import { Pill, toneForVerdict } from './common';
-import { Camera, Globe, Image, Lines, Post } from './Icons';
+import { Camera, Globe, Image, Lines, Post, Search } from './Icons';
 
 /** One saved check in a list. Its own module so the home screen's recent list does not pull in the History view. */
 export function HistoryRow({ check: c, onOpen, compact }: { check: StoredCheck; onOpen: () => void; compact?: boolean }) {
-  const Icon = c.kind === 'text' ? Lines : c.kind === 'image' ? Image : c.kind === 'post' ? Post : Globe;
+  // A question the user asked directly is not quoted text from somewhere: no quote marks, its own pill.
+  const question = isDirectQuestion(c.result.input);
+  const Icon = question ? Search : c.kind === 'text' ? Lines : c.kind === 'image' ? Image : c.kind === 'post' ? Post : Globe;
   const time = new Date(c.createdAt);
   // Two checks of the same text differ by what was asked; a fact-check is the unmarked case.
-  const asked = normalizeAsk(c.result.input.ask).id === 'factcheck' ? '' : askLabel(c.result.input.ask);
+  const asked = question ? 'Question' : normalizeAsk(c.result.input.ask).id === 'factcheck' ? '' : askLabel(c.result.input.ask);
   return (
     <button className={`wys-card flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-surface ${compact ? 'border-0 px-2' : ''}`} onClick={onOpen}>
       {!compact && (
@@ -17,7 +20,7 @@ export function HistoryRow({ check: c, onOpen, compact }: { check: StoredCheck; 
         </span>
       )}
       <span className="flex min-w-0 grow flex-col gap-[3px]">
-        <span className="truncate text-[13px] leading-[18px] font-medium">{c.kind === 'text' ? `“${c.title}”` : c.title}</span>
+        <span className="truncate text-[13px] leading-[18px] font-medium">{c.kind === 'text' && !question ? `“${c.title}”` : c.title}</span>
         {!compact && c.result.verdict.summary && <span className="line-clamp-1 text-[12px] leading-4 text-ink-2">{c.result.verdict.summary}</span>}
         <span className="flex items-center gap-1.5 text-[11px] text-ink-2">
           <Pill tone={toneForVerdict(c.verdictKind)} className="px-[7px] py-px">

@@ -20,7 +20,14 @@ export const SHORTCUT_KEY = 'shortcut';
 const d = { chip: true, disabledSites: [] as string[], shortcutAction: 'panel' as const, defaultProvider: 'gemini' as const };
 
 /** Mirrors the labels in pipeline/question.ts (importing it would put every preset's text into each page); a unit test keeps them equal. */
-export const PUBLIC_ASK_NAMES: Record<string, string> = { explain: 'Explain it', timeline: 'Timeline', flaws: 'Find the flaws', custom: 'Your question' };
+export const PUBLIC_ASK_NAMES: Record<string, string> = {
+  explain: 'Explain it',
+  summarize: 'Summarize',
+  timeline: 'Timeline',
+  flaws: 'Find the flaws',
+  sources: 'Find more sources',
+  custom: 'Your question',
+};
 
 /** Mirrors `PROVIDER_IDS` in settings.ts (a value import would pull zod in); a unit test keeps them equal. */
 export const PUBLIC_PROVIDER_IDS: ProviderId[] = ['gemini', 'openai-compat', 'anthropic', 'webmode'];
@@ -29,7 +36,8 @@ export function readPublicSettings(raw: unknown): PublicSettings {
   const o = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
   const privacy = (typeof o.privacy === 'object' && o.privacy !== null ? o.privacy : {}) as Record<string, unknown>;
   const ask = (typeof o.ask === 'object' && o.ask !== null ? o.ask : {}) as Record<string, unknown>;
-  // "Ask your own" with nothing written falls back to the fact-check, as everywhere else.
+  // A custom default with nothing written falls back to the fact-check, as everywhere else. Which of
+  // the saved questions it is does not matter here: the chip only says "Your question".
   const askId = typeof ask.default === 'string' && (ask.default !== 'custom' || (typeof ask.custom === 'string' && ask.custom.trim())) ? ask.default : '';
   return {
     chip: typeof privacy.chip === 'boolean' ? privacy.chip : d.chip,

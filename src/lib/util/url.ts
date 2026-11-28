@@ -37,6 +37,82 @@ export function normalizeUrl(input: string): string {
   }
 }
 
+/**
+ * Query keys that only identify the click, the campaign or the sharer. `ref` is not here: on many
+ * sites (GitHub, docs) it selects content. `si` and `feature` are removed only on the hosts that use
+ * them as share trackers (see SHARE_TRACKER_HOSTS).
+ */
+const TRACKING_KEY =
+  /^(utm_[a-z_]*|fbclid|gclid|gclsrc|dclid|gbraid|wbraid|msclkid|yclid|twclid|ttclid|li_fat_id|igshid|igsh|mc_cid|mc_eid|mkt_tok|_hsenc|_hsmi|__hssc|__hstc|__hsfp|hsctatracking|vero_conv|vero_id|oly_anon_id|oly_enc_id|_ga|_gl|_openstat|ref_src|ref_url|s_cid|cmpid|ocid|spm|scm|wickedid|trk|trkcampaign|sr_share|rcm|ito|xtor|at_medium|at_campaign|ns_campaign|ns_mchannel|ns_source|ns_linkname|ns_fee|cvid|smid|smtyp)$/i;
+
+const SHARE_TRACKER_HOSTS = /(^|\.)(youtube\.com|youtu\.be|spotify\.com|music\.apple\.com|podcasts\.apple\.com)$/i;
+
+/**
+ * Wrappers that only bounce the click through a tracking redirect: the real address is a query
+ * value. Each entry: host pattern, path pattern, the parameter that holds the target.
+ */
+const REDIRECT_WRAPPERS: [RegExp, RegExp, string][] = [
+  [/(^|\.)google\.[a-z.]+$/i, /^\/url$/, 'q'],
+  [/(^|\.)google\.[a-z.]+$/i, /^\/url$/, 'url'],
+  [/^l[m]?\.facebook\.com$/i, /^\/l\.php$/, 'u'],
+  [/^l\.instagram\.com$/i, /^\/$/, 'u'],
+  [/^l\.messenger\.com$/i, /^\/l\.php$/, 'u'],
+  [/^out\.reddit\.com$/i, /^\/[^/]+$/, 'url'],
+  [/^(www\.)?linkedin\.com$/i, /^\/redir\/redirect\/?$/, 'url'],
+  [/^href\.li$/i, /^\/$/, ''],
+  [/^(www\.)?youtube\.com$/i, /^\/redirect$/, 'q'],
+  [/^slack-redir\.net$/i, /^\/link$/, 'url'],
+];
+
+/**
+ * The address with tracking removed, for links shown, stored, copied or exported: known redirect
+ * wrappers are unwrapped to their target, tracking query keys are dropped, and everything else
+ * (other keys exactly as written, the fragment) is kept, so the link opens the same page. Returns
+ * the input unchanged when it is not an http(s) URL.
+ */
+export function stripTracking(input: string): string {
+  let url = input;
+  for (let hops = 0; hops < 3; hops++) {
+    const target = unwrapRedirect(url);
+    if (!target) break;
+    url = target;
+  }
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return input;
+    const shareHost = SHARE_TRACKER_HOSTS.test(u.hostname);
+    const kept = u.search
+      .slice(1)
+      .split('&')
+      .filter((pair) => {
+        if (!pair) return false;
+        const key = decodeKey(pair.split('=')[0] ?? '');
+        if (TRACKING_KEY.test(key)) return false;
+        if (shareHost && /^(si|feature|pp)$/i.test(key)) return false;
+        return true;
+      });
+    u.search = kept.length ? `?${kept.join('&')}` : '';
+    return u.toString();
+  } catch {
+    return input;
+  }
+}
+
+function unwrapRedirect(url: string): string | null {
+  try {
+    const u = new URL(url);
+    for (const [host, path, param] of REDIRECT_WRAPPERS) {
+      if (!host.test(u.hostname) || !path.test(u.pathname)) continue;
+      // href.li puts the whole target after the "?".
+      const target = param ? u.searchParams.get(param) : decodeURIComponent(u.search.slice(1));
+      if (target && /^https?:\/\//i.test(target)) return target;
+    }
+  } catch {
+    /* not a URL */
+  }
+  return null;
+}
+
 function decodeKey(k: string): string {
   try {
     return decodeURIComponent(k.replace(/\+/g, ' '));

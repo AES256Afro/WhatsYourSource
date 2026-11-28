@@ -2,8 +2,10 @@ import { isPublicHttpUrl } from '../util/url';
 
 /**
  * Fetch a page and reduce it to readable text for a model that can't browse.
- * Runs in the side panel (extension origin), so it needs a host permission for the site;
- * without one the fetch fails with a TypeError and we report that honestly.
+ * Runs in the side panel (extension origin). Chromium lets the extension's pages read any site
+ * because the content script matches all sites, so the browser does not enforce the user's grant:
+ * the caller (the local model's tool loop) offers and runs this only when "Allow all sites" is
+ * granted (hasAllUrls). Without the grant the model works from search snippets.
  *
  * The URL comes from the model, and the model has read untrusted page content, so this is the one
  * place a prompt injection could reach the network. Only public http(s) hosts are allowed: no

@@ -5,10 +5,17 @@ import { defaultAsk, providerReady, type Settings } from '@/lib/storage/settings
 import { useShortcutLabel } from '../hooks/useShortcutLabel';
 import { useTargetSelection } from '../hooks/useTargetSelection';
 import { domainOf, truncate } from '@/lib/util/url';
-import { askIdLabel, normalizeAsk, type Ask, type AskId } from '@/lib/pipeline/question';
-import { AskPicker } from './AskPicker';
+import { askIdLabel, MAX_SAVED_QUESTIONS, normalizeAsk, type Ask, type AskId } from '@/lib/pipeline/question';
+import { AskModelBox } from './AskModelBox';
+import { AskPicker, type AskChoice } from './AskPicker';
 import { Label, ProviderBadge, TextAction } from './common';
 import { ChevronRight, External, Globe, Image, Logo } from './Icons';
+
+/** Which saved question and which typed words the home view had, kept while the panel page stays open. */
+const homeMemory: { choice: AskChoice | null; own: string } = { choice: null, own: '' };
+function remember(patch: Partial<typeof homeMemory>) {
+  Object.assign(homeMemory, patch);
+}
 
 export function HomeView({
   settings,
@@ -24,7 +31,7 @@ export function HomeView({
   onCheck: (input: CheckInput) => void;
   onWebMode: (input: CheckInput) => void;
   onSettings: () => void;
-  /** Save the custom question's text, or make a question the default for every way of starting a check. */
+  /** Save a question to the list, or make a question the default for every way of starting a check. */
   onAskChange: (patch: Partial<Settings['ask']>) => void;
   /** The question picked here for checks started from this panel; null follows the default. */
   picked: AskId | null;
@@ -44,29 +51,76 @@ export function HomeView({
   // The question for checks started here. It starts as the default and can differ from it: picking
   // "Timeline" for one post must not quietly change what the chip and the shortcut ask.
   // Until the user picks here, it follows the default, including a change made in the popup or Settings.
-  const picked = pickedHere ?? settings.ask.default;
-  const [typedHere, setTypedHere] = useState<string | null>(null);
-  const customText = typedHere ?? settings.ask.custom;
+  // The panel keeps only a question id for the pick (`picked`); which saved question, and the words
+  // under "Ask your own", are kept here (and in `homeMemory`, so they outlive this view).
+  const saved = settings.ask.saved;
+  const [localChoice, setLocalChoiceState] = useState<AskChoice | null>(homeMemory.choice);
+  const setLocalChoice = (c: AskChoice | null) => {
+    remember({ choice: c });
+    setLocalChoiceState(c);
+  };
+  const [ownText, setOwnTextState] = useState(
+    () => homeMemory.own || (settings.ask.default === 'custom' && !saved.includes(settings.ask.custom) ? settings.ask.custom : ''),
+  );
+  const setOwnText = (t: string) => {
+    remember({ own: t });
+    setOwnTextState(t);
+  };
+  // A question saved from here counts as saved before the new list comes back from storage.
+  const [justSaved, setJustSaved] = useState('');
+
+  const defaultChoice: AskChoice =
+    settings.ask.default !== 'custom'
+      ? { kind: 'preset', id: settings.ask.default }
+      : saved.includes(settings.ask.custom)
+        ? { kind: 'saved', text: settings.ask.custom }
+        : { kind: 'own' };
+  const choice: AskChoice =
+    pickedHere === null
+      ? defaultChoice
+      : pickedHere !== 'custom'
+        ? { kind: 'preset', id: pickedHere }
+        : localChoice?.kind === 'saved' && (saved.includes(localChoice.text) || localChoice.text === justSaved)
+          ? localChoice
+          : { kind: 'own' };
+  const ask: Ask =
+    choice.kind === 'preset'
+      ? { id: choice.id }
+      : choice.kind === 'saved'
+        ? { id: 'custom', custom: choice.text }
+        : normalizeAsk({ id: 'custom', custom: choice === defaultChoice && !ownText ? settings.ask.custom : ownText });
+  // What the default really asks: a custom default with no words falls back to Fact-check.
+  const effectiveDefault = defaultAsk(settings);
+  const sameAsk = (a: Ask, b: Ask) => a.id === b.id && (a.id !== 'custom' || a.custom === b.custom);
+  /** A question's name inside a sentence. */
+  const nameOf = (a: Ask) => (a.id === 'custom' ? `“${truncate(a.custom ?? '', 40)}”` : askIdLabel(a.id));
   /** Shown for a few seconds after "Always ask X", with the way back. */
-  const [madeDefault, setMadeDefault] = useState<{ now: AskId; was: AskId } | null>(null);
+  const [madeDefault, setMadeDefault] = useState<{ now: Ask; was: Settings['ask'] } | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const makeDefault = (id: AskId, was: AskId) => {
-    onAskChange({ default: id });
-    onPick(null);
-    setMadeDefault(was === id ? null : { now: id, was });
+  const focusChecked = () =>
     // The line that held the action is gone; keep keyboard focus on the choice it applied to.
     setTimeout(() => pickerRef.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus(), 0);
+  const makeDefault = (next: Ask) => {
+    const was = settings.ask;
+    onAskChange(next.id === 'custom' ? { default: 'custom', custom: next.custom ?? '' } : { default: next.id });
+    onPick(null);
+    setLocalChoice(null);
+    setMadeDefault(sameAsk(next, effectiveDefault) ? null : { now: next, was });
+    focusChecked();
+  };
+  const undoDefault = (was: Settings['ask']) => {
+    onAskChange(was);
+    onPick(null);
+    setLocalChoice(null);
+    setMadeDefault(null);
+    focusChecked();
   };
   useEffect(() => {
     if (!madeDefault) return;
     const t = setTimeout(() => setMadeDefault(null), 6000);
     return () => clearTimeout(t);
   }, [madeDefault]);
-  const ask: Ask = normalizeAsk({ id: picked, custom: customText });
-  // What the default really asks: "Ask your own" with no text written falls back to Fact-check.
-  const effectiveDefault = defaultAsk(settings).id;
-  /** A question's name inside a sentence. */
-  const nameOf = (id: AskId) => (id === 'custom' ? 'your question' : askIdLabel(id));
+  const pickable = !(choice.kind === 'own' && ask.id !== 'custom'); // "Ask your own" with nothing typed yet
   const webmode = settings.defaultProvider === 'webmode';
   const ready = providerReady(settings);
   const providerLabel = ready ? providerRunLabel(settings.defaultProvider, settings) : `${PROVIDER_LABELS[settings.defaultProvider]} · no key set`;
@@ -76,6 +130,16 @@ export function HomeView({
   /** With Google AI Mode as the default, every check leaves for a new tab; say so instead of changing nothing. */
   const run = (bare: CheckInput) => {
     const input = { ...bare, ask };
+    if (webmode) {
+      onWebMode(input);
+      setOpenedNote(true);
+      setTimeout(() => setOpenedNote(false), 4000);
+    } else onCheck(input);
+  };
+
+  /** A question asked directly: the question is both the text and the ask, whatever the picker shows. */
+  const askModel = (text: string) => {
+    const input: CheckInput = { kind: 'text', text, pageUrl: '', pageTitle: '', question: true, ask: { id: 'custom', custom: text } };
     if (webmode) {
       onWebMode(input);
       setOpenedNote(true);
@@ -108,31 +172,36 @@ export function HomeView({
       <div ref={pickerRef} className="flex flex-col gap-1.5">
         <Label>Question</Label>
         <AskPicker
-          selected={picked}
-          custom={customText}
-          onSelect={(id) => {
+          selected={choice}
+          saved={saved}
+          own={ownText}
+          onSelect={(c) => {
             setMadeDefault(null);
-            onPick(id);
+            setLocalChoice(c.kind === 'preset' ? null : c);
+            onPick(c.kind === 'preset' ? c.id : 'custom');
           }}
-          onCustom={(text) => {
-            setTypedHere(text);
-            onAskChange({ custom: text });
+          onOwn={setOwnText}
+          onSave={(text) => {
+            if (saved.length >= MAX_SAVED_QUESTIONS || saved.includes(text)) return;
+            onAskChange({ saved: [...saved, text] });
+            setJustSaved(text);
+            setOwnText('');
+            setLocalChoice({ kind: 'saved', text });
+            onPick('custom');
           }}
           kind={selection ? 'text' : 'page'}
         />
-        {picked !== effectiveDefault && ask.id === picked && (
-          <span className="text-[11px] leading-[15px] text-ink-2">
+        {pickable && !sameAsk(ask, effectiveDefault) && (
+          <span className="text-[11px] leading-[15px] text-ink-2 wrap-anywhere">
             Only for checks you start in this panel. Highlighting, the shortcut and the address bar still ask {nameOf(effectiveDefault)}.{' '}
-            <TextAction onClick={() => makeDefault(picked, effectiveDefault)}>Always ask {nameOf(picked)}</TextAction>
+            <TextAction onClick={() => makeDefault(ask)}>Always ask {nameOf(ask)}</TextAction>
           </span>
         )}
-        <span role="status" className="text-[11px] leading-[15px] text-ink-2 empty:hidden">
+        <span role="status" className="text-[11px] leading-[15px] text-ink-2 wrap-anywhere empty:hidden">
           {madeDefault && (
             <>
-              {madeDefault.now === 'custom'
-                ? 'Your question is now the default for highlighting, the shortcut and the address bar.'
-                : `${askIdLabel(madeDefault.now)} is now the default for highlighting, the shortcut and the address bar.`}{' '}
-              <TextAction onClick={() => makeDefault(madeDefault.was, madeDefault.was)}>Undo</TextAction>
+              {`${madeDefault.now.id === 'custom' ? nameOf(madeDefault.now) : askIdLabel(madeDefault.now.id)} is now the default for highlighting, the shortcut and the address bar.`}{' '}
+              <TextAction onClick={() => undoDefault(madeDefault.was)}>Undo</TextAction>
             </>
           )}
         </span>
@@ -255,6 +324,8 @@ export function HomeView({
           </button>
         </form>
       </div>
+
+      <AskModelBox disabledReason={ready || webmode ? undefined : 'Set up a model in Settings to ask a question.'} onAsk={askModel} />
 
       {recent}
     </div>

@@ -7,7 +7,7 @@ import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { askLabel, availableAsks, DEFAULT_ASK, questionFor, type AskId } from '@/lib/pipeline/question';
 import { defaultAsk, providerReady } from '@/lib/storage/settings';
 import { useTargetSelection } from '../hooks/useTargetSelection';
-import { domainOf } from '@/lib/util/url';
+import { domainOf, truncate } from '@/lib/util/url';
 import { useSettings } from '../hooks/useSettings';
 import { useShortcutLabel } from '../hooks/useShortcutLabel';
 import { External, Logo, Sliders, Sparkle } from '../components/Icons';
@@ -25,6 +25,9 @@ export function PopupApp() {
       : null;
   const webmode = settings?.defaultProvider === 'webmode';
   const ask = settings ? defaultAsk(settings) : DEFAULT_ASK;
+  const saved = settings?.ask.saved ?? [];
+  // The select's value: a preset id, or `saved-<index>` for a saved question ('own' for a custom default not in the list).
+  const askValue = ask.id !== 'custom' ? ask.id : saved.includes(ask.custom ?? '') ? `saved-${saved.indexOf(ask.custom ?? '')}` : 'own';
 
   /** Open the panel synchronously (user gesture), then hand over the job. */
   const checkInPanel = () => {
@@ -67,23 +70,29 @@ export function PopupApp() {
             <select
               id="wys-default-ask"
               className="wys-input h-8 w-auto max-w-[200px] text-[12px]"
-              value={ask.id}
+              value={askValue}
               onChange={(e) => {
                 // Read now: by the time the updater runs, React has put the old value back in the control.
-                const id = e.target.value as AskId;
-                void update((s) => ({ ...s, ask: { ...s.ask, default: id } }));
+                const v = e.target.value;
+                if (v === 'own') return;
+                void update((s) => {
+                  if (!v.startsWith('saved-')) return { ...s, ask: { ...s.ask, default: v as AskId } };
+                  const q = s.ask.saved[Number(v.slice(6))];
+                  return q ? { ...s, ask: { ...s.ask, default: 'custom', custom: q } } : s;
+                });
               }}
             >
-              {availableAsks(settings?.ask.custom).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {askLabel(a)}
+              {availableAsks(saved).map((a, i) => (
+                <option key={a.id === 'custom' ? `saved-${i}` : a.id} value={a.id === 'custom' ? `saved-${saved.indexOf(a.custom ?? '')}` : a.id}>
+                  {a.id === 'custom' ? truncate(a.custom ?? '', 60) : askLabel(a)}
                 </option>
               ))}
+              {askValue === 'own' && <option value="own">{truncate(ask.custom ?? '', 60)}</option>}
             </select>
           </div>
           <span className="px-1 text-[11px] leading-[15px] text-ink-2">
             Asks: “{questionFor(ask, input?.kind ?? 'text')}” Used by these buttons, the chip, the shortcut and the address bar; right-click items name their
-            own question. To write your own, open the side panel.
+            own question. To add your own questions, open Settings.
           </span>
         </div>
 

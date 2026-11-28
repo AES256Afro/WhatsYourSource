@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { isDirectQuestion } from '@/lib/messaging/protocol';
 import type { RunState } from '@/lib/pipeline/progress';
 import { stripThinking } from '@/lib/pipeline/schema';
 import { askLabel, normalizeAsk, questionFor } from '@/lib/pipeline/question';
@@ -20,9 +21,12 @@ export function CheckingView({ run, onCancel }: { run: RunState; onCancel: () =>
     <div className="flex h-full flex-col">
       <div className="flex grow flex-col gap-3.5 overflow-y-auto p-3.5">
         <InputCard input={run.input} clamp />
-        <p className="m-0 text-[12px] leading-4 text-ink-2">
-          <span className="font-semibold text-ink">{askLabel(run.input.ask)}:</span> “{questionFor(run.input.ask, run.input.kind)}”
-        </p>
+        {/* A direct question is already the input card; repeating it under "Your question" says it twice. */}
+        {!isDirectQuestion(run.input) && (
+          <p className="m-0 text-[12px] leading-4 text-ink-2">
+            <span className="font-semibold text-ink">{askLabel(run.input.ask)}:</span> “{questionFor(run.input.ask, run.input.kind)}”
+          </p>
+        )}
 
         <div
           ref={steps}
