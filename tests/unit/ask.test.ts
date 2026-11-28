@@ -194,15 +194,15 @@ describe('bug sweep 3', () => {
 
 describe('the chip names a non-default question', () => {
   it('mirrors the picker labels', async () => {
-    const { PUBLIC_ASK_NAMES, readPublicSettings } = await import('@/lib/storage/publicSettings');
+    const { PUBLIC_ASK_NAMES, publicAskName } = await import('@/lib/storage/publicSettings');
     const { askIdLabel } = await import('@/lib/pipeline/question');
     for (const id of ['explain', 'summarize', 'timeline', 'flaws', 'sources'] as const) expect(PUBLIC_ASK_NAMES[id]).toBe(askIdLabel(id));
     const { CUSTOM_ASK_NAME } = await import('@/lib/pipeline/question');
     expect(PUBLIC_ASK_NAMES.custom).toBe(CUSTOM_ASK_NAME);
-    expect(readPublicSettings({ ask: { default: 'timeline', custom: '' } }).askName).toBe('Timeline');
-    expect(readPublicSettings({ ask: { default: 'factcheck', custom: '' } }).askName).toBe('');
-    expect(readPublicSettings({ ask: { default: 'custom', custom: '  ' } }).askName).toBe('');
-    expect(readPublicSettings({}).askName).toBe('');
+    expect(publicAskName({ default: 'timeline', custom: '' })).toBe('Timeline');
+    expect(publicAskName({ default: 'factcheck', custom: '' })).toBe('');
+    expect(publicAskName({ default: 'custom', custom: '  ' })).toBe('');
+    expect(publicAskName({ default: 'custom', custom: 'Who?' })).toBe('Your question');
   });
 });
 

@@ -8,12 +8,13 @@ import {
   DEFAULT_SETTINGS,
   defaultAsk,
   loadSettingsWithoutSecrets,
-  mergeSettings,
   pageTriggerTarget,
-  SETTINGS_KEY,
+  repairPublicMirror,
+  serveSettingsMessage,
   type Settings,
 } from '@/lib/storage/settings';
-import { SHORTCUT_KEY } from '@/lib/storage/publicSettings';
+import { createSettingsRecord, readMenusBuiltFrom, writeMenusBuiltFrom } from '@/lib/storage/settingsStore';
+import { PUBLIC_KEY, SHORTCUT_KEY } from '@/lib/storage/publicSettings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { askForMenu, MENU_SELECTION_WEB, menuItems, parseMenuId, savedQuestionsChanged } from '@/lib/menus';
 import type { AskId } from '@/lib/pipeline/question';
@@ -28,7 +29,8 @@ type MaybeTab = Browser.tabs.Tab | undefined;
 export default defineBackground(() => {
   /**
    * `sidePanel.open` must run synchronously inside the user-gesture handler, so the decision
-   * "panel or web tab?" cannot wait for storage. Keep a copy of the public settings in memory.
+   * "panel or web tab?" cannot wait for storage. Keep a copy of the settings (keys blanked) in
+   * memory, loaded from the settings database (which also migrates 1.3.0 storage on first run).
    * Until the first load resolves we assume the panel, which is the common case.
    */
   let settings: Settings = DEFAULT_SETTINGS;
@@ -36,30 +38,39 @@ export default defineBackground(() => {
     settings = s;
   };
   void loadSettingsWithoutSecrets().then(adopt, (e: unknown) => console.warn('[wys] settings unreadable', e));
-  // The saved questions the menu items were last built from; null until built in this worker's life.
-  let menusBuiltFrom: string[] | null = null;
+  // Every save rewrites the public mirror in storage.local; that change (which also wakes this worker)
+  // is the signal to reload from the database. The mirror's content is never trusted: a page can
+  // write it too, which only costs a reload, and it is put back to what the database says.
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes[SETTINGS_KEY]) return;
-    // Compared with what the menu shows (or the stored old value after a wake), never with the
-    // in-memory copy, which may still be the defaults or already the new value.
-    const rebuild = savedQuestionsChanged(changes[SETTINGS_KEY], menusBuiltFrom);
-    adopt(mergeSettings(DEFAULT_SETTINGS, changes[SETTINGS_KEY].newValue));
+    if (area !== 'local' || !(PUBLIC_KEY in changes)) return;
+    void repairPublicMirror(changes[PUBLIC_KEY]?.newValue).catch((e: unknown) => console.warn('[wys] settings mirror', e));
     // The menu offers the user's own questions by their words and place; any change to the list needs new items.
-    if (rebuild) createMenus();
+    createMenus(false);
   });
+  // An upgrade or a page may have left the mirror out of step while the worker was not running.
+  void browser.storage.local
+    .get(PUBLIC_KEY)
+    .then((r) => repairPublicMirror(r[PUBLIC_KEY]))
+    .catch(() => undefined);
 
   // onInstalled and onStartup can both fire in one worker start (an update applied at launch); the
   // second removeAll must wait for the first chain or the creates interleave into duplicate ids.
   let menus: Promise<void> = Promise.resolve();
-  function createMenus() {
+  /**
+   * Builds the context menu, or with `force` false only when the saved questions differ from the
+   * list it was last built from. That list is kept in the settings database, never compared with
+   * the in-memory copy (which may still be the defaults right after a wake).
+   */
+  function createMenus(force = true) {
     menus = menus
       // The items name the user's own question, so the settings are read first (the in-memory copy
       // may still be the defaults when this runs at install or startup).
       .then(() => loadSettingsWithoutSecrets().then(adopt, () => undefined))
-      .then(() => browser.contextMenus.removeAll())
-      .then(() => {
-        menusBuiltFrom = [...settings.ask.saved];
-        const items = menuItems(settings.ask.saved) as Browser.contextMenus.CreateProperties[];
+      .then(async () => {
+        if (!force && !savedQuestionsChanged(settings.ask.saved, await readMenusBuiltFrom())) return;
+        await browser.contextMenus.removeAll();
+        const builtFrom = [...settings.ask.saved];
+        const items = menuItems(builtFrom) as Browser.contextMenus.CreateProperties[];
         // Each create takes a callback that reads lastError: a duplicate id (two registrations in one
         // worker start) is then a handled condition, not an "Unchecked runtime.lastError" entry.
         for (const item of items)
@@ -67,11 +78,22 @@ export default defineBackground(() => {
             // Reading it is what marks the error handled; a duplicate id means the other chain already made the item.
             if (browser.runtime.lastError) return;
           });
+        await writeMenusBuiltFrom(builtFrom);
       })
       .catch((e: unknown) => console.warn('[wys] context menus', e));
   }
 
-  browser.runtime.onInstalled.addListener(createMenus);
+  // A fresh install has nothing to migrate: create the settings record from defaults at once, so the
+  // migration from storage.local never runs and a page cannot plant old-format keys for it to adopt.
+  // (No content script exists yet: Chrome and Firefox do not inject into tabs open before install.)
+  browser.runtime.onInstalled.addListener(({ reason }) => {
+    if (reason !== 'install') return;
+    void createSettingsRecord(DEFAULT_SETTINGS)
+      .then(() => browser.storage.local.get(PUBLIC_KEY))
+      .then((s) => repairPublicMirror(s[PUBLIC_KEY]))
+      .catch((e: unknown) => console.warn('[wys] first settings record', e));
+  });
+  browser.runtime.onInstalled.addListener(() => createMenus());
   // The chip on pages cannot ask the commands API; publish the live binding whenever the worker starts.
   const publishShortcut = () =>
     void browser.commands
@@ -87,7 +109,7 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(publishShortcut);
   browser.runtime.onStartup.addListener(publishShortcut);
   // Firefox does not always run the event page on startup; register on both.
-  browser.runtime.onStartup.addListener(createMenus);
+  browser.runtime.onStartup.addListener(() => createMenus());
 
   /**
    * Where a context-menu check goes: the web tab when Google AI Mode is the default provider,
@@ -248,6 +270,13 @@ export default defineBackground(() => {
   };
 
   browser.runtime.onMessage.addListener((raw, sender, sendResponse) => {
+    // Settings for the extension's own pages in a Firefox private window (see `viaBackground` in
+    // storage/settings.ts). Refused for anyone else, content scripts included.
+    const settingsReply = serveSettingsMessage(raw, sender);
+    if (settingsReply) {
+      void settingsReply.then(sendResponse);
+      return true;
+    }
     const parsed = MessageSchema.safeParse(raw);
     if (!parsed.success) return false;
     const msg = parsed.data;

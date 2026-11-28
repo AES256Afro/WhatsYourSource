@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { browser } from 'wxt/browser';
+import { createSettingsRecord, readSettingsRecord, writeSettingsRecord } from './settingsStore';
+import { PUBLIC_KEY, sameMirror, toPublicMirror } from './publicSettings';
 import { ASK_IDS, cleanCustomQuestion, MAX_CUSTOM_QUESTION, normalizeAsk, normalizeAskSettings, type Ask } from '../pipeline/question';
 
 /** `'webmode'` is Google AI Mode on google.com: chosen like a provider, but never an LLM call (`createProvider` returns null for it). */
@@ -132,14 +134,17 @@ export function defaultAsk(s: Pick<Settings, 'ask'>): Ask {
 }
 
 /**
- * Storage layout. `settings` holds everything *except* API keys and is what the content script
- * (which runs on every page) reads for the chip. `secrets` holds the keys and is only ever read by
- * extension pages. Older installs kept the keys inside `settings`; `loadSettings` migrates them.
+ * Storage layout (since 1.3.1). The full settings, API keys included, live in the extension's own
+ * IndexedDB (`settingsStore.ts`): web pages and the content script that runs in them cannot open it.
+ * The content script gets a small public copy under `PUBLIC_KEY` in `storage.local` (`publicSettings.ts`),
+ * rewritten by every save; a change to that key is also the signal extension pages and the background
+ * reload on. 1.3.0 and older kept everything in `storage.local` under `settings` and `secrets`
+ * (older still: keys inside `settings`); the first load migrates them once and removes them.
  */
-export const SETTINGS_KEY = 'settings';
-export const SECRETS_KEY = 'secrets';
+export const LEGACY_SETTINGS_KEY = 'settings';
+export const LEGACY_SECRETS_KEY = 'secrets';
 
-const SECRET_PATHS: readonly (readonly string[])[] = [
+export const SECRET_PATHS: readonly (readonly string[])[] = [
   ['providers', 'gemini', 'apiKey'],
   ['providers', 'openaiCompat', 'apiKey'],
   ['providers', 'openaiCompat', 'braveKey'],
@@ -239,20 +244,11 @@ export function withNormalizedAsk(s: Settings): Settings {
   return { ...s, ask: normalizeAskSettings(s.ask) };
 }
 
-/** The settings object with every secret blanked, which is what goes under `settings` in storage. */
+/** The settings object with every secret blanked (the background's in-memory copy). */
 export function stripSecrets(s: Settings): Settings {
   const copy = structuredClone(s) as unknown as Plain;
   for (const p of SECRET_PATHS) setPath(copy, p, '');
   return SettingsSchema.parse(copy);
-}
-
-function collectSecrets(s: Settings): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const p of SECRET_PATHS) {
-    const v = getPath(s, p);
-    if (typeof v === 'string' && v) out[p.join('.')] = v;
-  }
-  return out;
 }
 
 function applySecrets(s: Settings, secrets: unknown): Settings {
@@ -265,27 +261,173 @@ function applySecrets(s: Settings, secrets: unknown): Settings {
   return SettingsSchema.parse(copy);
 }
 
-/** Full settings, keys included. Extension pages only. */
-export async function loadSettings(): Promise<Settings> {
-  const stored = await browser.storage.local.get([SETTINGS_KEY, SECRETS_KEY]);
-  const pub = mergeSettings(DEFAULT_SETTINGS, stored[SETTINGS_KEY]);
-  const withSecrets = applySecrets(pub, stored[SECRETS_KEY]);
-  // Pre-split installs kept keys inside `settings`; move them out once.
-  if (Object.keys(collectSecrets(pub)).length > 0) {
-    await saveSettings(withSecrets);
-  }
-  return withSecrets;
+const LOCK_NAME = 'wys-settings-migrate';
+let localLock: Promise<unknown> = Promise.resolve();
+
+/**
+ * Runs `fn` with the migration lock held: `navigator.locks` spans every extension page and the
+ * background (Chrome and Firefox), so two panels and the worker starting together migrate once.
+ * Where it is missing (tests) a promise chain serialises within this context; the database's
+ * create-if-absent transaction is the backstop either way.
+ */
+function withMigrationLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = (globalThis.navigator as (Navigator & { locks?: LockManager }) | undefined)?.locks;
+  if (locks?.request) return locks.request(LOCK_NAME, fn) as Promise<T>;
+  const run = localLock.then(fn);
+  localLock = run.catch(() => undefined);
+  return run;
 }
 
-/** Settings without keys: what the background keeps in memory (the content script reads `publicSettings` instead). */
-export async function loadSettingsWithoutSecrets(): Promise<Settings> {
-  const stored = await browser.storage.local.get(SETTINGS_KEY);
-  return mergeSettings(DEFAULT_SETTINGS, stored[SETTINGS_KEY]);
+/**
+ * Moves 1.3.0-and-older settings out of `storage.local` into the database, once. Only runs while the
+ * database has no settings record; afterwards nothing reads the old keys again, so an old-format
+ * `settings` or `secrets` key that a page plants later is ignored (and removed by `sweepLegacyKeys`).
+ */
+async function migrate(): Promise<{ settings: Settings; rev: number }> {
+  return withMigrationLock(async () => {
+    const existing = await readSettingsRecord();
+    if (existing.settings !== undefined) return { settings: mergeSettings(DEFAULT_SETTINGS, existing.settings), rev: existing.rev };
+    const old = await browser.storage.local.get([LEGACY_SETTINGS_KEY, LEGACY_SECRETS_KEY]);
+    // mergeSettings keeps keys that pre-split installs stored inside `settings`; `secrets` wins where set.
+    const migrated = applySecrets(mergeSettings(DEFAULT_SETTINGS, old[LEGACY_SETTINGS_KEY]), old[LEGACY_SECRETS_KEY]);
+    const { created, rev } = await createSettingsRecord(migrated);
+    const settings = created ? migrated : mergeSettings(DEFAULT_SETTINGS, (await readSettingsRecord()).settings);
+    if (created) await writeMirror(settings, rev);
+    await browser.storage.local.remove([LEGACY_SETTINGS_KEY, LEGACY_SECRETS_KEY]);
+    return { settings, rev };
+  });
 }
 
-export async function saveSettings(next: Settings): Promise<void> {
+let swept: Promise<void> | null = null;
+/** Once per context: drop old-format keys left in `storage.local` (a migration cut short, or planted). Never read. */
+function sweepLegacyKeys(): Promise<void> {
+  // Under the migration lock, so it never races a migration that is still moving the keys.
+  swept ??= withMigrationLock(async () => {
+    const r = await browser.storage.local.get([LEGACY_SETTINGS_KEY, LEGACY_SECRETS_KEY]);
+    if (Object.values(r).some((v) => v !== undefined)) await browser.storage.local.remove([LEGACY_SETTINGS_KEY, LEGACY_SECRETS_KEY]);
+  }).catch(() => undefined);
+  return swept;
+}
+
+/** For tests: forget this context's one-time work. */
+export function resetSettingsForTests(): void {
+  swept = null;
+  localLock = Promise.resolve();
+}
+
+/** Settings and revision straight from the database (migrating first if it is empty). Not for private-window pages. */
+async function loadDirect(): Promise<{ settings: Settings; rev: number }> {
+  const stored = await readSettingsRecord();
+  if (stored.settings === undefined) return migrate();
+  void sweepLegacyKeys();
+  return { settings: mergeSettings(DEFAULT_SETTINGS, stored.settings), rev: stored.rev };
+}
+
+async function saveDirect(next: Settings): Promise<void> {
   const parsed = withNormalizedAsk(SettingsSchema.parse(next));
-  await browser.storage.local.set({ [SETTINGS_KEY]: stripSecrets(parsed), [SECRETS_KEY]: collectSecrets(parsed) });
+  // A first save must not skip the migration: the old keys would stay behind in storage.local.
+  await loadDirect();
+  const rev = await writeSettingsRecord(parsed);
+  await writeMirror(parsed, rev);
+}
+
+function writeMirror(s: Settings, rev: number): Promise<void> {
+  return browser.storage.local.set({ [PUBLIC_KEY]: toPublicMirror(s, rev) });
+}
+
+/**
+ * Firefox gives extension pages in a private window their own, in-memory IndexedDB, where the
+ * settings would look empty. Those pages ask the background (which runs outside the private window
+ * and serves its own database) instead. In Chrome this is never true for our pages.
+ */
+function viaBackground(): boolean {
+  try {
+    return (browser.extension as { inIncognitoContext?: boolean } | undefined)?.inIncognitoContext === true;
+  } catch {
+    return false;
+  }
+}
+
+export const SETTINGS_GET = 'wys:settings-get';
+/** The page sends the whole next object: `updateSettings`'s mutate function cannot cross a message. */
+export const SETTINGS_SAVE = 'wys:settings-save';
+const SettingsMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal(SETTINGS_GET) }).strict(),
+  z.object({ type: z.literal(SETTINGS_SAVE), settings: SettingsSchema }).strict(),
+]);
+const SettingsReplySchema = z.union([
+  z.object({ ok: z.literal(true), settings: z.unknown().optional() }),
+  z.object({ ok: z.literal(false), error: z.string() }),
+]);
+type SettingsReply = z.infer<typeof SettingsReplySchema>;
+
+async function askBackground(msg: z.infer<typeof SettingsMessageSchema>): Promise<unknown> {
+  const reply = SettingsReplySchema.parse(await browser.runtime.sendMessage(msg));
+  if (!reply.ok) throw new Error(reply.error);
+  return reply.settings;
+}
+
+/** True only for the extension's own pages: a content script's sender carries the web page's URL. */
+export function fromOwnPage(sender: { id?: string; url?: string }): boolean {
+  const own = browser.runtime.getURL('');
+  return sender.id === browser.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(own);
+}
+
+/**
+ * The background's side of `viaBackground`: null for any other message; for a settings message, the
+ * reply. Refused unless the sender is one of the extension's own pages.
+ */
+export function serveSettingsMessage(raw: unknown, sender: { id?: string; url?: string }): Promise<SettingsReply> | null {
+  const parsed = SettingsMessageSchema.safeParse(raw);
+  if (!parsed.success) {
+    // A settings request with a malformed body is still answered (and refused), never passed on.
+    const type = typeof raw === 'object' && raw !== null ? (raw as { type?: unknown }).type : undefined;
+    return type === SETTINGS_GET || type === SETTINGS_SAVE ? Promise.resolve({ ok: false, error: 'bad request' }) : null;
+  }
+  if (!fromOwnPage(sender)) return Promise.resolve({ ok: false, error: 'refused' });
+  const msg = parsed.data;
+  const work =
+    msg.type === SETTINGS_GET
+      ? loadDirect().then(({ settings }) => ({ ok: true as const, settings }))
+      : saveDirect(msg.settings).then(() => ({ ok: true as const }));
+  return work.catch((e: unknown) => ({ ok: false as const, error: String(e) }));
+}
+
+/** Full settings, keys included. Extension pages and the background only. */
+export async function loadSettings(): Promise<Settings> {
+  if (viaBackground()) return mergeSettings(DEFAULT_SETTINGS, await askBackground({ type: SETTINGS_GET }));
+  return (await loadDirect()).settings;
+}
+
+/** Settings with every key blanked: what the background keeps in memory. */
+export async function loadSettingsWithoutSecrets(): Promise<Settings> {
+  return stripSecrets(await loadSettings());
+}
+
+/** The settings and the revision the public mirror should carry (background only: it repairs the mirror). */
+export function loadSettingsWithRev(): Promise<{ settings: Settings; rev: number }> {
+  return loadDirect();
+}
+
+/**
+ * Rewrites the public mirror when it is not what the database says (a stale write from a racing
+ * save, or a page that rewrote it). Background only. Resolves to whether it wrote.
+ */
+export async function repairPublicMirror(current: unknown): Promise<boolean> {
+  const { settings, rev } = await loadDirect();
+  const want = toPublicMirror(settings, rev);
+  if (sameMirror(current, want)) return false;
+  await browser.storage.local.set({ [PUBLIC_KEY]: want });
+  return true;
+}
+
+/** Saves to the database first, then the public mirror (with a new revision), which tells every other context. */
+export async function saveSettings(next: Settings): Promise<void> {
+  if (viaBackground()) {
+    await askBackground({ type: SETTINGS_SAVE, settings: withNormalizedAsk(SettingsSchema.parse(next)) });
+    return;
+  }
+  await saveDirect(next);
 }
 
 let updateQueue: Promise<unknown> = Promise.resolve();
@@ -302,12 +444,14 @@ export function updateSettings(mutate: (s: Settings) => Settings): Promise<Setti
   return run;
 }
 
-/** Fires with the full settings (keys included) whenever either storage key changes. Extension pages only. */
+/**
+ * Fires with the full settings (keys included, reloaded from the database) whenever the public
+ * mirror changes. A page can rewrite the mirror, which only causes a harmless reload. Extension pages only.
+ */
 export function onSettingsChanged(cb: (s: Settings) => void): () => void {
   const listener = (changes: Record<string, { newValue?: unknown }>, area: string) => {
-    if (area !== 'local') return;
-    if (!(SETTINGS_KEY in changes) && !(SECRETS_KEY in changes)) return;
-    void loadSettings().then(cb);
+    if (area !== 'local' || !(PUBLIC_KEY in changes)) return;
+    void loadSettings().then(cb, (e: unknown) => console.warn('[wys] settings unreadable', e));
   };
   browser.storage.onChanged.addListener(listener);
   return () => browser.storage.onChanged.removeListener(listener);

@@ -2,7 +2,14 @@
 
 All notable changes to WhatsYourSource. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.3.0] - 2026-11-27
+## [Unreleased]
+
+### Security
+- API keys and settings no longer live in `browser.storage.local`, which the script that runs on web pages can read and write. They are in the extension's own IndexedDB database (`wys-settings`), which pages and that script cannot open. Before, a compromised page process could read every key, receive them on each save, and rewrite the model endpoint so later checks and the key went to another server (reproduced against 1.3.0 in Chromium; the same attack finds nothing on this build).
+- The page script now gets a small public copy with only the chip settings (on/off, blocked sites, what the chip opens, the default question's name) and a change counter; no keys, endpoints or question texts. A forged copy is put back, and nothing trusted reads it as settings.
+- Existing settings and keys move to the new database the first time the new version starts (once, even with several panels open), and the old `settings` and `secrets` entries are deleted. A fresh install creates its settings record at install time, so nothing is ever read from `storage.local`.
+- Firefox private windows reach settings through the background, which answers only the extension's own pages.
+
 
 ### Added
 - Ask the model a question directly: a box on the side panel's home screen sends a question with nothing selected, and the answer comes with sources, is saved to history and takes follow-up questions like any check. In Google AI Mode it opens a search for the question.

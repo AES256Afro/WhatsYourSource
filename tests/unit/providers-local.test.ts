@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { guessVisionFromName, localServer, parseLmStudio, parseOllamaShow, parseOllamaTags, serverRoot } from '@/lib/providers/localModels';
 import { parseClaims, buildClaimsRequest } from '@/lib/pipeline/claims';
-import { PUBLIC_PROVIDER_IDS, pageTriggerTarget, readPublicSettings } from '@/lib/storage/publicSettings';
-import { PROVIDER_IDS } from '@/lib/storage/settings';
+import { pageTriggerTarget, readPublicSettings, toPublicMirror } from '@/lib/storage/publicSettings';
+import { DEFAULT_SETTINGS } from '@/lib/storage/settings';
 import { googleAiModeUrl } from '@/lib/googleAiMode';
 import { presetFor } from '@/lib/providers/registry';
 
@@ -65,10 +65,14 @@ describe('claim extraction', () => {
 
 describe('public settings for the content script', () => {
   it('reads only what it needs and falls back per field', () => {
-    const p = readPublicSettings({ privacy: { chip: false, disabledSites: ['a.com', 3] }, shortcutAction: 'nope', defaultProvider: 'webmode' });
-    expect(p).toEqual({ chip: false, disabledSites: ['a.com'], shortcutAction: 'panel', defaultProvider: 'webmode', askName: '' });
-    expect(pageTriggerTarget(p)).toBe('webmode');
+    const p = readPublicSettings({ chip: false, disabledSites: ['a.com', 3], trigger: 'nope', askName: '<b>Injected</b>' });
+    expect(p).toEqual({ chip: false, disabledSites: ['a.com'], trigger: 'panel', askName: '' });
+    expect(readPublicSettings({ trigger: 'webmode' }).trigger).toBe('webmode');
     expect(readPublicSettings('garbage').chip).toBe(true);
+  });
+  it('the mirror carries where a page-started check goes, worked out from the settings', () => {
+    expect(toPublicMirror({ ...DEFAULT_SETTINGS, defaultProvider: 'webmode' }, 3)).toMatchObject({ rev: 3, trigger: 'webmode' });
+    expect(toPublicMirror(DEFAULT_SETTINGS, 1).trigger).toBe(pageTriggerTarget(DEFAULT_SETTINGS));
   });
 });
 
@@ -77,11 +81,5 @@ describe('Google web variants', () => {
     const input = { kind: 'text' as const, text: 'hello', pageUrl: '', pageTitle: '' };
     expect(googleAiModeUrl(input, 'ai-mode')).toContain('udm=50&');
     expect(googleAiModeUrl(input, 'overview')).not.toContain('udm=50');
-  });
-});
-
-describe('public settings mirror', () => {
-  it('lists the same provider ids as the schema', () => {
-    expect([...PUBLIC_PROVIDER_IDS].sort()).toEqual([...PROVIDER_IDS].sort());
   });
 });

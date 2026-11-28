@@ -57,7 +57,7 @@ const test = base.extend<{ context: BrowserContext; sw: Worker; extensionId: str
   },
 });
 
-test.beforeEach(async ({ context, sw }) => {
+test.beforeEach(async ({ context, sw, extensionId }) => {
   // A page the content script is allowed to run on.
   await context.route('http://example.test/**', (route) =>
     route.fulfill({
@@ -89,6 +89,9 @@ test.beforeEach(async ({ context, sw }) => {
       ]),
     }),
   );
+  // Settings as 1.3.0 and older stored them (storage.local, the key inside `settings`), so every test
+  // also runs the migration into the settings database. The worker has already started (and found
+  // nothing to migrate), so the database is put back to its state before the update first.
   await sw.evaluate(async () => {
     await chrome.storage.local.set({
       settings: {
@@ -99,7 +102,56 @@ test.beforeEach(async ({ context, sw }) => {
         privacy: { snapshots: true, chip: true, disabledSites: [] },
       },
     });
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open('wys-settings');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(new Error(String(req.error)));
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('kv', 'readwrite');
+      tx.objectStore('kv').delete('settings');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(new Error(String(tx.error)));
+    });
+    db.close();
   });
+  // The first extension page to load the settings migrates them.
+  const opener = await context.newPage();
+  await opener.goto(`chrome-extension://${extensionId}/options.html`);
+  await expect
+    .poll(() =>
+      sw.evaluate(async () => {
+        const all = await chrome.storage.local.get(null);
+        return 'public' in all && !('settings' in all);
+      }),
+    )
+    .toBe(true);
+  await opener.close();
+});
+
+test('after the migration storage.local holds no key, no settings and no secrets', async ({ context, sw, extensionId }) => {
+  const all = await sw.evaluate(async () => chrome.storage.local.get(null));
+  expect(all).not.toHaveProperty('settings');
+  expect(all).not.toHaveProperty('secrets');
+  expect(JSON.stringify(all)).not.toContain('test-key');
+  // The key is in the settings database, and an extension page still has it.
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/options.html`);
+  const key = await panel.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open('wys-settings');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(new Error(String(req.error)));
+    });
+    const settings = await new Promise<any>((resolve, reject) => {
+      const req = db.transaction('kv').objectStore('kv').get('settings');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(new Error(String(req.error)));
+    });
+    db.close();
+    return settings?.providers?.gemini?.apiKey as string | undefined;
+  });
+  expect(key).toBe('test-key');
 });
 
 test('content script leaves the page alone until a real selection, then shows the chip and answers selection queries', async ({ context, sw }) => {

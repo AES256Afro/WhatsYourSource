@@ -4,7 +4,7 @@ import { clampSelection, INLINE_IMAGE_SENTINEL, LIMITS } from '@/lib/messaging/l
 import type { SelectionInfo } from '@/lib/messaging/protocol';
 import { extractPost } from '@/lib/post/extract';
 import { shortcutLabelForPlatform } from '@/lib/shortcut';
-import { pageTriggerTarget, readPublicSettings, SETTINGS_KEY, SHORTCUT_KEY, siteAllowed, type PublicSettings } from '@/lib/storage/publicSettings';
+import { PUBLIC_KEY, readPublicSettings, SHORTCUT_KEY, siteAllowed, type PublicSettings } from '@/lib/storage/publicSettings';
 
 /**
  * Runs on every page, does three small things and nothing else:
@@ -24,18 +24,19 @@ export default defineContentScript({
   main(ctx) {
     // XML, SVG and other non-HTML documents: no chip (attachShadow throws there) and nothing to snapshot.
     if (!(document instanceof HTMLDocument) || document.contentType === 'application/xml' || document.contentType === 'text/xml') return;
-    // Only the public half of the settings (no API keys) is read here. (storage.onChanged still
-    // delivers every change to this isolated world; the `secrets` key is ignored, never kept.)
+    // Only the small public copy of the settings (chip on/off, sites, where a check goes, the
+    // question's name) is read here. The settings and keys live in the extension's own database,
+    // which this script, running in the page's origin, cannot open.
     let settings: PublicSettings = readPublicSettings(undefined);
     // The live key binding, as the background last read it (users rebind or remove it); null = unknown, '' = unbound.
     let binding: string | null = null;
-    void browser.storage.local.get([SETTINGS_KEY, SHORTCUT_KEY]).then((r) => {
-      settings = readPublicSettings(r[SETTINGS_KEY]);
+    void browser.storage.local.get([PUBLIC_KEY, SHORTCUT_KEY]).then((r) => {
+      settings = readPublicSettings(r[PUBLIC_KEY]);
       if (typeof r[SHORTCUT_KEY] === 'string') binding = r[SHORTCUT_KEY];
     });
     browser.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
-      if (changes[SETTINGS_KEY]) settings = readPublicSettings(changes[SETTINGS_KEY].newValue);
+      if (changes[PUBLIC_KEY]) settings = readPublicSettings(changes[PUBLIC_KEY].newValue);
       if (changes[SHORTCUT_KEY] && typeof changes[SHORTCUT_KEY].newValue === 'string') {
         binding = changes[SHORTCUT_KEY].newValue;
         chip.setShortcut(binding);
@@ -49,7 +50,7 @@ export default defineContentScript({
         window.clearTimeout(timer);
         chip.hide();
         if (!sel) return;
-        const type = pageTriggerTarget(settings) === 'webmode' ? 'wys:open-webmode' : 'wys:check';
+        const type = settings.trigger === 'webmode' ? 'wys:open-webmode' : 'wys:check';
         try {
           void browser.runtime
             .sendMessage({ type, input: { kind: 'text', ...sel } })

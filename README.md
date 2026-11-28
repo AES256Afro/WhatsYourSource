@@ -92,7 +92,7 @@ A local model can't search by itself. The quickest private search backend is Sea
 
 ### Settings and keys
 
-Keys live in `browser.storage.local` on your device. They are never synced and are only ever sent to the provider you picked. The Gemini free tier may use prompts to improve Google's products; a paid key does not.
+Keys live in the extension's own database (IndexedDB) on your device, which web pages cannot open. They are never synced and are only ever sent to the provider you picked. The Gemini free tier may use prompts to improve Google's products; a paid key does not.
 
 ## License
 
