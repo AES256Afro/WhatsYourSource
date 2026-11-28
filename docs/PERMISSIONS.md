@@ -5,7 +5,7 @@ Single purpose: check the origin and reliability of text, images and pages the u
 | Permission | Why it is needed | When it is used |
 |---|---|---|
 | `contextMenus` | "Fact-check / Explain / Timeline behind / Find flaws and inaccuracies in" items for the selection, image, post, page or link in the right-click menu | Menu creation at install; clicks are user-initiated |
-| `storage` | Settings, API keys (local only, never synced) and the pending-job handoff between background and side panel (`storage.session`) | Always |
+| `storage` | A small copy of the chip settings for the script on pages (`storage.local`; settings and API keys themselves are in the extension's own IndexedDB on this device, never synced) and the pending-job handoff between background and side panel (`storage.session`) | Always |
 | `unlimitedStorage` | History keeps page snapshots in IndexedDB; a few hundred checks with snapshots exceed the default quota | When saving a check |
 | `activeTab` | Read the selection and take a visible-area screenshot of the tab the user acted on (image fallback, snapshot) | Only after a user gesture on that tab (menu, shortcut, toolbar) |
 | `scripting` | Read the selection in the frame the user right-clicked, or on pages loaded before the extension was installed; inject the page-copy script when a check runs | Only when a check is started |

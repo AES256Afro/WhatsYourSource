@@ -117,12 +117,12 @@ export function customQuestionChanged(change: { oldValue?: unknown; newValue?: u
 const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((q, i) => q === b[i]);
 
 /**
- * Whether a settings change needs the menu rebuilt: the saved questions (words or order) differ from
- * the list the menu was last built from, or (when that is unknown, after the worker woke) from the
- * stored old value.
+ * Whether the menu needs rebuilding: the saved questions (words or order) differ from the list the
+ * menu was last built from, as the background recorded it in the settings database (so the answer
+ * survives a worker wake). Unknown (`null`, never recorded) means rebuild.
  */
-export function savedQuestionsChanged(change: { oldValue?: unknown; newValue?: unknown }, builtFrom: readonly string[] | null): boolean {
-  return !sameList(storedSavedQuestions(change.newValue), builtFrom ?? storedSavedQuestions(change.oldValue));
+export function savedQuestionsChanged(saved: readonly string[], builtFrom: readonly string[] | null): boolean {
+  return builtFrom === null || !sameList(saved, builtFrom);
 }
 
 /** A preset's item id (`wys-page:timeline`), or a saved question's by its place in the list (`wys-page:custom-2`). */

@@ -123,7 +123,11 @@ export async function installFakes(scenario: string) {
     },
     lookups: { factChecks: true, factCheckKey: 'preview-key', archive: true, credibility: true },
   };
-  await fakeBrowser.storage.local.set({ settings: base });
+  // Through the real save path (the settings database plus the public mirror), after the fake
+  // browser is installed: the settings module reads the global browser when it loads. A save
+  // overwrites what an earlier preview load left in this origin's IndexedDB.
+  const { DEFAULT_SETTINGS, mergeSettings, saveSettings } = await import('@/lib/storage/settings');
+  await saveSettings(mergeSettings(DEFAULT_SETTINGS, base));
 
   // Image scenario: a generated PNG queued as a job, so the whole image path runs (fetch → provenance → model).
   if (scenario === 'image') {

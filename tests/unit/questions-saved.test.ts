@@ -11,8 +11,8 @@ import {
   removeSavedQuestion,
   savedAsks,
 } from '@/lib/pipeline/question';
-import { readPublicSettings } from '@/lib/storage/publicSettings';
-import { DEFAULT_SETTINGS, defaultAsk, loadSettings, mergeSettings, saveSettings, SETTINGS_KEY, updateSettings } from '@/lib/storage/settings';
+import { PUBLIC_KEY, toPublicMirror } from '@/lib/storage/publicSettings';
+import { DEFAULT_SETTINGS, defaultAsk, LEGACY_SETTINGS_KEY, loadSettings, mergeSettings, saveSettings, updateSettings } from '@/lib/storage/settings';
 
 /** A settings object as 1.2.x stored it: one custom question, no saved list. */
 const v12 = (over: object = {}) => ({
@@ -79,14 +79,16 @@ describe('saved questions in settings', () => {
     const loaded = await loadSettings();
     expect(loaded.ask.saved).toEqual(['Who?']);
     expect(loaded.providers.gemini.apiKey).toBe('k');
-    const stored = await fakeBrowser.storage.local.get(SETTINGS_KEY);
-    expect(JSON.stringify(stored[SETTINGS_KEY])).not.toContain('"k"');
+    const stored = await fakeBrowser.storage.local.get(null);
+    expect(JSON.stringify(stored)).not.toContain('"k"');
+    expect(JSON.stringify(stored[PUBLIC_KEY])).not.toContain('Who?');
   });
 
   it('the chip still names the default question', () => {
-    expect(readPublicSettings({ ask: { default: 'custom', custom: 'Who?', saved: ['Who?'] } }).askName).toBe('Your question');
-    expect(readPublicSettings({ ask: { default: 'sources', custom: '', saved: ['Who?'] } }).askName).toBe('Find more sources');
-    expect(readPublicSettings(v12()).askName).toBe('Your question');
+    const mirror = (raw: unknown) => toPublicMirror(mergeSettings(DEFAULT_SETTINGS, raw), 1);
+    expect(mirror({ ask: { default: 'custom', custom: 'Who?', saved: ['Who?'] } }).askName).toBe('Your question');
+    expect(mirror({ ask: { default: 'sources', custom: '', saved: ['Who?'] } }).askName).toBe('Find more sources');
+    expect(mirror(v12()).askName).toBe('Your question');
   });
 });
 
@@ -132,26 +134,21 @@ describe('saved questions on the right-click menu', () => {
     expect(askForMenu(item.askId, ['A?', 'B?'], item.index)).toBeNull();
   });
 
-  it('rebuilds when the list changes, including after a worker wake', () => {
-    const st = (saved: string[] | undefined, custom = '') => ({ ask: { default: 'factcheck', custom, ...(saved ? { saved } : {}) } });
-    // After a wake: compared with the stored old value.
-    expect(savedQuestionsChanged({ oldValue: st(['A?']), newValue: st(['A?', 'B?']) }, null)).toBe(true);
-    expect(savedQuestionsChanged({ oldValue: st(['A?', 'B?']), newValue: st(['B?', 'A?']) }, null)).toBe(true); // reordered
-    expect(savedQuestionsChanged({ oldValue: st(['A?']), newValue: st([' A? ']) }, null)).toBe(false);
-    expect(savedQuestionsChanged({ oldValue: st(['A?'], 'A?'), newValue: { ...st(['A?'], 'A?'), privacy: { chip: false } } }, null)).toBe(false);
-    // A 1.2.x object rewritten with the same question as its first saved one: nothing to rebuild.
-    expect(savedQuestionsChanged({ oldValue: st(undefined, 'A?'), newValue: st(['A?'], 'A?') }, null)).toBe(false);
-    expect(storedSavedQuestions(st(undefined, 'A?'))).toEqual(['A?']);
-    // Known build: compared with that.
-    expect(savedQuestionsChanged({ oldValue: st(['A?']), newValue: st(['A?']) }, [])).toBe(true);
-    expect(savedQuestionsChanged({ oldValue: st([]), newValue: st(['A?']) }, ['A?'])).toBe(false);
+  it('rebuilds when the list differs from the one the menu was last built from', () => {
+    expect(savedQuestionsChanged(['A?', 'B?'], ['A?'])).toBe(true);
+    expect(savedQuestionsChanged(['B?', 'A?'], ['A?', 'B?'])).toBe(true); // reordered
+    expect(savedQuestionsChanged(['A?'], ['A?'])).toBe(false);
+    expect(savedQuestionsChanged([], [])).toBe(false);
+    // Never recorded (first start after the update): rebuild.
+    expect(savedQuestionsChanged([], null)).toBe(true);
+    expect(storedSavedQuestions({ ask: { default: 'factcheck', custom: 'A?' } })).toEqual(['A?']);
   });
 });
 
 describe('storage round trip', () => {
   beforeEach(() => fakeBrowser.reset());
   it('a 1.2.x object in storage loads with its question saved', async () => {
-    await fakeBrowser.storage.local.set({ [SETTINGS_KEY]: v12() });
+    await fakeBrowser.storage.local.set({ [LEGACY_SETTINGS_KEY]: v12() });
     expect((await loadSettings()).ask.saved).toEqual(['Who pays for this?']);
   });
 });

@@ -37,7 +37,7 @@ The extension never sends data to any other party on its own. Links you click in
 
 ## What is stored, and where
 
-- **Settings and API keys** — `browser.storage.local` on this device. Never synced through your browser account. Keys are kept under a separate storage key that only the extension's own pages read; the script that runs on web pages never loads them. Keys are only ever sent to the provider they belong to.
+- **Settings and API keys** — the extension's own database (IndexedDB) on this device, which web pages and the script that runs in them cannot open. Never synced through your browser account. The script on pages gets a small copy of the chip settings only (whether the chip is on, the sites where it is off, whether a check opens the panel or Google, and the name of the default question), kept in `browser.storage.local`. Keys are only ever sent to the provider they belong to.
 - **History** — IndexedDB on this device: each result card and, if enabled, a sanitized copy of the page's main content plus a screenshot of the visible area at the time of the check. Snapshots are capped (default 200 MB; oldest removed first). You can delete single checks or clear everything from the History screen. Nothing in history leaves your device unless you export it.
 - Saved pages are shown in a sandboxed frame with scripts blocked and images disabled by default; turning images on fetches them from their original hosts, which reveals your IP address to those hosts like normal browsing would.
 
