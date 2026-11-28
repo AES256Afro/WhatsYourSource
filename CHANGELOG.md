@@ -2,7 +2,7 @@
 
 All notable changes to WhatsYourSource. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.3.2] - 2026-11-27
 
 ### Security
 - A right-click check uses the words the browser reported when the menu opened. The page's own copy of the selection (its line breaks and the surrounding paragraph) is used only when it holds exactly those words. Before, a page could swap, extend or (in a frame) replace the selection after the right-click and have its own text checked under the user's pick.

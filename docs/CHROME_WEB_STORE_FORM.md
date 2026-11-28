@@ -1,6 +1,6 @@
-# Chrome Web Store developer dashboard — every field, ready to paste (1.3.1)
+# Chrome Web Store developer dashboard — every field, ready to paste (1.3.2)
 
-Dashboard: https://chrome.google.com/webstore/devconsole → your item → **Package** → *Upload new package* for an update (**New item** the first time). Files come from the [v1.3.1 release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.3.1) and the `store/` folder of this repo. Work through the tabs in the order below; the dashboard will not let you submit until every tab shows a tick.
+Dashboard: https://chrome.google.com/webstore/devconsole → your item → **Package** → *Upload new package* for an update (**New item** the first time). Files come from the [v1.3.2 release](https://github.com/AES256Afro/WhatsYourSource/releases/tag/v1.3.2) and the `store/` folder of this repo. Work through the tabs in the order below; the dashboard will not let you submit until every tab shows a tick.
 
 ---
 
@@ -8,9 +8,9 @@ Dashboard: https://chrome.google.com/webstore/devconsole → your item → **Pac
 
 | Field | Entry |
 |---|---|
-| Upload | `whatsyoursource-1.3.1-chrome.zip` (from the GitHub release, or `npm run zip`) |
+| Upload | `whatsyoursource-1.3.2-chrome.zip` (from the GitHub release, or `npm run zip`) |
 
-The dashboard reads the name, version (1.3.1), description and icon from the manifest inside the zip.
+The dashboard reads the name, version (1.3.2), description and icon from the manifest inside the zip.
 
 ---
 
